@@ -10,7 +10,7 @@
  */
 import type { SessionRecap } from './recap'
 import type { VaultGraph } from './graph'
-import type { CampaignMap, MapPin, PartyMarker } from './map'
+import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { PlayMode, Speaker } from './play'
 import type {
@@ -145,7 +145,7 @@ export interface InvokeMap {
   >
   /** Campaign maps (image, pins, party marker) kept in a "type: map" note. */
   'maps:get': Invoke<[campaignPath: VaultPath], CampaignMap>
-  'maps:save': Invoke<[campaignPath: VaultPath, map: { image: string; pins: MapPin[]; party: PartyMarker | null }], CampaignMap>
+  'maps:save': Invoke<[campaignPath: VaultPath, map: { image: string; pins: MapPin[]; party: PartyMarker | null; aspect?: number; scale?: MapScale | null }], CampaignMap>
   'maps:importImage': Invoke<[campaignPath: VaultPath], string | null>
   'maps:images': Invoke<[campaignPath: VaultPath], string[]>
   'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string], string>

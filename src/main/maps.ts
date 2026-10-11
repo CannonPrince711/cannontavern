@@ -3,7 +3,7 @@ import { dialog } from 'electron'
 import { promises as fs } from 'node:fs'
 import { basename, extname } from 'node:path'
 import { IMAGE_EXTENSIONS, CAMPAIGN_FILE, IMAGES_FOLDER } from '@shared/layout'
-import { normalizeParty, normalizePins, pinsFromBody, replacePinsSection, type CampaignMap, type MapPin, type PartyMarker } from '@shared/map'
+import { DEFAULT_ASPECT, normalizeAspect, normalizeParty, normalizePins, normalizeScale, pinsFromBody, replacePinsSection, type CampaignMap, type MapPin, type MapScale, type PartyMarker } from '@shared/map'
 import { joinVaultPath, noteName, sanitizeFileName, toWikilink } from '@shared/names'
 import type { VaultPath } from '@shared/types'
 import { AppError } from './errors'
@@ -36,12 +36,12 @@ function imagePath(vault: Vault, campaignPath: VaultPath, raw: unknown): string 
 
 export async function readMap(vault: Vault, campaignPath: VaultPath): Promise<CampaignMap> {
   const { path, content } = await findMapNote(vault, campaignPath)
-  if (content === null) return { path, exists: false, image: '', pins: [], party: null }
+  if (content === null) return { path, exists: false, image: '', pins: [], party: null, aspect: DEFAULT_ASPECT, scale: null }
   const { data, body } = parseNote(content)
   let pins = normalizePins(data.pins)
   // Hand-written notes list pins in the body; offer them for placing.
   if (!pins.length) pins = pinsFromBody(body)
-  return { path, exists: true, image: imagePath(vault, campaignPath, data.image), pins, party: normalizeParty(data.party) }
+  return { path, exists: true, image: imagePath(vault, campaignPath, data.image), pins, party: normalizeParty(data.party), aspect: normalizeAspect(data.aspect), scale: normalizeScale(data.scale) }
 }
 
 /** Four decimals is well under a pixel on any map. */
@@ -49,14 +49,20 @@ function round(v: number | null): number | null {
   return v === null ? null : Math.round(v * 10000) / 10000
 }
 
-export async function saveMap(vault: Vault, campaignPath: VaultPath, next: { image: string; pins: MapPin[]; party: PartyMarker | null }): Promise<CampaignMap> {
+export async function saveMap(
+  vault: Vault,
+  campaignPath: VaultPath,
+  next: { image: string; pins: MapPin[]; party: PartyMarker | null; aspect?: number; scale?: MapScale | null }
+): Promise<CampaignMap> {
   const { path } = await findMapNote(vault, campaignPath)
   // Store the image relative to the campaign folder when it's inside it.
   const image = next.image.startsWith(`${campaignPath}/`) ? next.image.slice(campaignPath.length + 1) : next.image
   const fields = {
     pins: next.pins.map((p) => ({ id: p.id, name: p.name, x: round(p.x), y: round(p.y), kind: p.kind, ...(p.description ? { description: p.description } : {}), ...(p.note ? { note: p.note } : {}) })),
     party: next.party ? { ...next.party, x: round(next.party.x)!, y: round(next.party.y)! } : null,
-    image: image || undefined
+    image: image || undefined,
+    aspect: next.aspect && Math.abs(next.aspect - DEFAULT_ASPECT) > 0.001 ? Math.round(next.aspect * 10000) / 10000 : undefined,
+    scale: next.scale ?? undefined
   }
   const embed = next.image ? `![[${next.image.split('/').pop()}]]` : ''
   await vault.mutate(path, (cur) => {

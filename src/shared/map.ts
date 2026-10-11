@@ -35,14 +35,65 @@ export interface PartyMarker {
   at?: string
 }
 
+export const SCALE_UNITS = ['ft', 'm', 'mi', 'km'] as const
+export type ScaleUnit = (typeof SCALE_UNITS)[number]
+
+/** How wide the whole map is in the world, for the scale bar. */
+export interface MapScale {
+  width: number
+  unit: ScaleUnit
+}
+
 export interface CampaignMap {
   /** The map note (may not exist yet). */
   path: VaultPath
   exists: boolean
-  /** Vault path of the map image, or ''. */
+  /** Vault path of the map image, or '' (pins on a blank grid). */
   image: string
   pins: MapPin[]
   party: PartyMarker | null
+  /** Image width ÷ height (4:3 when there's no image). */
+  aspect: number
+  scale: MapScale | null
+}
+
+export const DEFAULT_ASPECT = 4 / 3
+
+export function normalizeScale(raw: unknown): MapScale | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const width = typeof r.width === 'number' && r.width > 0 ? r.width : null
+  const unit = (SCALE_UNITS as readonly string[]).includes(r.unit as string) ? (r.unit as ScaleUnit) : null
+  return width && unit ? { width, unit } : null
+}
+
+export function normalizeAspect(raw: unknown): number {
+  return typeof raw === 'number' && raw > 0.1 && raw < 10 ? raw : DEFAULT_ASPECT
+}
+
+/** A round scale-bar length (1, 2 or 5 × 10ⁿ units) that is about `targetPx` wide. */
+export function niceScaleBar(pxPerUnit: number, targetPx = 64): { units: number; px: number } {
+  const raw = targetPx / pxPerUnit
+  const pow = 10 ** Math.floor(Math.log10(raw))
+  const units = [1, 2, 5, 10].map((m) => m * pow).reduce((best, u) => (Math.abs(u - raw) < Math.abs(best - raw) ? u : best))
+  return { units, px: units * pxPerUnit }
+}
+
+/** Lays out named places on a loose grid (for campaigns made by the builder). */
+export function autoLayout(names: string[]): { x: number; y: number }[] {
+  const n = names.length
+  const cols = Math.max(1, Math.ceil(Math.sqrt(n * DEFAULT_ASPECT)))
+  const rows = Math.max(1, Math.ceil(n / cols))
+  return names.map((name, i) => {
+    // Deterministic jitter from the name, so layouts are stable.
+    let h = 0
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+    const jx = ((h % 1000) / 1000 - 0.5) * 0.5
+    const jy = ((Math.floor(h / 1000) % 1000) / 1000 - 0.5) * 0.5
+    const c = i % cols
+    const r = Math.floor(i / cols)
+    return { x: Math.round(((c + 0.5 + jx) / cols) * 10000) / 10000, y: Math.round(((r + 0.5 + jy) / rows) * 10000) / 10000 }
+  })
 }
 
 const clamp01 = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null)

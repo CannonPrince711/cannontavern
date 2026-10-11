@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PIN_KINDS } from '@shared/map'
+import { PIN_KINDS, SCALE_UNITS } from '@shared/map'
 import { handle } from '../ipc'
 import { imageService } from '../images'
 import { campaignImages, importMapImage, readMap, saveMap } from '../maps'
@@ -31,7 +31,9 @@ export function registerMapHandlers(): void {
             })
           )
           .max(500),
-        party: z.object({ x: coord, y: coord, at: z.string().max(60).optional() }).nullable()
+        party: z.object({ x: coord, y: coord, at: z.string().max(60).optional() }).nullable(),
+        aspect: z.number().min(0.1).max(10).optional(),
+        scale: z.object({ width: z.number().positive().max(1e7), unit: z.enum(SCALE_UNITS) }).nullable().optional()
       })
     ])
   )

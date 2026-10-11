@@ -37,3 +37,20 @@ describe('maps', () => {
     expect(partyLocation({ pins, party: { x: 0.2, y: 0.2 } })).toBeNull()
   })
 })
+
+describe('map layout and scale', () => {
+  it('picks round scale-bar lengths', async () => {
+    const { niceScaleBar } = await import('../src/shared/map')
+    expect(niceScaleBar(3.2, 64).units).toBe(20) // 3.2 px per metre → 20 m ≈ 64 px
+    expect(niceScaleBar(0.5, 64).units).toBe(100)
+    expect(niceScaleBar(100, 64).units).toBe(0.5)
+  })
+  it('lays builder locations out inside the map, deterministically', async () => {
+    const { autoLayout } = await import('../src/shared/map')
+    const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    const a = autoLayout(names)
+    expect(a).toEqual(autoLayout(names))
+    expect(a.every((p) => p.x > 0 && p.x < 1 && p.y > 0 && p.y < 1)).toBe(true)
+    expect(new Set(a.map((p) => `${p.x},${p.y}`)).size).toBe(names.length)
+  })
+})

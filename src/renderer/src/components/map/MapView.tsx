@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { Crosshair, FileImage, ImagePlus, Loader2, MapPin as PinIcon, Plus, Shield, Trash2, Wand2, X } from 'lucide-react'
-import { nearestPin, PIN_KIND_INFO, PIN_KINDS, type CampaignMap, type MapPin, type PartyMarker, type PinKind } from '@shared/map'
+import { nearestPin, PIN_KIND_INFO, PIN_KINDS, SCALE_UNITS, type CampaignMap, type MapPin, type PartyMarker, type PinKind, type ScaleUnit } from '@shared/map'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, Switch } from '@/components/ui/controls'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -22,7 +22,7 @@ interface MapStore {
   open: boolean
   load: (campaignPath: string | null) => Promise<void>
   /** Optimistic local change, saved shortly after. */
-  change: (patch: Partial<Pick<CampaignMap, 'image' | 'pins' | 'party'>>) => void
+  change: (patch: Partial<Pick<CampaignMap, 'image' | 'pins' | 'party' | 'aspect' | 'scale'>>) => void
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -50,7 +50,7 @@ export const useMap = create<MapStore>((set, get) => ({
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       lastSave = Date.now()
-      invoke('maps:save', campaignPath, { image: next.image, pins: next.pins, party: next.party })
+      invoke('maps:save', campaignPath, { image: next.image, pins: next.pins, party: next.party, aspect: next.aspect, scale: next.scale })
         .then((saved) => get().campaignPath === campaignPath && set({ map: { ...get().map!, path: saved.path, exists: true } }))
         .catch((err) => toast.error(err, 'Could not save the map'))
     }, 350)
@@ -114,37 +114,6 @@ function PartyToken({ party, scale = 1, small }: { party: PartyMarker; scale?: n
     >
       {!small && <Shield className="size-3.5" />}
     </span>
-  )
-}
-
-/** Mini-map: a corner thumbnail of the campaign map with pins and the party. */
-export function MiniMap(): React.JSX.Element | null {
-  const map = useMap((s) => s.map)
-  const show = useApp((s) => s.settings?.behavior.miniMap ?? true)
-  if (!map?.image || !show) return null
-  const at = map.party?.at ? map.pins.find((p) => p.id === map.party!.at)?.name : null
-  return (
-    <div className="group absolute top-3 right-4 z-10 w-52 overflow-hidden rounded-lg border bg-popover/95 shadow-card">
-      <button type="button" onClick={() => useMap.setState({ open: true })} aria-label="Open the map" className="relative block w-full">
-        <img src={vaultUrl(map.image)} alt="" className="block aspect-[4/3] w-full object-cover" draggable={false} />
-        {map.pins.filter((p) => p.x !== null).map((p) => (
-          <PinMarker key={p.id} pin={p} small />
-        ))}
-        {map.party && <PartyToken party={map.party} small />}
-      </button>
-      <div className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground">
-        <Shield className="size-3 text-emerald" />
-        <span className="truncate">{at ? `At ${at}` : 'Map'}</span>
-        <button
-          type="button"
-          aria-label="Hide the mini-map"
-          onClick={() => void useApp.getState().updateSettings({ behavior: { miniMap: false } })}
-          className="ml-auto rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground"
-        >
-          <X className="size-3" />
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -384,17 +353,15 @@ export function MapOverlay(): React.JSX.Element | null {
           {atPin ? ` · party at ${atPin.name}` : ''}
         </span>
         <div className="ml-4 flex items-center gap-1.5">
-          <Button size="sm" variant={placing === 'new' ? 'default' : 'outline'} onClick={() => setPlacing(placing === 'new' ? null : 'new')} disabled={!map.image}>
+          <Button size="sm" variant={placing === 'new' ? 'default' : 'outline'} onClick={() => setPlacing(placing === 'new' ? null : 'new')} disabled={chooser}>
             <Plus /> Add pin
           </Button>
-          <Button size="sm" variant={placing === 'party' ? 'default' : 'outline'} onClick={() => setPlacing(placing === 'party' ? null : 'party')} disabled={!map.image}>
+          <Button size="sm" variant={placing === 'party' ? 'default' : 'outline'} onClick={() => setPlacing(placing === 'party' ? null : 'party')} disabled={chooser}>
             <Crosshair /> Place party
           </Button>
-          {map.image && (
-            <Button size="sm" variant="ghost" onClick={() => setChooser(true)}>
-              <ImagePlus /> Change image
-            </Button>
-          )}
+          <Button size="sm" variant="ghost" onClick={() => setChooser(true)}>
+            <ImagePlus /> {map.image ? 'Change image' : 'Add a map image'}
+          </Button>
         </div>
         <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           <Switch aria-label="Tell the DM when the party moves" checked={settings?.play.announceTravel ?? true} onCheckedChange={(v) => void useApp.getState().updateSettings({ play: { announceTravel: v } })} /> Tell the DM when the party moves
@@ -409,12 +376,12 @@ export function MapOverlay(): React.JSX.Element | null {
       <div className="flex min-h-0 flex-1">
         <div
           className={cn('relative min-w-0 flex-1 overflow-hidden bg-[#0b0a0d]', placing ? 'cursor-crosshair' : 'cursor-grab')}
-          onPointerDown={map.image && !chooser ? onPointerDown : undefined}
+          onPointerDown={!chooser ? onPointerDown : undefined}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onWheel={map.image && !chooser ? onWheel : undefined}
+          onWheel={!chooser ? onWheel : undefined}
         >
-          {!map.image || chooser ? (
+          {chooser ? (
             <div className="grid h-full place-items-center overflow-y-auto p-6">
               <ImageChooser campaignPath={campaignPath} onClose={chooser ? () => setChooser(false) : undefined} />
             </div>
@@ -422,7 +389,32 @@ export function MapOverlay(): React.JSX.Element | null {
             <div className="absolute inset-0 grid place-items-center p-6">
               <div style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})` }} className="relative max-h-full max-w-full">
                 <div ref={boxRef} className="relative">
-                  <img src={vaultUrl(map.image)} alt="Campaign map" className="block max-h-[calc(100vh-140px)] max-w-full select-none" draggable={false} />
+                  {map.image ? (
+                    <img
+                      src={vaultUrl(map.image)}
+                      alt="Campaign map"
+                      className="block max-h-[calc(100vh-140px)] max-w-full select-none"
+                      draggable={false}
+                      onLoad={(e) => {
+                        const img = e.currentTarget
+                        const aspect = img.naturalWidth / img.naturalHeight
+                        if (img.naturalHeight && Math.abs(aspect - map.aspect) > 0.001) change({ aspect })
+                      }}
+                    />
+                  ) : (
+                    // No image: pins live on a blank grid (the mini-map works the same way).
+                    <div
+                      aria-label="Blank map grid"
+                      className="rounded-md border border-white/10"
+                      style={{
+                        width: `min(calc(100vw - 380px), calc((100vh - 150px) * ${map.aspect}))`,
+                        aspectRatio: String(map.aspect),
+                        background: '#16151a',
+                        backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
+                        backgroundSize: '40px 40px'
+                      }}
+                    />
+                  )}
                   {pins.filter((p) => p.x !== null).map((p) => (
                     <PinMarker key={p.id} pin={p} selected={p.id === selected} scale={view.scale} />
                   ))}
@@ -441,6 +433,33 @@ export function MapOverlay(): React.JSX.Element | null {
           <div className="flex items-center gap-2 rounded-lg border bg-card/70 px-3 py-2 text-sm">
             <Shield className="size-4 text-emerald" />
             <span className="min-w-0 flex-1 truncate">{atPin ? `Party at ${atPin.name}` : map.party ? 'Party on the road' : 'Party not placed'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+            <span className="shrink-0" title="How wide the whole map is, for the scale bar">Map width</span>
+            <Input
+              type="number"
+              min={0}
+              value={map.scale?.width ?? ''}
+              onChange={(e) => {
+                const width = Number(e.target.value)
+                change({ scale: width > 0 ? { width, unit: map.scale?.unit ?? 'mi' } : null })
+              }}
+              placeholder="—"
+              aria-label="Map width"
+              className="h-7 w-20 text-xs"
+            />
+            <NativeSelect
+              value={map.scale?.unit ?? 'mi'}
+              onChange={(e) => map.scale && change({ scale: { ...map.scale, unit: e.target.value as ScaleUnit } })}
+              aria-label="Map width unit"
+              className="h-7 w-[4.75rem] text-xs"
+            >
+              {SCALE_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </NativeSelect>
           </div>
           {pin ? (
             <PinEditor
@@ -468,7 +487,7 @@ export function MapOverlay(): React.JSX.Element | null {
                 <div key={p.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent">
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   <Tip label="Click the map to place it">
-                    <Button size="sm" variant="ghost" className="h-6" onClick={() => setPlacing(p.id)} disabled={!map.image}>
+                    <Button size="sm" variant="ghost" className="h-6" onClick={() => setPlacing(p.id)}>
                       Place
                     </Button>
                   </Tip>

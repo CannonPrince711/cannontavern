@@ -14,6 +14,8 @@ import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError } from './errors'
 import { createCampaign, readCharacter, saveParty } from './library'
 import { createSession } from './sessions'
+import { saveMap } from './maps'
+import { autoLayout } from '@shared/map'
 import { settingsStore } from './settings-store'
 import { serializeNote, updateNote } from './vault/frontmatter'
 import { vaultService } from './vault/service'
@@ -101,6 +103,14 @@ export async function buildCampaign(draft: CampaignDraft, opts: BuildOptions): P
       serializeNote({ type: 'npc', name: npc.name.trim(), description: npc.description.trim(), personality: npc.personality.trim(), tags: ['npc', tag] }, `\n${body.join('\n\n')}\n`),
       { baseHash: null }
     )
+  }
+
+  // A starter map: the locations laid out on a grid, the party at the first one.
+  if (draft.locations.length) {
+    const places = draft.locations.map((l) => l.name.trim()).filter(Boolean)
+    const spots = autoLayout(places)
+    const pins = places.map((name, i) => ({ id: `loc${i + 1}`, name, x: spots[i]!.x, y: spots[i]!.y, kind: 'location' as const, description: draft.locations[i]!.description.trim().slice(0, 300), note: undefined }))
+    await saveMap(vault, campaign.path, { image: '', pins, party: pins[0] ? { x: pins[0].x, y: pins[0].y, at: pins[0].id } : null })
   }
 
   let sessionPath: VaultPath | null = null
