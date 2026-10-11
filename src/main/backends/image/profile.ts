@@ -50,6 +50,7 @@ export function applyImageProfile(
     else if (b.type === 'comfyui') {
       const wf = b.comfy.workflows.find((w) => w.id === workflowId)
       if (wf) wf.checkpoint = model
+      else b.comfy.checkpoint = model
     }
   }
   const over: Partial<ImageRequest> = {

@@ -205,7 +205,9 @@ function imageBackendSchema<S extends SecretSchema>(secret: S) {
     comfy: z
       .object({
         workflows: z.array(ComfyWorkflowSchema).default([]),
-        defaultWorkflowId: z.string().nullable().default(null)
+        defaultWorkflowId: z.string().nullable().default(null),
+        /** Checkpoint for the built-in workflow (used when no workflow is imported); '' = the server's first. */
+        checkpoint: z.string().default('')
       })
       .prefault({}),
     openai: z

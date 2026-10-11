@@ -41,7 +41,12 @@ export async function listImageModels(stored: ImageBackend): Promise<ImageModelL
       const workflows = stored.comfy.workflows.map((w) => ({ id: w.id, name: w.name, purpose: w.purpose, canSetModel: !!w.mapping.checkpoint }))
       const wf = stored.comfy.workflows.find((w) => w.id === stored.comfy.defaultWorkflowId) ?? stored.comfy.workflows[0]
       const base = { workflows, currentWorkflowId: wf?.id ?? null, models: [] as string[], current: wf?.checkpoint ?? '' }
-      if (!wf) return { ...base, note: 'Import a workflow first.' }
+      if (!wf) {
+        // The built-in workflow: any checkpoint the server has.
+        const info = await getJson(b, `${root(b)}/object_info/CheckpointLoaderSimple`)
+        const models = optionsFor(info, 'CheckpointLoaderSimple', 'ckpt_name')
+        return { ...base, models, current: stored.comfy.checkpoint || models[0] || '', ...(models.length ? {} : { note: 'ComfyUI has no checkpoints in models/checkpoints.' }) }
+      }
       if (!wf.mapping.checkpoint) return { ...base, note: 'This workflow has no checkpoint node mapped, so it always uses its own model.' }
       const json = await loadWorkflowFile(wf.file, wf.location)
       const node = json[wf.mapping.checkpoint.nodeId]
@@ -86,6 +91,7 @@ export function withImageModel(b: ImageBackend, choice: { model?: string; workfl
     if (next.type === 'comfyui') {
       const wf = next.comfy.workflows.find((w) => w.id === next.comfy.defaultWorkflowId) ?? next.comfy.workflows[0]
       if (wf) wf.checkpoint = choice.model
+      else next.comfy.checkpoint = choice.model
     } else if (next.type === 'a1111') next.a1111.model = choice.model
     else if (next.type === 'openai') next.openai.model = choice.model
   }

@@ -34,7 +34,7 @@ function ImageCard(): React.JSX.Element {
       const info = await invoke('comfy:importWorkflow')
       if (!info) return
       const wf = { id: crypto.randomUUID(), name: info.file.replace(/\.json$/i, ''), purpose: 'scene' as const, location: 'appdata' as const, file: info.file, mapping: info.guess, seedMode: 'random' as const, fixedSeed: 0, checkpoint: '', lora: '', loraStrength: 0.8 }
-      setDraft({ ...draft, comfy: { workflows: [...draft.comfy.workflows, wf], defaultWorkflowId: draft.comfy.defaultWorkflowId ?? wf.id } })
+      setDraft({ ...draft, comfy: { ...draft.comfy, workflows: [...draft.comfy.workflows, wf], defaultWorkflowId: draft.comfy.defaultWorkflowId ?? wf.id } })
       toast.success(`Imported ${wf.name}`)
     } catch (err) {
       toast.error(err, 'Could not import the workflow')

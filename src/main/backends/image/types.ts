@@ -17,6 +17,8 @@ export interface ImageRequest {
   /** -1 = random. */
   seed: number
   workflowId?: string
+  /** ComfyUI built-in workflow: the checkpoint to load. */
+  checkpoint?: string
   /** Source image for img2img (e.g. the character's avatar). */
   source?: { data: Buffer; filename: string }
 }

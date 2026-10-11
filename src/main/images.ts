@@ -260,7 +260,7 @@ class ImageService {
     if (sketch) {
       // Paint over the sketch (img2img), keeping its proportions.
       const wf = backend.comfy.workflows.find((w) => w.id === workflowId)
-      if (backend.type === 'comfyui' && !wf?.mapping.sourceImage) {
+      if (backend.type === 'comfyui' && backend.comfy.workflows.length > 0 && !wf?.mapping.sourceImage) {
         throw new AppError('NO_IMG2IMG', `The ComfyUI workflow “${wf?.name ?? 'for maps'}” has no Load Image node, so it can’t start from a sketch. Import an img2img workflow and pick it for Maps in Generation options.`)
       }
       if (backend.type !== 'comfyui' && backend.type !== 'a1111') {

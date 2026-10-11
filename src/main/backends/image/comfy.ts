@@ -130,16 +130,96 @@ export interface ComfyDeps {
   loadWorkflow: (wf: ComfyWorkflow) => Promise<ApiWorkflow>
 }
 
+/**
+ * The workflow used when none is imported: ComfyUI's standard text-to-image
+ * graph (load checkpoint → prompts → empty latent → sampler → decode → save),
+ * or, with a source image, img2img (load → resize → encode → sample at 0.55).
+ */
+export function builtinWorkflow(img2img: boolean, sampler = ''): { api: ApiWorkflow; mapping: ComfyMapping } {
+  const { name, scheduler } = comfySampler(sampler)
+  const api: ApiWorkflow = {
+    '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: '' } },
+    '6': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
+    '7': { class_type: 'CLIPTextEncode', inputs: { text: '', clip: ['4', 1] } },
+    '3': {
+      class_type: 'KSampler',
+      inputs: { seed: 0, steps: 25, cfg: 6, sampler_name: name, scheduler, denoise: img2img ? 0.55 : 1, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: img2img ? ['11', 0] : ['5', 0] }
+    },
+    '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
+    '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'DNDTavern', images: ['8', 0] } }
+  }
+  if (img2img) {
+    api['10'] = { class_type: 'LoadImage', inputs: { image: '' } }
+    api['12'] = { class_type: 'ImageScale', inputs: { upscale_method: 'lanczos', width: 1024, height: 1024, crop: 'disabled', image: ['10', 0] } }
+    api['11'] = { class_type: 'VAEEncode', inputs: { pixels: ['12', 0], vae: ['4', 2] } }
+  } else {
+    api['5'] = { class_type: 'EmptyLatentImage', inputs: { width: 1024, height: 1024, batch_size: 1 } }
+  }
+  const at = (nodeId: string, input: string): NodeInput => ({ nodeId, input })
+  const size = img2img ? '12' : '5'
+  return {
+    api,
+    mapping: {
+      positive: at('6', 'text'),
+      negative: at('7', 'text'),
+      seed: at('3', 'seed'),
+      steps: at('3', 'steps'),
+      cfg: at('3', 'cfg'),
+      width: at(size, 'width'),
+      height: at(size, 'height'),
+      checkpoint: at('4', 'ckpt_name'),
+      lora: null,
+      loraStrength: null,
+      sourceImage: img2img ? at('10', 'image') : null
+    }
+  }
+}
+
+/** Automatic1111-style sampler names ("DPM++ 2M Karras") → ComfyUI's sampler and scheduler. */
+export function comfySampler(a1111: string): { name: string; scheduler: string } {
+  const s = a1111.trim().toLowerCase()
+  const scheduler = s.includes('karras') ? 'karras' : s.includes('exponential') ? 'exponential' : 'normal'
+  const base = s.replace(/karras|exponential/g, '').trim()
+  const table: Record<string, string> = {
+    euler: 'euler',
+    'euler a': 'euler_ancestral',
+    heun: 'heun',
+    'dpm2': 'dpm_2',
+    'dpm2 a': 'dpm_2_ancestral',
+    'dpm++ 2m': 'dpmpp_2m',
+    'dpm++ 2m sde': 'dpmpp_2m_sde',
+    'dpm++ sde': 'dpmpp_sde',
+    'dpm++ 2s a': 'dpmpp_2s_ancestral',
+    'dpm++ 3m sde': 'dpmpp_3m_sde',
+    lms: 'lms',
+    ddim: 'ddim',
+    uni_pc: 'uni_pc',
+    unipc: 'uni_pc'
+  }
+  return { name: table[base] ?? (/^[a-z0-9_]+$/.test(base) && base ? base : 'euler'), scheduler }
+}
+
 export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
   return {
     async generate(b, req, opts) {
       const workflows = b.comfy.workflows
-      const wf = workflows.find((w) => w.id === req.workflowId) ?? workflows.find((w) => w.id === b.comfy.defaultWorkflowId) ?? workflows[0]
-      if (!wf) throw new AppError('COMFY_NO_WORKFLOW', `“${b.name}” has no workflow. Import an API-format workflow in Settings → Image backends.`)
-      if (!wf.mapping.positive) throw new AppError('COMFY_MAPPING', `Workflow “${wf.name}” has no node mapped to the positive prompt.`)
-      const api = await deps.loadWorkflow(wf)
+      const imported = workflows.find((w) => w.id === req.workflowId) ?? workflows.find((w) => w.id === b.comfy.defaultWorkflowId) ?? workflows[0]
       const root = base(b)
       const authHeaders: Record<string, string> = b.key ? { Authorization: `Bearer ${b.key}` } : {}
+      // No workflow imported: ComfyUI's standard graph, with the configured checkpoint or the server's first.
+      let wf: Pick<ComfyWorkflow, 'name' | 'mapping' | 'seedMode' | 'fixedSeed' | 'checkpoint' | 'lora' | 'loraStrength'>
+      let api: ApiWorkflow
+      if (imported) {
+        wf = imported
+        if (!wf.mapping.positive) throw new AppError('COMFY_MAPPING', `Workflow “${wf.name}” has no node mapped to the positive prompt.`)
+        api = await deps.loadWorkflow(imported)
+      } else {
+        const builtin = builtinWorkflow(!!req.source, req.sampler)
+        const checkpoint = req.checkpoint || b.comfy.checkpoint || (await firstCheckpoint(b, root, authHeaders))
+        if (!checkpoint) throw new AppError('COMFY_NO_CHECKPOINT', `ComfyUI on “${b.name}” has no checkpoints in models/checkpoints. Add one, or import a workflow in Settings → Image backends.`)
+        wf = { name: 'Built-in', mapping: builtin.mapping, seedMode: 'random', fixedSeed: 0, checkpoint, lora: '', loraStrength: 0.8 }
+        api = builtin.api
+      }
 
       let sourceName: string | undefined
       if (req.source && wf.mapping.sourceImage) {
@@ -207,6 +287,14 @@ export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
       }
     }
   }
+}
+
+/** The first checkpoint ComfyUI offers (for the built-in workflow when none is chosen). */
+async function firstCheckpoint(b: ResolvedImageBackend, root: string, headers: Record<string, string>): Promise<string> {
+  const { res, deadline } = await request({ ...b.net, retries: 0 }, { url: `${root}/object_info/CheckpointLoaderSimple`, headers })
+  const info = (await readJson(res, deadline)) as { CheckpointLoaderSimple?: { input?: { required?: { ckpt_name?: unknown[] } } } }
+  const list = info.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0]
+  return Array.isArray(list) && typeof list[0] === 'string' ? list[0] : ''
 }
 
 interface ProgressWatch {

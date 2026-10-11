@@ -187,7 +187,7 @@ export function ComfyWorkflows({
     <div className="space-y-2">
       {workflows.length === 0 && (
         <Callout tone="muted">
-          Export a workflow from ComfyUI with <strong>Save (API Format)</strong> (enable Dev mode in ComfyUI’s settings), then import it here. You can add several, for example Portrait, Scene and Map.
+          Without one, DND Tavern uses a built-in standard workflow (checkpoint → prompt → sampler), with the checkpoint from the model switcher or Generation options. For LoRAs, upscalers or anything custom, export a workflow from ComfyUI with <strong>Save (API Format)</strong> (enable Dev mode in ComfyUI’s settings) and import it here. You can add several, for example Portrait, Scene and Map.
         </Callout>
       )}
       {workflows.map((wf) => (

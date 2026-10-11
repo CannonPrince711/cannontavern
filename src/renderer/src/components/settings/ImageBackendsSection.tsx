@@ -125,7 +125,7 @@ function ImageBackendEditor({ initial, isNew, onSaved, onDone }: { initial: Imag
 
         {draft.type === 'comfyui' && (
           <Disclosure title="Workflows" defaultOpen badge={<span className="text-xs text-muted-foreground">{draft.comfy.workflows.length}</span>}>
-            <ComfyWorkflows workflows={draft.comfy.workflows} defaultId={draft.comfy.defaultWorkflowId} onChange={(workflows, defaultWorkflowId) => set('comfy', { workflows, defaultWorkflowId })} />
+            <ComfyWorkflows workflows={draft.comfy.workflows} defaultId={draft.comfy.defaultWorkflowId} onChange={(workflows, defaultWorkflowId) => set('comfy', { ...draft.comfy, workflows, defaultWorkflowId })} />
           </Disclosure>
         )}
 

@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { WebSocketServer } from 'ws'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ImageBackendSchema, ComfyWorkflowSchema } from '@shared/settings'
-import { applyMapping, comfyAdapter, guessMapping, parseWorkflow, summarizeWorkflow, type ApiWorkflow } from '../src/main/backends/image/comfy'
+import { applyMapping, builtinWorkflow, comfyAdapter, comfySampler, guessMapping, parseWorkflow, summarizeWorkflow, type ApiWorkflow } from '../src/main/backends/image/comfy'
 import { solidPng } from '../src/main/import/png'
 import type { ResolvedImageBackend } from '../src/main/backends/image/types'
 
@@ -101,6 +101,9 @@ describe('ComfyUI generation against a mock server', () => {
           expect(url.searchParams.get('filename')).toBe('tavern_0001.png')
           res.writeHead(200, { 'Content-Type': 'image/png' })
           res.end(png)
+        } else if (url.pathname === '/object_info/CheckpointLoaderSimple') {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [['sdxl_base.safetensors', 'fantasyMap.safetensors']] } } } }))
         } else if (url.pathname === '/upload/image') {
           uploads++
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -147,11 +150,39 @@ describe('ComfyUI generation against a mock server', () => {
     expect(sent.prompt['11']!.inputs.image).toBe('avatar.png')
   })
 
-  it('explains a backend without workflows', async () => {
+  const net = { headers: {}, proxy: '', allowSelfSigned: false, timeoutMs: 5000, retries: 0 }
+
+  it('uses a built-in text-to-image workflow when none is imported', async () => {
     const b = ImageBackendSchema.parse({ id: 'c', name: 'Comfy', type: 'comfyui', baseUrl: base })
     const adapter = comfyAdapter({ loadWorkflow: async () => WORKFLOW })
-    await expect(
-      adapter.generate({ ...b, key: '', net: { headers: {}, proxy: '', allowSelfSigned: false, timeoutMs: 5000, retries: 0 } }, { prompt: 'x', negative: '', width: 64, height: 64, steps: 1, cfg: 1, sampler: '', seed: 1 }, {})
-    ).rejects.toThrow(/no workflow/)
+    const r = await adapter.generate({ ...b, key: '', net }, { prompt: 'a misty harbour', negative: 'text', width: 1344, height: 768, steps: 30, cfg: 5, sampler: 'DPM++ 2M Karras', seed: 3 }, {})
+    expect(r.data.equals(png)).toBe(true)
+    const sent = queued.at(-1)!.prompt
+    expect(sent['4']!.inputs.ckpt_name).toBe('sdxl_base.safetensors') // the server's first checkpoint
+    expect(sent['6']!.inputs.text).toBe('a misty harbour')
+    expect(sent['7']!.inputs.text).toBe('text')
+    expect(sent['5']!.inputs).toMatchObject({ width: 1344, height: 768 })
+    expect(sent['3']!.inputs).toMatchObject({ seed: 3, steps: 30, cfg: 5, sampler_name: 'dpmpp_2m', scheduler: 'karras', denoise: 1 })
+    expect(sent['9']!.class_type).toBe('SaveImage')
   })
+
+  it('paints over a source image with the built-in img2img workflow and the chosen checkpoint', async () => {
+    const b = ImageBackendSchema.parse({ id: 'c', name: 'Comfy', type: 'comfyui', baseUrl: base, comfy: { checkpoint: 'fantasyMap.safetensors' } })
+    const adapter = comfyAdapter({ loadWorkflow: async () => WORKFLOW })
+    await adapter.generate({ ...b, key: '', net }, { prompt: 'a map', negative: '', width: 1216, height: 688, steps: 20, cfg: 6, sampler: 'euler', seed: 1, source: { data: png, filename: 'sketch.png' } }, {})
+    const sent = queued.at(-1)!.prompt
+    expect(sent['4']!.inputs.ckpt_name).toBe('fantasyMap.safetensors')
+    expect(sent['10']!.inputs.image).toBe('avatar.png') // the uploaded file's name, from the fake server
+    expect(sent['12']!.inputs).toMatchObject({ width: 1216, height: 688 })
+    expect(sent['3']!.inputs).toMatchObject({ denoise: 0.55, latent_image: ['11', 0] })
+    expect(sent['5']).toBeUndefined()
+  })
+
+  it('maps Automatic1111 sampler names', () => {
+    expect(comfySampler('Euler a')).toEqual({ name: 'euler_ancestral', scheduler: 'normal' })
+    expect(comfySampler('DPM++ SDE Karras')).toEqual({ name: 'dpmpp_sde', scheduler: 'karras' })
+    expect(comfySampler('')).toEqual({ name: 'euler', scheduler: 'normal' })
+    expect(builtinWorkflow(false).mapping.sourceImage).toBeNull()
+  })
+
 })
