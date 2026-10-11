@@ -11,6 +11,7 @@ import type {
 } from '@shared/ipc'
 import { AppError, toErrorInfo } from './errors'
 import { isTrustedRendererUrl } from './security'
+import { describeIssues } from '@shared/validation'
 
 type Handler<C extends InvokeChannel> = (
   event: IpcMainInvokeEvent,
@@ -36,7 +37,7 @@ export function handle<C extends InvokeChannel>(
       if (argsSchema) {
         const parsed = argsSchema.safeParse(rawArgs)
         if (!parsed.success) {
-          throw new AppError('IPC_INVALID_ARGS', `Invalid arguments for ${channel}`, parsed.error.message)
+          throw new AppError('IPC_INVALID_ARGS', describeIssues(parsed.error, rawArgs) ?? `Invalid arguments for ${channel}`, parsed.error.message)
         }
         args = parsed.data
       }

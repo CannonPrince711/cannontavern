@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, parseDraft } from '../src/shared/builder'
+import { z } from 'zod'
+import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, parseDraft, PREMISE_MAX } from '../src/shared/builder'
+import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
   name: 'The Ashen Crown',
@@ -118,5 +120,24 @@ Hope you like it!`
 
   it('asks a compact prompt for retries', () => {
     expect(builderPrompt(CampaignConceptSchema.parse({ length: 'long' }), { compact: true })).toContain('3 locations, 3 NPCs')
+  })
+})
+
+describe('campaign builder: long premises', () => {
+  it('accepts a whole pasted campaign prompt, up to the limit', () => {
+    expect(CampaignConceptSchema.safeParse({ premise: 'x'.repeat(PREMISE_MAX) }).success).toBe(true)
+    expect(CampaignConceptSchema.safeParse({ premise: 'x'.repeat(PREMISE_MAX + 1) }).success).toBe(false)
+  })
+
+  it('explains a rejected field in words', () => {
+    const premise = 'x'.repeat(PREMISE_MAX + 200)
+    const result = z.tuple([CampaignConceptSchema]).safeParse([{ premise }])
+    expect(result.success).toBe(false)
+    expect(describeIssues(result.error!, [{ premise }])).toBe('Premise is too long: 12,200 characters, the limit is 12,000.')
+  })
+
+  it('names fields readably', () => {
+    expect(fieldLabel('houseRules')).toBe('House rules')
+    expect(fieldLabel('max_tokens')).toBe('Max tokens')
   })
 })

@@ -36,6 +36,15 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
       // Leave the reply room inside the model's context window.
       const promptTokens = Math.ceil((BUILDER_SYSTEM.length + prompt.length) / 3.5)
       const room = window - promptTokens - 64
+      if (room < 800) {
+        // The request alone would fill the model's window: say so rather than send something that gets cut.
+        lastError = new AppError(
+          'PROMPT_TOO_LONG',
+          `The premise is too long for this model: the request is about ${promptTokens.toLocaleString('en-US')} tokens, and its context window is ${window.toLocaleString('en-US')}. Shorten the premise, or raise the server's context size.`
+        )
+        if (compact) break
+        continue
+      }
       const maxTokens = Math.max(800, Math.min(6000, room))
       try {
         const result = await textAdapter(backend.type).generate(resolveTextBackend(backend), { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens }, { stream: false })

@@ -11,9 +11,12 @@ import { EDITIONS } from './editions'
 export const CAMPAIGN_TONES = ['Heroic', 'Grim', 'Horror', 'Mystery', 'Comedic', 'Political intrigue', 'Exploration', 'Swashbuckling', 'Romantic', 'Epic'] as const
 export const CAMPAIGN_SETTINGS = ['Classic high fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange', 'Your own idea'] as const
 
+/** Long enough for a full pasted campaign prompt. */
+export const PREMISE_MAX = 12_000
+
 export const CampaignConceptSchema = z.object({
   name: z.string().max(120).default(''),
-  premise: z.string().max(4000).default(''),
+  premise: z.string().max(PREMISE_MAX).default(''),
   tones: z.array(z.string().max(40)).max(6).default([]),
   setting: z.string().max(200).default(''),
   levels: z.string().max(40).default('1–5'),

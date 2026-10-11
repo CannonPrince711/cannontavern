@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
-import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, type CampaignConcept, type CampaignDraft } from '@shared/builder'
+import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, PREMISE_MAX, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
 import { EDITION_INFO, EDITIONS } from '@shared/editions'
 import { Button } from '@/components/ui/button'
@@ -76,6 +76,7 @@ function listOps<K extends 'locations' | 'npcs' | 'factions' | 'outline' | 'ques
 function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { concept: CampaignConcept; setConcept: (c: CampaignConcept) => void; onDraft: () => void; onManual: () => void; hasBackend: boolean }): React.JSX.Element {
   const set = <K extends keyof CampaignConcept>(k: K, v: CampaignConcept[K]): void => setConcept({ ...concept, [k]: v })
   const custom = !CAMPAIGN_SETTINGS.slice(0, -1).includes(concept.setting as (typeof CAMPAIGN_SETTINGS)[number]) && concept.setting !== ''
+  const tooLong = concept.premise.length > PREMISE_MAX
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-[1fr_auto] gap-4">
@@ -90,7 +91,20 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="cb-premise">Premise</Label>
-        <Textarea id="cb-premise" rows={3} value={concept.premise} onChange={(e) => set('premise', e.target.value)} placeholder="A fog-bound fishing town where a drowned bell rings at night, and someone keeps disappearing each time it does…" />
+        <Textarea
+          id="cb-premise"
+          rows={concept.premise.length > 500 ? 10 : 3}
+          value={concept.premise}
+          onChange={(e) => set('premise', e.target.value)}
+          aria-invalid={tooLong || undefined}
+          aria-describedby="cb-premise-count"
+          className={cn(tooLong && 'border-crimson focus-visible:ring-crimson/40')}
+          placeholder="A fog-bound fishing town where a drowned bell rings at night, and someone keeps disappearing each time it does… (or paste a whole campaign prompt)"
+        />
+        <p id="cb-premise-count" className={cn('text-right text-[11px] tabular-nums', tooLong ? 'text-crimson' : 'text-muted-foreground')}>
+          {tooLong && 'Too long: shorten it to draft. '}
+          {concept.premise.length.toLocaleString('en-US')} / {PREMISE_MAX.toLocaleString('en-US')} characters
+        </p>
       </div>
       <div className="space-y-1.5">
         <Label>Tone</Label>
@@ -168,7 +182,7 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
         <Button variant="ghost" onClick={onManual}>
           <Hammer /> Fill it in by hand
         </Button>
-        <Button onClick={onDraft} disabled={!hasBackend}>
+        <Button onClick={onDraft} disabled={!hasBackend || tooLong}>
           <Wand2 /> Draft with AI
         </Button>
       </div>
