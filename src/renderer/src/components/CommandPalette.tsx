@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { BookOpen, CornerDownLeft, Dices, FileText, FolderOpen, Hash, MessageSquare, Plus, ScrollText, Search, Settings, SquareTerminal, User } from 'lucide-react'
+import { BookOpen, CornerDownLeft, Dices, FileText, FolderOpen, Hash, MessageSquare, Plus, ScrollText, Search, Settings, SquareTerminal, User, Wand2 } from 'lucide-react'
 import { listCommands, runCommand } from '@/lib/commands'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -82,6 +82,7 @@ function useItems(query: string): Item[] {
         }
       },
       { id: 'new-campaign', group: 'Actions', label: 'New campaign', icon: FolderOpen, run: () => useUi.setState({ creatingCampaign: true }) },
+      { id: 'builder', group: 'Actions', label: 'Campaign builder', icon: Wand2, keywords: 'create generate ai world npc', run: () => useUi.setState({ buildingCampaign: true }) },
       { id: 'dice', group: 'Actions', label: 'Dice tray', icon: Dices, keywords: 'roll', run: () => useDiceFx.getState().setTrayOpen(!useDiceFx.getState().trayOpen) },
       { id: 'inspector', group: 'Actions', label: 'Prompt inspector', icon: SquareTerminal, keywords: 'tokens context debug', run: () => useUi.setState({ inspectorOpen: true }) },
       { id: 'left', group: 'Actions', label: 'Toggle left sidebar', icon: MessageSquare, run: () => useLayout.getState().toggleLeft() },

@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppearance, useReducedMotion } from '@/hooks/useAppearance'
 import { AskDialog } from '@/components/AskDialog'
 import { CharacterEditor } from '@/components/characters/CharacterEditor'
+import { CampaignBuilder } from '@/components/builder/CampaignBuilder'
 import { CommandPalette } from '@/components/CommandPalette'
 import { DiceOverlay } from '@/components/dice/DiceOverlay'
 import { Lightbox } from '@/components/images/Lightbox'
@@ -83,6 +84,7 @@ export function App(): React.JSX.Element {
           {ready && <CharacterEditor />}
           {ready && <PromptInspector />}
           {ready && <LorebookEditor />}
+          {ready && <CampaignBuilder />}
           <AskDialog />
           <DiceOverlay />
           <Lightbox />

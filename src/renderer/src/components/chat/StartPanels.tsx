@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, ScrollText, Sparkles } from 'lucide-react'
+import { Loader2, ScrollText, Sparkles, Wand2 } from 'lucide-react'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { EmptyState } from '@/components/EmptyState'
 import { BookArt, ScrollArt } from '@/components/illustrations'
@@ -40,6 +40,7 @@ export function CreateCampaignPanel(): React.JSX.Element {
       title="Begin a campaign"
       description="A campaign is a folder in your vault with its setting, party sheet, sessions and images."
       action={
+        <div className="flex flex-col items-center gap-3">
         <form
           className="flex w-96 gap-2"
           onSubmit={(e) => {
@@ -57,6 +58,12 @@ export function CreateCampaignPanel(): React.JSX.Element {
             </Button>
           )}
         </form>
+        <span className="text-xs text-muted-foreground">or</span>
+        <Button variant="outline" onClick={() => useUi.setState({ buildingCampaign: true })}>
+          <Wand2 /> Open the campaign builder
+        </Button>
+        <span className="max-w-sm text-center text-xs text-muted-foreground">Describe a premise and tone; the AI drafts places, NPCs, factions, secrets and an opening scene for you to edit.</span>
+        </div>
       }
     />
   )

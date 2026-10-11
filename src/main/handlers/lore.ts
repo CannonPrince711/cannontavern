@@ -1,3 +1,6 @@
+import { CampaignConceptSchema, CampaignDraftSchema, type CampaignConcept, type CampaignDraft } from '@shared/builder'
+import { PLAY_MODES, type PlayMode } from '@shared/play'
+import { buildCampaign, draftCampaign } from '../builder'
 import { z } from 'zod'
 import { CAMPAIGN_FILE, FOLDERS } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
@@ -57,6 +60,20 @@ export function registerLoreHandlers(): void {
       return book
     },
     z.tuple([z.string().min(1).max(120)])
+  )
+
+  handle('campaigns:draft', (_e, concept) => draftCampaign(concept), z.tuple([CampaignConceptSchema]) as unknown as z.ZodType<[CampaignConcept]>)
+
+  handle(
+    'campaigns:build',
+    async (_e, draft, opts) => {
+      const r = await buildCampaign(draft, opts)
+      return { index: vaultService.getIndex()!, ...r }
+    },
+    z.tuple([
+      CampaignDraftSchema,
+      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional() })
+    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string }]>
   )
 
   handle(

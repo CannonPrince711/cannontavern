@@ -12,6 +12,9 @@ import { toast } from '@/stores/toasts'
 import { useVault } from '@/stores/vault'
 import { NumberInput } from './fields'
 
+// Stable empty list for the selector above (a fresh [] would loop).
+const NO_PRESETS: never[] = []
+
 const BLOCK_LABELS: Record<string, { label: string; hint: string }> = {
   preset: { label: 'DM preset', hint: 'System prompt and DM rules ([CHECK …] format)' },
   character: { label: 'Character card', hint: 'Description, personality, scenario, examples' },
@@ -28,7 +31,7 @@ const BLOCK_LABELS: Record<string, { label: string; hint: string }> = {
 function PresetEditor(): React.JSX.Element {
   const settings = useApp((s) => s.settings)!
   const updateSettings = useApp((s) => s.updateSettings)
-  const presets = useVault((s) => s.index?.presets ?? [])
+  const presets = useVault((s) => s.index?.presets) ?? NO_PRESETS
   const current = settings.general.defaultPreset
   const [text, setText] = useState('')
   const [loaded, setLoaded] = useState('')

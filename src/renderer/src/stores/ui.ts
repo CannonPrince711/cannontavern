@@ -17,6 +17,8 @@ interface UiStore {
   editingCharacter: string | null
   /** Chat pane shows the "new campaign" form. */
   creatingCampaign: boolean
+  /** The campaign builder dialog is open. */
+  buildingCampaign: boolean
   settingsOpen: boolean
   settingsSection: SettingsSection
   paletteOpen: boolean
@@ -32,6 +34,7 @@ export const useUi = create<UiStore>((set) => ({
   editingLorebook: null,
   editingCharacter: null,
   creatingCampaign: false,
+  buildingCampaign: false,
   settingsOpen: false,
   settingsSection: 'general',
   paletteOpen: false,

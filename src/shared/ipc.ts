@@ -9,6 +9,7 @@
  * errors keep their code and detail across the boundary.
  */
 import type { SessionRecap } from './recap'
+import type { CampaignConcept, CampaignDraft } from './builder'
 import type { PlayMode, Speaker } from './play'
 import type {
   AppInfo,
@@ -132,6 +133,12 @@ export interface InvokeMap {
   'characters:updateSheet': Invoke<[path: VaultPath, patch: Partial<DndSheet> | null], CharacterNote>
 
   // Campaigns and lorebooks
+  /** Campaign builder: an AI draft from a concept, then the reviewed draft written to the vault. */
+  'campaigns:draft': Invoke<[concept: CampaignConcept], CampaignDraft>
+  'campaigns:build': Invoke<
+    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath }],
+    { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
+  >
   'campaigns:get': Invoke<[path: VaultPath], { campaign: Campaign; party: Party }>
   'campaigns:create': Invoke<[name: string], Campaign>
   'campaigns:saveParty': Invoke<[path: VaultPath, party: Party], Party>
@@ -295,6 +302,8 @@ const invokeChannels = {
   'characters:setAvatar': 1,
   'characters:updateSheet': 1,
   'campaigns:get': 1,
+  'campaigns:draft': 1,
+  'campaigns:build': 1,
   'campaigns:create': 1,
   'campaigns:saveParty': 1,
   'lorebooks:get': 1,
