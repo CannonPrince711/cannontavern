@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { joinVaultPath } from '@shared/names'
-import { vaultUrl } from '@/stores/vault'
+import { useVault, vaultUrl } from '@/stores/vault'
 import { RollChips } from '@/components/dice/RollChips'
 import { invoke } from '@/lib/ipc'
 import { useChat } from '@/stores/chat'
@@ -333,21 +333,20 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
     )
   }
 
-  // Player
-  const showAvatar = !!props.characterAvatar && !!m.name && m.name === props.characterName
+  // Player: whoever wrote it (you, a companion, a player at the table) gets their portrait.
   return (
     <motion.article
       ref={rootRef}
       initial={streaming ? { opacity: 0, y: 6 } : false}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative ml-auto flex max-w-[78%] flex-col items-end"
+      className="group relative ml-auto flex max-w-[82%] items-start gap-2.5"
       aria-label={m.name ?? 'Player'}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
+      <div className="flex min-w-0 flex-col items-end">
       {m.name && (
         <span className="mb-1 mr-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-          {showAvatar && <CharacterAvatar name={m.name} avatar={props.characterAvatar} size={18} />}
           {m.name}
           {isAi && <span className="rounded bg-muted px-1 text-[9px] tracking-wide uppercase">AI</span>}
         </span>
@@ -360,7 +359,22 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
       >
         <div className="font-chat text-[length:calc(var(--chat-font-size)*0.95)]">{body}</div>
       </div>
-      {!editing && !streaming && <div className="absolute -top-3 right-2">{actions}</div>}
+      </div>
+      {m.name && <SpeakerPortrait name={m.name} fallbackAvatar={m.name === props.characterName ? props.characterAvatar : undefined} />}
+      {!editing && !streaming && <div className="absolute -top-3 right-12">{actions}</div>}
     </motion.article>
   )
 })
+
+/** The portrait of the character or NPC a message is from, found by name (initials when there's no picture). */
+function SpeakerPortrait({ name, fallbackAvatar }: { name: string; fallbackAvatar?: string }): React.JSX.Element {
+  const who = useVault((s) => {
+    const key = name.trim().toLowerCase()
+    return [...(s.index?.characters ?? []), ...(s.index?.npcs ?? [])].find((c) => c.displayName.toLowerCase() === key || c.name.toLowerCase() === key)
+  })
+  return (
+    <div className="mt-5 shrink-0">
+      <CharacterAvatar name={name} avatar={who?.avatar ?? fallbackAvatar} version={who?.mtimeMs} size={36} />
+    </div>
+  )
+}

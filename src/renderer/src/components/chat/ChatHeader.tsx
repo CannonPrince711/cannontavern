@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ExternalLink, Map as MapIcon, Pencil, ScanSearch, UserRound, Users } from 'lucide-react'
+import { Check, ExternalLink, ImagePlus, Map as MapIcon, Pencil, ScanSearch, UserRound, Users } from 'lucide-react'
 import { useMap } from '@/components/map/MapView'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { NativeSelect } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
-import { invoke } from '@/lib/ipc'
+import { invoke, on } from '@/lib/ipc'
 import { useApp } from '@/stores/app'
 import { useChat } from '@/stores/chat'
 import { toast } from '@/stores/toasts'
@@ -72,7 +72,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
       </div>
 
       <Tip label={PLAY_MODE_INFO[mode].description}>
-        <NativeSelect value={mode} onChange={(e) => void meta({ mode: e.target.value as PlayMode })} className="w-[7.5rem] @min-[760px]:w-36" aria-label="Play mode">
+        <NativeSelect value={mode} onChange={(e) => void meta({ mode: e.target.value as PlayMode })} className="w-[7.5rem] shrink-0 @min-[760px]:w-36" aria-label="Play mode">
           {PLAY_MODES.map((m) => (
             <option key={m} value={m}>
               {PLAY_MODE_INFO[m].short}
@@ -139,6 +139,29 @@ function CompanionsMenu({ mode }: { mode: PlayMode }): React.JSX.Element {
   const candidates = [...(index?.characters ?? []), ...(index?.npcs ?? [])].filter((c) => !own.has(c.path.replace(/\.md$/i, '').toLowerCase()))
   const selected = candidates.filter((c) => isChosen(c.path))
 
+  const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
+  const unpainted = selected.filter((c) => !c.avatar)
+  // Portraits for companions who don't have one yet, one after another (each becomes their picture).
+  const paintMissing = async (): Promise<void> => {
+    toast.info(`Painting ${unpainted.length === 1 ? 'a portrait' : `${unpainted.length} portraits`}…`, 'They appear beside the companions’ messages when done.')
+    for (const c of unpainted) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          void invoke('images:generate', { kind: 'portrait', characterPath: c.path }).then(({ requestId }) => {
+            const offs = [
+              on('images:done', (e) => e.requestId === requestId && (offs.forEach((o) => o()), resolve())),
+              on('images:error', (e) => e.requestId === requestId && (offs.forEach((o) => o()), reject(e.error)))
+            ]
+          }, reject)
+        })
+      } catch (err) {
+        toast.error(err, `Couldn’t paint ${c.displayName}`)
+        return
+      }
+    }
+    toast.success('Portraits done')
+  }
+
   const toggle = async (path: string): Promise<void> => {
     const next = isChosen(path) ? selected.filter((c) => c.path !== path).map((c) => c.path) : [...selected.map((c) => c.path), path]
     if (next.length > 4) return toast.info('Up to 4 companions', 'More than that slows every turn and blurs their voices.')
@@ -167,6 +190,14 @@ function CompanionsMenu({ mode }: { mode: PlayMode }): React.JSX.Element {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {candidates.length === 0 && <DropdownMenuItem disabled>Create a character or NPC first</DropdownMenuItem>}
+        {unpainted.length > 0 && hasImageBackend && (
+          <>
+            <DropdownMenuItem onSelect={() => void paintMissing()} className="gap-2 text-gold">
+              <ImagePlus className="size-4" /> Paint missing portraits ({unpainted.length})
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {candidates.map((c) => (
           <DropdownMenuItem key={c.path} onSelect={(e) => (e.preventDefault(), void toggle(c.path))} className="gap-2">
             <span className="grid size-4 place-items-center">{isChosen(c.path) && <Check className="size-3.5" />}</span>
