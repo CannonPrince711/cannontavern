@@ -1,0 +1,189 @@
+import { z } from 'zod'
+import { newMessageId } from '@shared/callouts'
+import { toWikilink } from '@shared/names'
+import { normalizeCard } from '@shared/notes'
+import type { CharacterNote, CombatState, Message } from '@shared/types'
+import { chatService } from '../chat'
+import { AppError } from '../errors'
+import { handle, send } from '../ipc'
+import { createCampaign, createCharacter, readCampaign, readCharacter, saveCharacter, saveParty } from '../library'
+import { createSession, deleteMessage, forkSession, postMessage, readSession, updateFrontmatter, updateMessage } from '../sessions'
+import { settingsStore } from '../settings-store'
+import { vaultService } from '../vault/service'
+import { extensionHost } from '../extensions/host'
+import { getMainWindow } from '../window'
+
+const path = z.string().min(1).max(1024)
+
+const MessageInput = z.object({
+  role: z.enum(['player', 'dm', 'roll', 'system', 'image']),
+  name: z.string().optional(),
+  text: z.string(),
+  swipes: z.array(z.string()).optional(),
+  swipeIndex: z.number().int().min(0).optional(),
+  roll: z.any().optional(),
+  image: z.any().optional(),
+  stateChanges: z.any().optional(),
+  hidden: z.boolean().optional()
+})
+
+/** Publishes an updated session to the window and refreshes the index. */
+function publish<T extends { path: string }>(session: T): T {
+  send(getMainWindow(), 'session:updated', session as never)
+  void vaultService.reindex(session.path)
+  return session
+}
+
+export function registerSessionHandlers(): void {
+  // ── Sessions ──────────────────────────────────────────────────────────────
+  handle('sessions:get', (_e, p) => readSession(vaultService.require(), p), z.tuple([path]))
+
+  handle(
+    'sessions:create',
+    async (_e, { campaignPath, characterPath, title }) => {
+      const vault = vaultService.require()
+      const s = settingsStore.get()
+      const character = characterPath ? await readCharacter(vault, characterPath) : null
+      const session = await createSession(vault, {
+        campaignPath,
+        characterPath,
+        characterName: character?.card.name,
+        title,
+        persona: character?.card.name,
+        dateFormat: s.general.sessionDateFormat,
+        firstMessage: character?.card.first_mes
+      })
+      extensionHost.notify('onSessionStart', null, session.path)
+      return publish(session)
+    },
+    z.tuple([z.object({ campaignPath: path, characterPath: path.optional(), title: z.string().max(200).optional() })])
+  )
+
+  handle('sessions:fork', async (_e, p, id) => publish(await forkSession(vaultService.require(), p, id)), z.tuple([path, z.string()]))
+
+  handle(
+    'sessions:post',
+    async (_e, p, input) => {
+      const text = input.text
+      const message: Message = {
+        ...input,
+        id: newMessageId(),
+        swipes: input.swipes?.length ? input.swipes : [text],
+        swipeIndex: input.swipeIndex ?? 0,
+        createdAt: new Date().toISOString()
+      }
+      const session = publish(await postMessage(vaultService.require(), p, message))
+      if (message.role === 'roll' && message.roll) extensionHost.diceRolled(message.roll, p)
+      return session
+    },
+    z.tuple([path, MessageInput]) as never
+  )
+
+  handle(
+    'sessions:updateMessage',
+    async (_e, p, id, patch) =>
+      publish(
+        await updateMessage(vaultService.require(), p, id, (m) => {
+          const next = { ...m }
+          if (patch.swipeIndex !== undefined) {
+            const i = Math.max(0, Math.min(patch.swipeIndex, m.swipes.length - 1))
+            next.swipeIndex = i
+            next.text = m.swipes[i] ?? m.text
+          }
+          if (patch.text !== undefined) {
+            next.text = patch.text
+            next.swipes = [...next.swipes]
+            next.swipes[next.swipeIndex] = patch.text
+          }
+          if (patch.hidden !== undefined) next.hidden = patch.hidden || undefined
+          return next
+        })
+      ),
+    z.tuple([path, z.string(), z.object({ text: z.string().optional(), swipeIndex: z.number().int().optional(), hidden: z.boolean().optional() })])
+  )
+
+  handle('sessions:deleteMessage', async (_e, p, id) => publish(await deleteMessage(vaultService.require(), p, id)), z.tuple([path, z.string()]))
+
+  handle(
+    'sessions:saveCombat',
+    async (_e, p, combat) => publish(await updateFrontmatter(vaultService.require(), p, { combat: combat ?? undefined })),
+    z.tuple([path, z.any()]) as unknown as z.ZodType<[string, CombatState | null]>
+  )
+
+  handle(
+    'sessions:updateMeta',
+    async (_e, p, patch) => {
+      const vault = vaultService.require()
+      const fm: Record<string, unknown> = {}
+      if (patch.title !== undefined) fm.title = patch.title.trim() || undefined
+      if (patch.persona !== undefined) fm.persona = patch.persona.trim() || undefined
+      if (patch.summary !== undefined) fm.summary = patch.summary.trim() || undefined
+      if (patch.characterPath !== undefined) {
+        if (patch.characterPath) {
+          const c = await readCharacter(vault, patch.characterPath)
+          fm.characters = [toWikilink(c.path, { full: true, alias: c.card.name })]
+        } else fm.characters = []
+      }
+      return publish(await updateFrontmatter(vault, p, fm))
+    },
+    z.tuple([
+      path,
+      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional() })
+    ])
+  )
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  handle('chat:send', (_e, { sessionPath, text, persona }) => chatService.send(sessionPath, text, persona), z.tuple([z.object({ sessionPath: path, text: z.string().max(200_000), persona: z.string().max(200).optional() })]))
+  handle('chat:regenerate', (_e, { sessionPath }) => chatService.regenerate(sessionPath), z.tuple([z.object({ sessionPath: path })]))
+  handle('chat:continue', (_e, { sessionPath }) => chatService.continue(sessionPath), z.tuple([z.object({ sessionPath: path })]))
+  handle('chat:stop', (_e, requestId) => chatService.stop(requestId), z.tuple([z.string()]))
+  handle('chat:inspectPrompt', (_e, { sessionPath }) => chatService.inspect(sessionPath), z.tuple([z.object({ sessionPath: path })]))
+
+  // ── Characters & campaigns (basics; import/export live in characters.ts) ─
+  handle('characters:get', (_e, p) => readCharacter(vaultService.require(), p), z.tuple([path]))
+  handle(
+    'characters:save',
+    async (_e, note, force) => {
+      const saved = await saveCharacter(vaultService.require(), { ...note, card: normalizeCard(note.card as never, note.card.name) }, force === true)
+      void vaultService.reindex(saved.path)
+      return saved
+    },
+    z.tuple([z.object({ path, card: z.record(z.string(), z.unknown()), body: z.string(), mtimeMs: z.number(), hash: z.string() }), z.boolean().optional()]) as unknown as z.ZodType<[CharacterNote, boolean?]>
+  )
+  handle(
+    'characters:create',
+    async (_e, name, npc) => {
+      const note = await createCharacter(vaultService.require(), name, npc)
+      await vaultService.reindex(note.path)
+      return note
+    },
+    z.tuple([z.string().min(1).max(120), z.boolean().optional()])
+  )
+
+  handle('campaigns:get', (_e, p) => readCampaign(vaultService.require(), p), z.tuple([path]))
+  handle(
+    'campaigns:create',
+    async (_e, name) => {
+      const vault = vaultService.require()
+      const campaign = await createCampaign(vault, name)
+      await vaultService.reindex(`${campaign.path}/Campaign.md`)
+      return campaign
+    },
+    z.tuple([z.string().min(1).max(120)])
+  )
+  handle('campaigns:saveParty', (_e, p, party) => saveParty(vaultService.require(), p, party), z.tuple([path, z.any()]) as never)
+}
+
+/** Pushes sessions edited outside the app (e.g. in Obsidian) to the window. */
+export function watchExternalSessionEdits(): void {
+  vaultService.on('change', ({ path: p, kind, event }) => {
+    if (kind !== 'session' || event === 'unlink') return
+    const vault = vaultService.vault
+    if (!vault) return
+    readSession(vault, p)
+      .then((s) => send(getMainWindow(), 'session:updated', s))
+      .catch((err) => {
+        if (!(err instanceof AppError)) console.warn('[sessions] could not re-read', p, err)
+      })
+  })
+}

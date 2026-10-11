@@ -1,0 +1,10 @@
+{
+  "id": "npc-generator",
+  "name": "NPC Generator",
+  "version": "1.0.0",
+  "description": "Creates an NPC note in NPCs/ from a template: /npc innkeeper. Optionally asks the text model to flesh it out.",
+  "author": "DND Tavern",
+  "permissions": ["vault:write", "generate:text"],
+  "commands": [{ "name": "npc", "description": "Create an NPC note (optionally give a role or ancestry)", "usage": "/npc [role]" }],
+  "settings": [{ "key": "useAi", "label": "Ask the text model for a short description", "type": "boolean", "default": true }]
+}

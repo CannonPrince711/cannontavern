@@ -1,0 +1,16 @@
+{
+  "id": "weather-time",
+  "name": "Weather & Time",
+  "version": "1.0.0",
+  "description": "Keeps an in-world clock and weather, and tells the DM about them in every prompt.",
+  "author": "DND Tavern",
+  "permissions": [],
+  "commands": [
+    { "name": "time", "description": "Show the time, or advance it: /time advance 2h, /time set 3 08:00", "usage": "/time [advance 2h | set <day> <hh:mm>]" },
+    { "name": "weather", "description": "Roll new weather for the current climate", "usage": "/weather" }
+  ],
+  "settings": [
+    { "key": "climate", "label": "Climate", "type": "select", "default": "temperate", "options": ["temperate", "coastal", "arctic", "desert", "tropical"] },
+    { "key": "announce", "label": "Post a note when time passes", "type": "boolean", "default": true }
+  ]
+}

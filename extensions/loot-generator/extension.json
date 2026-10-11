@@ -1,0 +1,9 @@
+{
+  "id": "loot-generator",
+  "name": "Loot Generator",
+  "version": "1.0.0",
+  "description": "Rolls treasure by challenge rating: /loot cr 3, or /loot cr 7 hoard.",
+  "author": "DND Tavern",
+  "permissions": [],
+  "commands": [{ "name": "loot", "description": "Roll treasure for a challenge rating (add “hoard” for a treasure hoard)", "usage": "/loot cr 3 [hoard]" }]
+}

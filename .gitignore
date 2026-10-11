@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+.vite/
+coverage/
+
+# Obsidian per-machine state for the test vault
+TestVault/.obsidian/workspace*.json
+TestVault/.trash/

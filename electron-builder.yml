@@ -1,0 +1,36 @@
+appId: com.dndtavern.app
+productName: DND Tavern
+copyright: Copyright © 2026 DND Tavern
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: extensions
+    to: extensions
+    filter: ['**/*']
+npmRebuild: false
+win:
+  executableName: DND Tavern
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  artifactName: ${productName} Setup ${version}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: DND Tavern
+  uninstallDisplayName: DND Tavern
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+portable:
+  artifactName: ${productName} ${version}.${ext}
+publish: null

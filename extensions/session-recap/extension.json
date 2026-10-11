@@ -1,0 +1,9 @@
+{
+  "id": "session-recap",
+  "name": "Session Recap",
+  "version": "1.0.0",
+  "description": "Summarises the current session and appends the recap to the campaign’s Campaign.md: /recap.",
+  "author": "DND Tavern",
+  "permissions": ["generate:text", "vault:read", "vault:write"],
+  "commands": [{ "name": "recap", "description": "Summarise this session into Campaign.md", "usage": "/recap" }]
+}
