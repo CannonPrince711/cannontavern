@@ -1,4 +1,5 @@
-import { BookOpen, Image, Network, Puzzle, ScrollText, Swords, Users } from 'lucide-react'
+import { BookOpen, Crown, Image, Network, Puzzle, ScrollText, Swords, Users } from 'lucide-react'
+import { DmScreen } from '@/components/table/DmScreen'
 import { TablePanel } from '@/components/table/TablePanel'
 import { GraphPanel } from '@/components/graph/GraphView'
 import { EmptyState } from '@/components/EmptyState'
@@ -62,6 +63,14 @@ const TABS: { id: RightTab; label: string; icon: React.ElementType; art: React.R
     text: 'Host the session for other players.'
   },
   {
+    id: 'dm',
+    label: 'DM screen',
+    icon: Crown,
+    art: <RuneArt />,
+    title: 'DM screen',
+    text: 'Private rolls and quick reference.'
+  },
+  {
     id: 'extensions',
     label: 'Extensions',
     icon: Puzzle,
@@ -106,6 +115,8 @@ export function RightPanel(): React.JSX.Element {
             <GraphPanel />
           ) : t.id === 'table' ? (
             <TablePanel />
+          ) : t.id === 'dm' ? (
+            <DmScreen />
           ) : t.id === 'extensions' ? (
             <ExtensionsPanel />
           ) : (
