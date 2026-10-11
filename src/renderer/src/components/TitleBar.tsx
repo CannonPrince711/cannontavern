@@ -3,6 +3,7 @@ import { THEMES } from '@shared/themes'
 import type { ThemeId } from '@shared/types'
 import { Logo } from '@/components/Logo'
 import { TextModelSwitcher } from '@/components/ModelSwitcher'
+import { UpdatePill } from '@/components/Updates'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -60,6 +61,7 @@ export function TitleBar(): React.JSX.Element {
       <div className="flex-1" />
 
       <div className="no-drag flex items-center gap-1 pr-2">
+        <UpdatePill />
         <TextModelSwitcher variant="pill" className="mr-1" />
 
         <Tip label="Search everything (Ctrl+K)">

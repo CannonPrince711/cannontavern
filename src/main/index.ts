@@ -19,7 +19,7 @@ import { extensionHost } from './extensions/host'
 import { registerExtensionHandlers } from './handlers/extensions'
 import { vaultService } from './vault/service'
 import { syncTray, attachTrayBehaviour } from './tray'
-import { checkForUpdates } from './updates'
+import { updater } from './updater'
 import { recapService } from './recap'
 import { applyAppearance, createMainWindow, getMainWindow } from './window'
 
@@ -71,7 +71,7 @@ if (!app.requestSingleInstanceLock()) {
         app.setLoginItemSettings({ openAtLogin: next.behavior.launchOnStartup })
       }
       if (next.behavior.minimizeToTray !== prev.behavior.minimizeToTray) syncTray()
-      if (next.behavior.autoUpdateCheck && !prev.behavior.autoUpdateCheck) void checkForUpdates()
+      if (next.behavior.autoUpdateCheck && !prev.behavior.autoUpdateCheck) void updater.check(false)
       send(getMainWindow(), 'settings:changed', settingsStore.getPublic())
     })
 
@@ -93,8 +93,7 @@ if (!app.requestSingleInstanceLock()) {
     const win = await createMainWindow(settingsStore.get().appearance)
     attachTrayBehaviour(win)
     syncTray()
-    // Give the renderer a moment to subscribe to toasts.
-    setTimeout(() => void checkForUpdates(), 5000)
+    updater.checkOnStartup()
     // The session open when the app last closed has ended: compress it.
     setTimeout(() => void recapService.compressLastPlayed().catch((err) => console.warn('[recap] startup check failed:', err)), 15_000)
 

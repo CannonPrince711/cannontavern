@@ -506,6 +506,17 @@ export interface ErrorInfo {
   detail?: string
 }
 
+/** The in-app updater's state (Settings → General → Updates, title bar). */
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'none'; checkedAt: string }
+  /** canInstall is false for portable and dev builds, which get a download link instead. */
+  | { state: 'available'; version: string; canInstall: boolean; url?: string; notes?: string }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  | { state: 'error'; message: string }
+
 export interface ToastEvent {
   level: 'info' | 'success' | 'warning' | 'error'
   title: string

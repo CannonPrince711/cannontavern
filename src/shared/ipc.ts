@@ -23,6 +23,7 @@ import type {
   ErrorInfo,
   ExtensionInfo,
   ImageModelList,
+  UpdateStatus,
   ExtensionPermission,
   Id,
   Lorebook,
@@ -74,6 +75,11 @@ export interface InvokeMap {
   // App and window
   'app:getInfo': Invoke<[], AppInfo>
   'app:openExternal': Invoke<[url: string], void>
+  /** In-app updates. */
+  'updates:status': Invoke<[], UpdateStatus>
+  'updates:check': Invoke<[], UpdateStatus>
+  'updates:download': Invoke<[], void>
+  'updates:install': Invoke<[], void>
   /** Shows a native right-click menu; resolves to the chosen item's id (null if dismissed). */
   'app:contextMenu': Invoke<[items: ContextMenuItem[]], string | null>
   'app:openFolder': Invoke<[which: 'userData' | 'extensions' | 'workflows'], void>
@@ -239,6 +245,7 @@ export interface EventMap {
   'settings:changed': PublicSettings
   'window:state': WindowState
   'toast': ToastEvent
+  'updates:changed': UpdateStatus
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session
@@ -266,6 +273,10 @@ export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: ErrorInfo
 const invokeChannels = {
   'app:getInfo': 1,
   'app:openExternal': 1,
+  'updates:status': 1,
+  'updates:check': 1,
+  'updates:download': 1,
+  'updates:install': 1,
   'app:contextMenu': 1,
   'app:openFolder': 1,
   'window:minimize': 1,
@@ -370,7 +381,8 @@ const eventChannels = {
   'images:progress': 1,
   'images:done': 1,
   'images:error': 1,
-  'extensions:notify': 1
+  'extensions:notify': 1,
+  'updates:changed': 1
 } satisfies Record<EventChannel, 1>
 
 export const INVOKE_CHANNELS = Object.keys(invokeChannels) as InvokeChannel[]

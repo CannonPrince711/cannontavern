@@ -7,6 +7,7 @@ import { handle } from '../ipc'
 import { paths } from '../paths'
 import { openExternalSafe } from '../security'
 import { popupMenu } from '../context-menu'
+import { updater } from '../updater'
 import { getAppliedMaterial, getMainWindow, isWin11 } from '../window'
 
 export function registerAppHandlers(): void {
@@ -30,6 +31,11 @@ export function registerAppHandlers(): void {
     },
     z.tuple([z.string().max(8192)])
   )
+
+  handle('updates:status', () => updater.status)
+  handle('updates:check', () => updater.check(true))
+  handle('updates:download', () => updater.download())
+  handle('updates:install', () => updater.install())
 
   handle(
     'app:contextMenu',

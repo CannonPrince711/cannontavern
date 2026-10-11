@@ -35,4 +35,10 @@ nsis:
   uninstallerIcon: build/icon.ico
 portable:
   artifactName: ${productName} ${version}.${ext}
-publish: null
+# In-app updates read latest.yml from GitHub Releases. "npm run release"
+# (with GH_TOKEN set) uploads the installer, its blockmap and latest.yml.
+publish:
+  provider: github
+  owner: CannonPrince711
+  repo: cannontavern
+  releaseType: release

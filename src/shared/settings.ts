@@ -325,6 +325,8 @@ export const SettingsSchema = z.object({
       launchOnStartup: z.boolean().default(false),
       minimizeToTray: z.boolean().default(false),
       autoUpdateCheck: z.boolean().default(false),
+      /** Download updates in the background as soon as they're found. */
+      autoDownloadUpdates: z.boolean().default(false),
       /** Double-click to edit, middle-click to open in Obsidian, Ctrl+wheel to zoom. */
       mouseShortcuts: z.boolean().default(true),
       /** What the mouse's back/forward buttons do. */
