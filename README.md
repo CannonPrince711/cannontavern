@@ -193,7 +193,7 @@ As the DM, writing `[CHECK perception DC 13]` rolls the check for the character 
 - **Mini-map**: a game-style schematic in the corner of the chat, centred on the party's HERE marker, with a compass and scale bar. Click it to open the map; hide it from its corner button or the map view.
 - **Graph view**: an Obsidian-style graph of your campaign notes and the wikilinks between them, plus dashed links where a session mentions a character or NPC. The right panel's Graph tab shows the local graph around the open session; Ctrl+K → Graph view shows everything, with search and filters. Click a note to open it.
 
-In the map's image chooser, **Paint from a sketch…** turns a rough drawing (coastlines, mountains, roads, in any paint program) into a finished map with img2img, keeping its proportions. It needs Automatic1111/Forge, or a ComfyUI workflow with a Load Image node picked for Maps. Map LoRAs such as Fantasy Map (world maps) and Mapcraft (battlemaps) work well with the Maps and Battlemaps generation options.
+In the map's image chooser, **Paint from a sketch…** turns a rough drawing (coastlines, mountains, roads, in any paint program) into a finished map with img2img, keeping its proportions. It needs Automatic1111/Forge, or a ComfyUI workflow with a Load Image node picked for Maps. Map LoRAs such as Fantasy Map (world maps) and Mapcraft (battlemaps) work well with the Maps and Battlemaps generation options; [docs/comfyui](docs/comfyui/README.md) has ready-to-import ComfyUI workflows for them. Without any imported workflow, ComfyUI backends use a built-in standard one.
 
 ## Multiplayer
 

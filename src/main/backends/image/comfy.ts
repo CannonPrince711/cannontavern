@@ -84,7 +84,8 @@ export function guessMapping(wf: ApiWorkflow): ComfyMapping {
     const noise = find((t) => /RandomNoise/i.test(t))
     if (noise) m.seed = has(noise[0], 'noise_seed')
   }
-  const latent = find((t) => /EmptyLatentImage|EmptySD3LatentImage|EmptyLatent/i.test(t))
+  // The output size: an empty latent (text-to-image), or, in img2img, the node that resizes the source.
+  const latent = find((t) => /EmptyLatentImage|EmptySD3LatentImage|EmptyLatent/i.test(t)) ?? find((t) => /^ImageScale$|ImageResize/i.test(t))
   if (latent) {
     m.width = has(latent[0], 'width')
     m.height = has(latent[0], 'height')

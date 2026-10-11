@@ -186,3 +186,13 @@ describe('ComfyUI generation against a mock server', () => {
   })
 
 })
+
+describe('example workflows in docs/comfyui', () => {
+  it('map fully when imported, including the sketch version’s resize', async () => {
+    const { readFileSync } = await import('node:fs')
+    const map = parseWorkflow(JSON.parse(readFileSync('docs/comfyui/sdxl-lora-map.json', 'utf8')))
+    expect(guessMapping(map)).toMatchObject({ positive: { nodeId: '6' }, negative: { nodeId: '7' }, width: { nodeId: '5' }, checkpoint: { nodeId: '4' }, lora: { nodeId: '10', input: 'lora_name' }, loraStrength: { nodeId: '10' } })
+    const sketch = guessMapping(parseWorkflow(JSON.parse(readFileSync('docs/comfyui/sdxl-lora-map-sketch.json', 'utf8'))))
+    expect(sketch).toMatchObject({ sourceImage: { nodeId: '11', input: 'image' }, width: { nodeId: '12', input: 'width' }, height: { nodeId: '12', input: 'height' } })
+  })
+})
