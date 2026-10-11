@@ -3,7 +3,7 @@
  * reviewed draft into the vault as ordinary notes (campaign, party, lorebook,
  * NPCs and an optional first session). Existing notes are never overwritten.
  */
-import { BUILDER_SYSTEM, builderPrompt, draftCampaignBody, draftLore, parseDraft, type CampaignConcept, type CampaignDraft } from '@shared/builder'
+import { BUILDER_SYSTEM, builderPrompt, draftCampaignBody, draftLore, draftSection, parseDraft, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { FOLDERS, CAMPAIGN_FILE } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { serializeLorebookBody } from '@shared/notes'
@@ -19,10 +19,30 @@ import { createSession } from './sessions'
 import { saveMap } from './maps'
 import { autoLayout } from '@shared/map'
 import { settingsStore } from './settings-store'
+import { send } from './ipc'
+import { getMainWindow } from './window'
 import { serializeNote, updateNote } from './vault/frontmatter'
 import { vaultService } from './vault/service'
 
+/** The draft being written, so Cancel can stop it. */
+let drafting: AbortController | null = null
+
+export function cancelDraft(): void {
+  drafting?.abort()
+}
+
 export async function draftCampaign(concept: CampaignConcept): Promise<CampaignDraft> {
+  drafting?.abort()
+  const controller = new AbortController()
+  drafting = controller
+  try {
+    return await draft(concept, controller.signal)
+  } finally {
+    if (drafting === controller) drafting = null
+  }
+}
+
+async function draft(concept: CampaignConcept, signal: AbortSignal): Promise<CampaignDraft> {
   const s = settingsStore.get()
   const chain = backendChain(s, 'chat')
   if (!chain.length) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first, or fill in the campaign by hand.')
@@ -46,8 +66,25 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
         continue
       }
       const maxTokens = Math.max(800, Math.min(6000, room))
+      // Stream the reply (when the backend streams) so the builder can show how far along it is.
+      const streaming = backend.generation.stream
+      let text = ''
+      let sent = 0
+      const progress = (force = false): void => {
+        if (!force && Date.now() - sent < 250) return
+        sent = Date.now()
+        send(getMainWindow(), 'campaigns:draftProgress', { chars: text.length, tokens: Math.round(text.length / 3.5), maxTokens, section: draftSection(text), attempt: compact ? 'compact' : 'full', streaming })
+      }
+      progress(true)
       try {
-        const result = await textAdapter(backend.type).generate(resolveTextBackend(backend), { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens }, { stream: false })
+        // Streaming resets the timeout with every token; a reply that only arrives at the end gets 10 minutes.
+        const resolved = resolveTextBackend(backend)
+        const net = streaming ? resolved.net : { ...resolved.net, timeoutMs: Math.max(resolved.net.timeoutMs, 600_000) }
+        const result = await textAdapter(backend.type).generate(
+          { ...resolved, net },
+          { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens },
+          { stream: streaming, signal, onToken: (delta) => ((text += delta), progress()) }
+        )
         lastReply = result.text
         const draft = parseDraft(result.text)
         if (!draft.name.trim()) draft.name = concept.name.trim() || 'Untitled Campaign'

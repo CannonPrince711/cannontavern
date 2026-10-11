@@ -1,6 +1,6 @@
 import { CampaignConceptSchema, CampaignDraftSchema, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { PLAY_MODES, type PlayMode } from '@shared/play'
-import { buildCampaign, draftCampaign } from '../builder'
+import { buildCampaign, cancelDraft, draftCampaign } from '../builder'
 import { EDITIONS, type Edition } from '@shared/editions'
 import { z } from 'zod'
 import { CAMPAIGN_FILE, FOLDERS } from '@shared/layout'
@@ -64,6 +64,7 @@ export function registerLoreHandlers(): void {
   )
 
   handle('campaigns:draft', (_e, concept) => draftCampaign(concept), z.tuple([CampaignConceptSchema]) as unknown as z.ZodType<[CampaignConcept]>)
+  handle('campaigns:cancelDraft', () => cancelDraft())
 
   handle(
     'campaigns:build',

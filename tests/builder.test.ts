@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, parseDraft, PREMISE_MAX } from '../src/shared/builder'
+import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, draftSection, emptyDraft, escapeStrayQuotes, parseDraft, PREMISE_MAX } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -165,5 +165,15 @@ describe('campaign builder: quotes inside text', () => {
   it('leaves valid JSON alone', () => {
     const valid = JSON.stringify({ a: 'say "hi", then go', b: ['x', 1, true, null], c: { d: 'line\nbreak' } }, null, 2)
     expect(escapeStrayQuotes(valid)).toBe(valid)
+  })
+})
+
+describe('campaign builder: progress while streaming', () => {
+  it('names the part of the campaign being written, ignoring nested keys', () => {
+    expect(draftSection('')).toBeNull()
+    expect(draftSection('{"name": "Shadow Gar')).toBe('the premise')
+    expect(draftSection('{"name": "X", "locations": [{"name": "Midgar", "description": "The ca')).toBe('places')
+    expect(draftSection('{"name": "X", "locations": [], "npcs": [{"name": "Alpha", "role": "Knight"')).toBe('NPCs')
+    expect(draftSection('{"name": "Say \\"npcs\\": nothing", "hook": "A')).toBe('the hook')
   })
 })

@@ -282,3 +282,47 @@ export function draftCampaignBody(d: CampaignDraft): string {
   if (secrets.length) parts.push(`## Secrets (for the DM)\n${secrets.map((s) => `- ${s}`).join('\n')}`)
   return `\n${parts.join('\n\n')}\n`
 }
+
+const SECTION_LABELS: Record<string, string> = {
+  name: 'the premise',
+  pitch: 'the premise',
+  setting: 'the setting',
+  tone: 'the tone',
+  houseRules: 'house rules',
+  hook: 'the hook',
+  opening: 'the opening scene',
+  locations: 'places',
+  npcs: 'NPCs',
+  factions: 'factions',
+  outline: 'the story outline',
+  quests: 'quests',
+  secrets: 'secrets'
+}
+
+/** The part of the campaign a reply that's still arriving is on ("NPCs"), from its last top-level key. */
+export function draftSection(partial: string): string | null {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  let start = -1
+  let last: string | null = null
+  for (let i = 0; i < partial.length; i++) {
+    const c = partial[i]!
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') {
+        inString = false
+        // A key at the top level of the object: "name": …
+        if (depth === 1 && start >= 0 && /^\s*:/.test(partial.slice(i + 1, i + 8))) last = partial.slice(start, i)
+      }
+      continue
+    }
+    if (c === '"') {
+      inString = true
+      start = i + 1
+    } else if (c === '{' || c === '[') depth++
+    else if (c === '}' || c === ']') depth--
+  }
+  return last ? (SECTION_LABELS[last] ?? null) : null
+}

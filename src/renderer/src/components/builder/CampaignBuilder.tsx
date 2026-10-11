@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, PREMISE_MAX, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/controls'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { invoke } from '@/lib/ipc'
+import { invoke, on } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
@@ -346,7 +346,8 @@ export function CampaignBuilder(): React.JSX.Element | null {
         setStage('review')
       }
     } catch (err) {
-      toast.error(err, 'Could not draft the campaign')
+      // Cancelled: just go back to the concept.
+      if ((err as { code?: string })?.code !== 'ABORTED') toast.error(err, 'Could not draft the campaign')
       setStage('concept')
     }
   }
@@ -401,13 +402,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
               }}
             />
           )}
-          {stage === 'drafting' && (
-            <div className="flex flex-col items-center gap-3 py-20 text-center" role="status">
-              <Loader2 className="size-8 animate-spin text-gold" />
-              <p className="font-display text-lg tracking-wide">Designing your campaign</p>
-              <p className="max-w-md text-sm text-muted-foreground">Inventing places, people, factions and secrets. This can take a minute with larger models.</p>
-            </div>
-          )}
+          {stage === 'drafting' && <DraftProgress key={run} onCancel={() => void invoke('campaigns:cancelDraft').catch(() => {})} />}
           {stage === 'review' && <ReviewStep draft={draft} setDraft={setDraft} mode={mode} setMode={setMode} />}
         </div>
         {stage === 'review' && (
@@ -441,5 +436,57 @@ export function CampaignBuilder(): React.JSX.Element | null {
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+type DraftProgressEvent = { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean }
+
+/** The draft as it streams in: what it's writing, how much, how fast, and a way out. */
+function DraftProgress({ onCancel }: { onCancel: () => void }): React.JSX.Element {
+  const [p, setP] = useState<DraftProgressEvent | null>(null)
+  const [started] = useState(() => Date.now())
+  const [firstToken, setFirstToken] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const off = on('campaigns:draftProgress', (e) => {
+      setP(e)
+      if (e.chars > 0) setFirstToken((t) => t ?? Date.now())
+    })
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => (off(), clearInterval(timer))
+  }, [])
+  const elapsed = Math.floor((now - started) / 1000)
+  const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`
+  const writingFor = firstToken ? (now - firstToken) / 1000 : 0
+  const speed = p && writingFor > 2 ? p.tokens / writingFor : null
+  const writing = !!p && p.chars > 0
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center" role="status">
+      <Loader2 className="size-8 animate-spin text-gold" />
+      <p className="font-display text-lg tracking-wide">{writing && p.section ? `Writing ${p.section}…` : 'Designing your campaign'}</p>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {p?.attempt === 'compact'
+          ? 'The first reply couldn’t be read, so it’s trying again with a smaller campaign.'
+          : writing
+            ? 'Inventing places, people, factions and secrets.'
+            : p && !p.streaming
+              ? 'Waiting for the whole reply (this backend doesn’t stream, so there’s no progress to show). Turn on Stream tokens in the backend’s settings to watch it write.'
+              : 'Sending the concept. The model reads it first; long premises take a little while.'}
+      </p>
+      {writing && (
+        <div className="w-full max-w-sm space-y-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-gold transition-[width] duration-300" style={{ width: `${Math.min(100, (p.tokens / p.maxTokens) * 100)}%` }} />
+          </div>
+          <p className="text-xs tabular-nums text-muted-foreground">
+            ≈ {p.tokens.toLocaleString('en-US')} tokens{speed ? ` · ${speed.toFixed(1)} tokens/s` : ''} · up to {p.maxTokens.toLocaleString('en-US')}
+          </p>
+        </div>
+      )}
+      <p className="text-xs tabular-nums text-muted-foreground">{clock}</p>
+      <Button variant="outline" size="sm" onClick={onCancel}>
+        Cancel
+      </Button>
+    </div>
   )
 }

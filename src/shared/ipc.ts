@@ -147,6 +147,7 @@ export interface InvokeMap {
   // Campaigns and lorebooks
   /** Campaign builder: an AI draft from a concept, then the reviewed draft written to the vault. */
   'campaigns:draft': Invoke<[concept: CampaignConcept], CampaignDraft>
+  'campaigns:cancelDraft': Invoke<[], void>
   'campaigns:build': Invoke<
     [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
@@ -264,6 +265,8 @@ export interface EventMap {
   'toast': ToastEvent
   'updates:changed': UpdateStatus
   'table:changed': TableStatus
+  /** The campaign builder's draft as it streams in. */
+  'campaigns:draftProgress': { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean }
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session
@@ -356,6 +359,7 @@ const invokeChannels = {
   'maps:images': 1,
   'maps:generate': 1,
   'campaigns:draft': 1,
+  'campaigns:cancelDraft': 1,
   'campaigns:build': 1,
   'campaigns:create': 1,
   'campaigns:saveParty': 1,
@@ -409,7 +413,8 @@ const eventChannels = {
   'images:error': 1,
   'extensions:notify': 1,
   'updates:changed': 1,
-  'table:changed': 1
+  'table:changed': 1,
+  'campaigns:draftProgress': 1
 } satisfies Record<EventChannel, 1>
 
 export const INVOKE_CHANNELS = Object.keys(invokeChannels) as InvokeChannel[]
