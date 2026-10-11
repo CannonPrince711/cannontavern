@@ -11,7 +11,7 @@ import { comfyAdapter, parseWorkflow, type ApiWorkflow } from './comfy'
 import { a1111Adapter, customImageAdapter, openAiImageAdapter } from './others'
 import type { ImageAdapter, ImageRequest, ResolvedImageBackend } from './types'
 
-/** Reads a stored ComfyUI workflow from %APPDATA%\DND Tavern\workflows\ or the vault. */
+/** Reads a stored ComfyUI workflow from the app's workflows folder or the vault. */
 export async function loadWorkflowFile(file: string, location: 'appdata' | 'vault'): Promise<ApiWorkflow> {
   const raw =
     location === 'vault'

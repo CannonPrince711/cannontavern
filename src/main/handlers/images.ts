@@ -61,7 +61,7 @@ export function registerImageHandlers(): void {
       throw new AppError('COMFY_WORKFLOW', 'That file is not valid JSON.')
     }
     const wf = parseWorkflow(json)
-    // Store a copy under %APPDATA%\DND Tavern\workflows\ so the original can move.
+    // Store a copy under the app's workflows folder so the original can move.
     await fs.mkdir(paths.workflowsDir, { recursive: true })
     const baseName = basename(file).replace(/[^\w .()-]/g, '_')
     let name = baseName

@@ -3,6 +3,21 @@ import type { SecretInput, SecretStored, SecretView } from '@shared/settings'
 import { AppError } from './errors'
 import { registerSecret } from './redact'
 
+/**
+ * Where keys are encrypted, for the UI ("Windows DPAPI", "the system
+ * keyring"…), or null when there's nowhere safe. On Linux without GNOME
+ * Keyring or KWallet, Electron falls back to a fixed password ("basic_text"),
+ * which isn't encryption worth the name, so that counts as unavailable.
+ */
+export function keyStorage(): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null
+  if (process.platform === 'win32') return 'Windows DPAPI'
+  if (process.platform === 'darwin') return 'the macOS Keychain'
+  const backend = safeStorage.getSelectedStorageBackend()
+  if (backend === 'basic_text' || backend === 'unknown') return null
+  return backend.startsWith('kwallet') ? 'KWallet' : 'the system keyring'
+}
+
 export function toView(secret: SecretStored): SecretView {
   switch (secret.kind) {
     case 'encrypted':
@@ -19,8 +34,13 @@ export function fromInput(input: SecretInput, previous: SecretStored | undefined
       return previous ?? { kind: 'none' }
     case 'set': {
       if (!input.value) return { kind: 'none' }
-      if (!safeStorage.isEncryptionAvailable()) {
-        throw new AppError('SECRET_UNAVAILABLE', 'OS encryption (DPAPI) is not available; cannot store keys.')
+      if (!keyStorage()) {
+        throw new AppError(
+          'SECRET_UNAVAILABLE',
+          process.platform === 'linux'
+            ? 'No system keyring is running (GNOME Keyring or KWallet), so the key can’t be stored encrypted. Start one, or type env:NAME to read the key from an environment variable.'
+            : 'OS encryption is not available, so the key can’t be stored. Type env:NAME to read it from an environment variable instead.'
+        )
       }
       registerSecret(input.value)
       return { kind: 'encrypted', data: safeStorage.encryptString(input.value).toString('base64') }
@@ -50,7 +70,9 @@ export function reveal(secret: SecretStored): string {
       } catch {
         throw new AppError(
           'SECRET_DECRYPT_FAILED',
-          'A stored key could not be decrypted. It may have been saved by another Windows user; enter it again.'
+          process.platform === 'linux'
+            ? 'A stored key could not be decrypted. The keyring may be locked, or the key was saved by another user; unlock it or enter the key again.'
+            : 'A stored key could not be decrypted. It may have been saved by another Windows user; enter it again.'
         )
       }
     }

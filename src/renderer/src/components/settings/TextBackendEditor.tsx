@@ -14,6 +14,7 @@ import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { Disclosure, HeadersEditor, ModelField, NullableNumber, NumberInput, TestResultPanel } from './fields'
 import { SecretField } from './SecretField'
+import { keyStorageHint } from '@/lib/platform'
 
 interface Props {
   initial: TextBackendInput
@@ -137,7 +138,7 @@ export function TextBackendEditor({ initial, isNew, onSaved, onDeleted, onDiscar
           </Callout>
         )}
 
-        <Field label={keyOptional ? 'API key (optional)' : 'API key'} htmlFor="tb-key" description="Encrypted with Windows DPAPI and never shown again. Or type env:NAME to read it from an environment variable.">
+        <Field label={keyOptional ? 'API key (optional)' : 'API key'} htmlFor="tb-key" description={`${keyStorageHint()} Or type env:NAME to read it from an environment variable.`}>
           <SecretField id="tb-key" value={draft.apiKey} onChange={(v) => set('apiKey', v)} />
         </Field>
 

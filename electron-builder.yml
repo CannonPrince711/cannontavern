@@ -35,8 +35,29 @@ nsis:
   uninstallerIcon: build/icon.ico
 portable:
   artifactName: ${productName} ${version}.${ext}
-# In-app updates read latest.yml from GitHub Releases. "npm run release"
-# (with GH_TOKEN set) uploads the installer, its blockmap and latest.yml.
+# Linux: build on Linux (or WSL) with "npm run dist:linux".
+linux:
+  executableName: dnd-tavern
+  icon: resources/icon.png
+  category: Game
+  synopsis: D&D chat frontend for LLMs that keeps everything in an Obsidian vault
+  maintainer: DND Tavern <noreply@users.noreply.github.com>
+  vendor: DND Tavern
+  # Window association on GNOME/KDE: Electron's app_id comes from package.json desktopName.
+  syncDesktopName: true
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+deb:
+  artifactName: dnd-tavern_${version}_${arch}.${ext}
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
+# In-app updates read latest.yml (latest-linux.yml for the AppImage) from
+# GitHub Releases. "npm run release" / "release:linux" (with GH_TOKEN set)
+# upload the builds, their blockmaps and those files.
 publish:
   provider: github
   owner: CannonPrince711

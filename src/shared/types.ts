@@ -505,6 +505,8 @@ export interface AppInfo {
   material: 'mica' | 'acrylic' | 'none'
   isPackaged: boolean
   userDataPath: string
+  /** Where API keys are encrypted ("Windows DPAPI", "the system keyring"…); null when keys can't be stored. */
+  keyStorage: string | null
 }
 
 export interface WindowState {

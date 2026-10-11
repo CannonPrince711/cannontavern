@@ -12,6 +12,7 @@ import { useExtensions } from '@/stores/extensions'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { ExtensionFrame } from './ExtensionFrame'
+import { useApp } from '@/stores/app'
 
 const PERMISSION_TEXT: Record<ExtensionPermission, { label: string; detail: string }> = {
   'vault:read': { label: 'Read notes', detail: 'Read notes inside the DND Tavern folder of your vault.' },
@@ -161,13 +162,15 @@ function ExtensionCard({ ext }: { ext: ExtensionInfo }): React.JSX.Element {
 }
 
 export function ExtensionsSection(): React.JSX.Element {
+  const dataDir = useApp((s) => s.info?.userDataPath)
+  const extensionsDir = dataDir ? `${dataDir}${dataDir.includes('\\') ? '\\' : '/'}extensions` : 'the app’s extensions folder'
   const list = useExtensions((s) => s.list)
   const reload = useExtensions((s) => s.reload)
   return (
     <div className="space-y-4">
       <SettingsGroup
         title="Extensions"
-        description="Extensions live in %APPDATA%\DND Tavern\extensions\, one folder each. They are off until you enable them, and each one only gets the permissions you grant."
+        description={`Extensions live in ${extensionsDir}, one folder each. They are off until you enable them, and each one only gets the permissions you grant.`}
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => void invoke('app:openFolder', 'extensions').catch((e) => toast.error(e))}>

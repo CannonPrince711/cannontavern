@@ -9,6 +9,7 @@ import { ExtensionsSection } from '@/components/extensions/ExtensionsUi'
 import { ImageBackendsSection } from './ImageBackendsSection'
 import { PromptSection } from './PromptSection'
 import { TextBackendsSection } from './TextBackendsSection'
+import { useApp } from '@/stores/app'
 
 const NAV: { id: SettingsSection; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'general', label: 'General', icon: Settings2, description: 'Vault, player and behaviour' },
@@ -25,6 +26,7 @@ export function SettingsOverlay(): React.JSX.Element {
   const section = useUi((s) => s.settingsSection)
   const close = useUi((s) => s.closeSettings)
   const current = NAV.find((n) => n.id === section)!
+  const userDataPath = useApp((s) => s.info?.userDataPath) ?? 'the app’s data folder'
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -66,7 +68,7 @@ export function SettingsOverlay(): React.JSX.Element {
           ))}
         </ul>
         <p className="mt-auto px-2 text-[11px] leading-relaxed text-muted-foreground">
-          Settings are stored in %APPDATA%\DND Tavern, outside your vault.
+          Settings are stored in <span className="selectable break-all">{userDataPath}</span>, outside your vault.
         </p>
       </nav>
 

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { StepHeader, type StepProps } from './Wizard'
+import { keyStorageHint } from '@/lib/platform'
 
 const NONE: never[] = []
 const FEATURED = ['openrouter', 'anthropic', 'openai', 'ollama', 'lmstudio', 'koboldcpp-v1']
@@ -102,7 +103,7 @@ export function BackendStep({ next, back }: StepProps): React.JSX.Element {
           {isInsecureUrl(draft.baseUrl) && (
             <Callout tone="gold">Plain http:// to a public address is unencrypted. Prefer https://, a VPN or Tailscale.</Callout>
           )}
-          <Field label="API key" htmlFor="wz-key" description="Encrypted with Windows DPAPI. Leave empty for local servers.">
+          <Field label="API key" htmlFor="wz-key" description={`${keyStorageHint()} Leave empty for local servers.`}>
             <SecretField id="wz-key" value={draft.apiKey} onChange={(v) => set('apiKey', v)} />
           </Field>
           <Field label="Model" htmlFor="wz-model">

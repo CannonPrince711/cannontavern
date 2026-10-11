@@ -1,10 +1,10 @@
 /**
  * In-app updates from GitHub Releases.
  *
- * Installed builds (NSIS) update themselves with electron-updater: check,
- * download in the background, then restart to install (or install on quit).
- * Portable and dev builds can't replace themselves, so they get a link to
- * the release page instead.
+ * Installed Windows builds (NSIS) and Linux AppImages update themselves with
+ * electron-updater: check, download in the background, then restart to
+ * install (or install on quit). Portable, .deb and dev builds can't replace
+ * themselves, so they get a link to the release page instead.
  */
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
@@ -34,9 +34,11 @@ class Updater {
   private wired = false
   private latestUrl = RELEASES_URL
 
-  /** Installed (NSIS) builds can replace themselves; portable and dev builds can't. */
+  /** NSIS installs and AppImages can replace themselves; portable, .deb and dev builds can't. */
   get canSelfUpdate(): boolean {
-    return app.isPackaged && !process.env['PORTABLE_EXECUTABLE_DIR']
+    if (!app.isPackaged) return false
+    if (process.platform === 'linux') return !!process.env['APPIMAGE']
+    return !process.env['PORTABLE_EXECUTABLE_DIR']
   }
 
   /** Read through a method: event handlers change the status while checks are awaited. */

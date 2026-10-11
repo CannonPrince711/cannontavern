@@ -5,7 +5,7 @@ import { noteName } from '@shared/names'
 import { AppError } from '../errors'
 import { handle } from '../ipc'
 import { settingsStore } from '../settings-store'
-import { detectObsidianVaults, obsidianUri, validateVault } from '../vault/obsidian'
+import { detectObsidianVaults, obsidianConfigFiles, obsidianUri, validateVault } from '../vault/obsidian'
 import { vaultService } from '../vault/service'
 import { createSampleCampaign } from '../sample'
 import { buildVaultGraph } from '../graph'
@@ -16,7 +16,7 @@ const pathArg = z.tuple([z.string().min(1).max(1024)])
 let noteListCache: { at: number; paths: string[] } | null = null
 
 export function registerVaultHandlers(): void {
-  handle('vault:detect', () => detectObsidianVaults(app.getPath('appData')))
+  handle('vault:detect', () => detectObsidianVaults(obsidianConfigFiles(app.getPath('appData'), app.getPath('home'))))
 
   handle('vault:pick', async () => {
     const win = getMainWindow()

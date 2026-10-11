@@ -1,6 +1,6 @@
 # DND Tavern
 
-A Windows desktop app for playing Dungeons & Dragons with an AI Dungeon Master, in the style of SillyTavern.
+A desktop app for Windows and Linux for playing Dungeons & Dragons with an AI Dungeon Master, in the style of SillyTavern.
 
 Everything it creates is stored as plain Markdown and image files in an **Obsidian vault**: characters, sheets, lorebooks, campaigns, session logs and illustrations. You can read and edit the same notes in Obsidian while you play, and DND Tavern picks up your edits live.
 
@@ -45,6 +45,31 @@ Download one of these from the Releases page:
 The builds are not code-signed, so Windows SmartScreen may say *"Windows protected your PC"* the first time. Click **More info → Run anyway**. See [Code signing](#code-signing) if you build and distribute it yourself.
 
 Requires Windows 10 or 11 (x64). Mica and acrylic window materials need Windows 11 22H2 or later; older versions use a solid background.
+
+### Linux
+
+Two builds for x64 Linux (Ubuntu 22.04 or newer, Debian 12, Fedora and others):
+
+| File | Use it when |
+| --- | --- |
+| `DND Tavern-<version>-x86_64.AppImage` | Any distribution. Runs without installing and updates itself. |
+| `dnd-tavern_<version>_amd64.deb` | Ubuntu or Debian, with a menu entry. Updates come as a new `.deb`. |
+
+```bash
+chmod +x "DND Tavern-0.2.0-x86_64.AppImage"
+```
+
+```bash
+./"DND Tavern-0.2.0-x86_64.AppImage"
+```
+
+AppImages need FUSE 2. Ubuntu 24.04 and later don't include it: `sudo apt install libfuse2t64` (on 22.04, `libfuse2`). For the `.deb`:
+
+```bash
+sudo apt install ./dnd-tavern_0.2.0_amd64.deb
+```
+
+API keys are encrypted with the desktop keyring (GNOME Keyring or KWallet), which GNOME and KDE run by default. Without a keyring (some minimal window managers, or WSL), keys can't be stored; type `env:NAME` in the key field to read the key from an environment variable instead. Settings live in `~/.config/DND Tavern/`. Obsidian is found whether it was installed natively, as a Flatpak or as a Snap.
 
 ## First run
 
@@ -245,7 +270,7 @@ Header values are stored encrypted, like API keys.
 4. Optionally mark a workflow as the default for scenes or portraits, choose random or fixed seeds, and override the checkpoint or LoRA (and its strength).
 5. Press **Test**. Progress streams over ComfyUI's websocket (falling back to polling) and can be cancelled.
 
-Workflows that take an input image (img2img, IP-Adapter) are supported: the reference image is uploaded to ComfyUI first. Workflows are stored in `%APPDATA%\DND Tavern\workflows\` by default, or in the vault if you prefer.
+Workflows that take an input image (img2img, IP-Adapter) are supported: the reference image is uploaded to ComfyUI first. Workflows are stored in the app's data folder (`%APPDATA%\DND Tavern\workflows\`, or `~/.config/DND Tavern/workflows/` on Linux) by default, or in the vault if you prefer.
 
 #### Remote ComfyUI behind a reverse proxy
 
@@ -273,19 +298,19 @@ The prompt is assembled from blocks you can reorder and switch off in **Settings
 
 ## Settings, keys and privacy
 
-- Settings live in `%APPDATA%\DND Tavern\settings.json`. Your vault holds your content; nothing else is written there.
-- API keys and secret headers are encrypted with Windows DPAPI (Electron `safeStorage`), so they can only be decrypted by your Windows account on this PC. Instead of storing a key, you can enter `env:NAME` to read it from an environment variable at request time.
+- Settings live in `%APPDATA%\DND Tavern\settings.json` (Linux: `~/.config/DND Tavern/settings.json`). Your vault holds your content; nothing else is written there.
+- API keys and secret headers are encrypted with Windows DPAPI, or the desktop keyring on Linux (Electron `safeStorage`), so they can only be decrypted by your account on this computer. Instead of storing a key, you can enter `env:NAME` to read it from an environment variable at request time.
 - Keys never reach the app's UI process, and they are redacted from logs, error messages and the prompt inspector.
 - DND Tavern makes no network requests except to the backends you configure, the update check if you turn it on, and the multiplayer server while you host.
 - **Minimise to tray** keeps the app in the notification area when you close the window. Quit from the tray icon's menu.
 
 ## Updates
 
-Settings → General → **Updates**: **Check now**, check on startup, and optionally download in the background. Installed copies update themselves from GitHub Releases: when a new version is ready, a pill in the title bar offers **Restart to update** (it also installs when you quit). Portable and development copies can't replace themselves, so they link to the release page instead. Nothing installs without you.
+Settings → General → **Updates**: **Check now**, check on startup, and optionally download in the background. Installed copies (and Linux AppImages) update themselves from GitHub Releases: when a new version is ready, a pill in the title bar offers **Restart to update** (it also installs when you quit). Portable, `.deb` and development copies can't replace themselves, so they link to the release page instead. Nothing installs without you.
 
 ## Writing extensions
 
-Extensions are folders in `%APPDATA%\DND Tavern\extensions\` (open it from **Settings → Extensions**). Six examples are installed: Weather & Time, Loot Generator, NPC Generator, Session Recap, Map Pins, and **Mature Mode (18+)**, which (once enabled and confirmed 18+) allows adult content between consenting adult characters and tracks its own per-character stat blocks such as Arousal, Affection and Stamina, updated by the model and editable in its panel. New extensions start disabled; enabling one shows the permissions it asks for, and you can grant or refuse each one.
+Extensions are folders in `%APPDATA%\DND Tavern\extensions\` (Linux: `~/.config/DND Tavern/extensions/`; open it from **Settings → Extensions**). Six examples are installed: Weather & Time, Loot Generator, NPC Generator, Session Recap, Map Pins, and **Mature Mode (18+)**, which (once enabled and confirmed 18+) allows adult content between consenting adult characters and tracks its own per-character stat blocks such as Arousal, Affection and Stamina, updated by the model and editable in its panel. New extensions start disabled; enabling one shows the permissions it asks for, and you can grant or refuse each one.
 
 ```text
 extensions/my-extension/
@@ -387,7 +412,7 @@ npm run typecheck
 
 npm 11 blocks dependency install scripts by default. The ones this project needs are already approved in `package.json` (`allowScripts`). Electron downloads its binary the first time it runs.
 
-Dev runs keep their data in `%APPDATA%\DND Tavern (dev)\`, so they never interfere with an installed copy.
+Dev runs keep their data in `%APPDATA%\DND Tavern (dev)\` (Linux: `~/.config/DND Tavern (dev)/`), so they never interfere with an installed copy.
 
 `TestVault/` is a small Obsidian vault for trying things out: point the wizard at it.
 
@@ -415,6 +440,20 @@ This type-checks, builds, and writes both installers to `dist/`:
 
 `npm run dist:dir` builds an unpacked app in `dist/win-unpacked/` for quick testing. Regenerate the icon from `build/icon.svg` with `npm run icon`.
 
+### Building for Linux
+
+Build on Linux, or in WSL on Windows (Ubuntu under WSL 2 works, and WSLg can run the result). Use Node.js 22 or newer, and clone the repository inside the Linux file system (for example `~/cannontavern`), not under `/mnt/c`, so `npm ci` installs Linux binaries:
+
+```bash
+npm ci
+```
+
+```bash
+npm run dist:linux
+```
+
+This writes `dist/DND Tavern-<version>-x86_64.AppImage` and `dist/dnd-tavern_<version>_amd64.deb`. Building the `.deb` needs no extra packages; running the app needs the usual Electron libraries (`libgtk-3-0`, `libnss3`, `libasound2`), which desktop installs already have.
+
 ### Publishing a release (for in-app updates)
 
 Bump `version` in `package.json`, set `GH_TOKEN` to a GitHub token that can create releases, and run:
@@ -424,6 +463,8 @@ npm run release
 ```
 
 This uploads the installer, its blockmap and `latest.yml` to a GitHub release, which installed copies check. The releases must be readable without a token, so the repository (or at least its releases) has to be public for updates to download.
+
+`release.bat [version] [--dry]` does the same with prompts: it bumps the version, finds a token (`GH_TOKEN`, the GitHub CLI's login, or a hidden prompt; never saved), publishes, and offers to commit the bump. On Linux, `./release.sh [version] [--dry]` publishes the AppImage, `.deb` and `latest-linux.yml` the same way (`npm run release:linux`). For one release with both, run each for the same version within two hours of each other; they upload to the same GitHub release.
 
 ### Code signing
 

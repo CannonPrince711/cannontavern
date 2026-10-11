@@ -6,6 +6,8 @@ import type { VaultPath } from '@shared/types'
 import { writeFileAtomic } from '../atomic'
 import { AppError } from '../errors'
 
+const CASE_INSENSITIVE = process.platform === 'win32' || process.platform === 'darwin'
+
 export interface FileState {
   mtimeMs: number
   size: number
@@ -101,8 +103,10 @@ export class Vault {
   }
 
   isInRoot(path: VaultPath): boolean {
-    const p = joinVaultPath(path).toLowerCase()
-    const r = this.rootFolder.toLowerCase()
+    // Windows and macOS ignore case in paths; on Linux "dnd tavern" is another folder.
+    const fold = (s: string): string => (CASE_INSENSITIVE ? s.toLowerCase() : s)
+    const p = fold(joinVaultPath(path))
+    const r = fold(this.rootFolder)
     return p === r || p.startsWith(`${r}/`)
   }
 

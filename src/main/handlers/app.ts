@@ -7,6 +7,7 @@ import { handle } from '../ipc'
 import { paths } from '../paths'
 import { openExternalSafe } from '../security'
 import { popupMenu } from '../context-menu'
+import { keyStorage } from '../secrets'
 import { updater } from '../updater'
 import { getAppliedMaterial, getMainWindow, isWin11 } from '../window'
 
@@ -19,7 +20,8 @@ export function registerAppHandlers(): void {
     isWin11: isWin11(),
     material: getAppliedMaterial(),
     isPackaged: app.isPackaged,
-    userDataPath: app.getPath('userData')
+    userDataPath: app.getPath('userData'),
+    keyStorage: keyStorage()
   }))
 
   handle(

@@ -4,6 +4,7 @@ import type { SecretInput } from '@shared/settings'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
+import { keyStorageName } from '@/lib/platform'
 
 /**
  * Edits a secret without ever showing a stored value. A stored key shows as
@@ -27,7 +28,7 @@ export function SecretField({
     return (
       <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/60 px-3">
         <Lock className="size-3.5 text-emerald" aria-hidden />
-        <span className="flex-1 text-sm">Stored, encrypted with Windows DPAPI</span>
+        <span className="flex-1 text-sm">Stored, encrypted with {keyStorageName()}</span>
         <Button variant="ghost" size="sm" onClick={() => onChange({ kind: 'set', value: '' })}>
           Replace
         </Button>

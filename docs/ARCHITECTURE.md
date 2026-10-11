@@ -52,7 +52,7 @@ cannontavern/
    │  ├─ security.ts                navigation guards, link allow-list, permissions
    │  ├─ ipc.ts, errors.ts          typed handle()/send(), sender check, zod args, AppError
    │  ├─ settings-store.ts          settings.json in userData, patches, public view
-   │  ├─ secrets.ts, redact.ts      safeStorage (DPAPI) and env: keys; masking in errors/logs
+   │  ├─ secrets.ts, redact.ts      safeStorage (DPAPI / Linux keyring) and env: keys; masking in errors/logs
    │  ├─ atomic.ts, paths.ts, http.ts  atomic writes; undici client with proxy, headers, retries
    │  ├─ vault/                     reader/writer with conflict checks, watcher, index, vault:// protocol
    │  ├─ library.ts, sessions.ts    characters, campaigns, lorebooks, presets; session notes
@@ -62,6 +62,8 @@ cannontavern/
    │  ├─ graph.ts, tips.ts          note graph for the graph view; AI ideas for the tips bubble
    │  ├─ table/host.ts              multiplayer host: HTTP + WebSocket server for the player page
    │  ├─ updater.ts                 in-app updates (electron-updater, GitHub Releases)
+   │  ├─ autostart.ts               start with the computer (login items; ~/.config/autostart on Linux)
+   │  ├─ backends/context.ts        asks self-hosted servers for their real context window
    │  ├─ context-menu.ts            native right-click menus
    │  ├─ images.ts                  image jobs, auto-illustration
    │  ├─ backends/text/             openai, anthropic, ollama, kobold, textgen, custom

@@ -110,8 +110,8 @@ export async function createMainWindow(appearance: Appearance): Promise<BrowserW
     minHeight: MIN_SIZE.height,
     show: false,
     title: 'DND Tavern',
-    // Packaged builds take the icon from the .exe; dev builds need it explicitly.
-    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../resources/icon.png') }),
+    // Packaged Windows builds take the icon from the .exe; Linux and dev builds need it explicitly.
+    ...(app.isPackaged && process.platform === 'win32' ? {} : { icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../resources/icon.png') }),
     // A hidden title bar plus the overlay keeps the native caption buttons, so
     // Windows 11 snap layouts appear when hovering maximise.
     titleBarStyle: 'hidden',

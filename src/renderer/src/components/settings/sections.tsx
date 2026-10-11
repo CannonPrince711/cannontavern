@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { useVault } from '@/stores/vault'
+import { keyStorageName } from '@/lib/platform'
 
 export function GeneralSection(): React.JSX.Element {
   const settings = useApp((s) => s.settings)!
@@ -277,7 +278,7 @@ export function SecuritySection(): React.JSX.Element {
         </Field>
         <div className="space-y-1.5 py-3 text-xs leading-relaxed text-muted-foreground">
           <p>• DND Tavern opens no network port. The window talks to the app only over internal IPC.</p>
-          <p>• API keys are encrypted with Windows DPAPI, stay in the background process, and are masked in errors and the prompt inspector.</p>
+          <p>• API keys are encrypted with {keyStorageName()}, stay in the background process, and are masked in errors and the prompt inspector.</p>
           <p>• Links in messages open in your browser only if they are https: or obsidian: links.</p>
         </div>
       </SettingsGroup>

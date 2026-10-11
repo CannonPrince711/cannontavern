@@ -21,6 +21,7 @@ import { registerExtensionHandlers } from './handlers/extensions'
 import { vaultService } from './vault/service'
 import { syncTray, attachTrayBehaviour } from './tray'
 import { updater } from './updater'
+import { setLaunchOnStartup } from './autostart'
 import { recapService } from './recap'
 import { applyAppearance, createMainWindow, getMainWindow } from './window'
 
@@ -70,7 +71,7 @@ if (!app.requestSingleInstanceLock()) {
         applyAppearance(next.appearance)
       }
       if (next.behavior.launchOnStartup !== prev.behavior.launchOnStartup && app.isPackaged) {
-        app.setLoginItemSettings({ openAtLogin: next.behavior.launchOnStartup })
+        void setLaunchOnStartup(next.behavior.launchOnStartup)
       }
       if (next.behavior.minimizeToTray !== prev.behavior.minimizeToTray) syncTray()
       if (next.behavior.autoUpdateCheck && !prev.behavior.autoUpdateCheck) void updater.check(false)

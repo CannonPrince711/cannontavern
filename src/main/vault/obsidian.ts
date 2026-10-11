@@ -4,28 +4,39 @@ import { basename, join } from 'node:path'
 import type { DetectedVault, VaultValidation } from '@shared/types'
 
 /**
- * Reads Obsidian's own vault list (%APPDATA%\obsidian\obsidian.json). Only that
- * file is read; nothing inside any vault's .obsidian/ is touched.
+ * Where Obsidian keeps its vault list: %APPDATA%\obsidian on Windows,
+ * ~/.config/obsidian on Linux, plus the Flatpak and Snap sandboxes.
  */
-export async function detectObsidianVaults(appDataDir: string): Promise<DetectedVault[]> {
-  let raw: string
-  try {
-    raw = await fs.readFile(join(appDataDir, 'obsidian', 'obsidian.json'), 'utf8')
-  } catch {
-    return []
+export function obsidianConfigFiles(appDataDir: string, home: string, platform: NodeJS.Platform = process.platform): string[] {
+  const files = [join(appDataDir, 'obsidian', 'obsidian.json')]
+  if (platform === 'linux') {
+    files.push(join(home, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'obsidian.json'))
+    files.push(join(home, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'obsidian.json'))
   }
-  let json: unknown
-  try {
-    json = JSON.parse(raw)
-  } catch {
-    return []
+  return files
+}
+
+/**
+ * Reads Obsidian's own vault list (obsidian.json; see obsidianConfigFiles).
+ * Only that file is read; nothing inside any vault's .obsidian/ is touched.
+ */
+export async function detectObsidianVaults(configFiles: string | string[]): Promise<DetectedVault[]> {
+  const files = typeof configFiles === 'string' ? [join(configFiles, 'obsidian', 'obsidian.json')] : configFiles
+  const entries: { path?: unknown; ts?: unknown; open?: unknown }[] = []
+  for (const file of files) {
+    try {
+      const json = JSON.parse(await fs.readFile(file, 'utf8')) as { vaults?: Record<string, { path?: unknown; ts?: unknown; open?: unknown }> }
+      if (json.vaults && typeof json.vaults === 'object') entries.push(...Object.values(json.vaults))
+    } catch {
+      // not installed this way, or unreadable
+    }
   }
-  const vaults = (json as { vaults?: Record<string, { path?: unknown; ts?: unknown; open?: unknown }> }).vaults
-  if (!vaults || typeof vaults !== 'object') return []
 
   const found: DetectedVault[] = []
-  for (const v of Object.values(vaults)) {
-    if (typeof v?.path !== 'string') continue
+  const seen = new Set<string>()
+  for (const v of entries) {
+    if (typeof v?.path !== 'string' || seen.has(v.path)) continue
+    seen.add(v.path)
     try {
       if (!(await fs.stat(v.path)).isDirectory()) continue
     } catch {
