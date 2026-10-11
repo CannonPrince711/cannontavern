@@ -170,6 +170,12 @@ export function LeftSidebar(): React.JSX.Element {
   const [newCharacter, setNewCharacter] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
+  // Opening a session also makes its campaign the active one.
+  const openSession = (s: SessionSummary): void => {
+    if (s.campaignPath !== activeCampaign) useVault.getState().setActiveCampaign(s.campaignPath)
+    selectSession(s.path)
+  }
+
   const q = query.trim().toLowerCase()
   const characters = useMemo(
     () => (index?.characters ?? []).filter((c) => !q || c.displayName.toLowerCase().includes(q)),
@@ -323,13 +329,13 @@ export function LeftSidebar(): React.JSX.Element {
                             role="option"
                             tabIndex={0}
                             aria-selected={selectedSession === s.path}
-                            onClick={() => selectSession(s.path)}
-                            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSession(s.path)}
+                            onClick={() => openSession(s)}
+                            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openSession(s)}
                             onAuxClick={(e) => e.button === 1 && mouseShortcutsOn() && openInObsidian(s.path)}
                             onContextMenu={(e) => {
                               e.preventDefault()
                               void showMenu([
-                                { label: 'Open', run: () => selectSession(s.path) },
+                                { label: 'Open', run: () => openSession(s) },
                                 { label: 'Open in Obsidian', run: () => openInObsidian(s.path) },
                                 separator,
                                 {

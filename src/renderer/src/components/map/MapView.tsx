@@ -59,7 +59,10 @@ export const useMap = create<MapStore>((set, get) => ({
 
 /** Keeps the map store on the active campaign and in sync with edits made in Obsidian. */
 export function useMapSync(): void {
-  const campaign = useVault((s) => s.activeCampaign)
+  // The open session's campaign wins over the sidebar's active one.
+  const sessionCampaign = useChat((s) => s.session?.campaignPath)
+  const activeCampaign = useVault((s) => s.activeCampaign)
+  const campaign = sessionCampaign ?? activeCampaign
   useEffect(() => {
     void useMap.getState().load(campaign)
   }, [campaign])

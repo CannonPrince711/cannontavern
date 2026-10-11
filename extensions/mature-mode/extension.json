@@ -1,0 +1,20 @@
+{
+  "id": "mature-mode",
+  "name": "Mature Mode (18+)",
+  "version": "1.0.0",
+  "description": "Opt-in adult content for stories between consenting adult characters, with its own stat blocks (arousal, affection, stamina…) tracked per character. Confirm you are 18+ in its panel before it does anything.",
+  "author": "DND Tavern",
+  "permissions": [],
+  "commands": [
+    { "name": "mature", "description": "Confirm you are 18+ and turn mature mode on or off", "usage": "/mature confirm | on | off" },
+    { "name": "stats", "description": "Show the mature-mode stat blocks", "usage": "/stats" },
+    { "name": "stat", "description": "Change a stat by hand", "usage": "/stat <character> <stat> <+n | -n | =n>" }
+  ],
+  "settings": [
+    { "key": "intensity", "label": "Content level", "type": "select", "default": "explicit", "options": ["suggestive", "explicit"] },
+    { "key": "stats", "label": "Stats to track (comma separated)", "type": "string", "default": "Arousal, Affection, Stamina" },
+    { "key": "max", "label": "Stat maximum", "type": "number", "default": 100 },
+    { "key": "limits", "label": "Hard limits: never include (comma separated)", "type": "string", "default": "" },
+    { "key": "aiStats", "label": "Let the AI see and update the stats", "type": "boolean", "default": true }
+  ]
+}
