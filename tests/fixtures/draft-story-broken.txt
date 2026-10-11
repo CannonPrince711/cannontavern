@@ -1,0 +1,55 @@
+```json
+{
+  "outline": [
+    {
+      "title": "Welcome to St. Jude's",
+      "summary": "The PCs arrive at St. Jude's, exploring their new lives as Devils and their new powers. They join clubs and make friends while adjusting to their new lives. Their first mission is to retrieve a stolen necklace from a rival house."
+    },
+    {
+      "title": "Hellfire in the Hallways",
+      "summary": "A mysterious arsonist sets fires around the school, targeting Devils. The PCs investigate and uncover a conspiracy involving the Khaos Brigade and a dangerous artifact."
+    },
+    {
+      "title": "The Devil's Dance",
+      "summary": "The PCs attend the annual Fall Ball, where they meet other Devil nobles and form alliances. An unexpected challenge from a rival house leads to their first Rating Game match."
+    },
+    {
+      "title": "The Holy Sword Crisis",
+      "summary": "Excalibur fragments fall into the hands of rogue exorcists, causing chaos in the city. The PCs must recover them before the conflict escalates into war."
+    },
+    {
+      "title": "Dragon Kings and God-Slayers",
+      "summary": "The PCs journey to the ruins of an ancient civilization to face the last dragon kings and retrieve an artifact that could change the balance of power."
+    },
+    {
+      "title": "Apocalypse Dawn",
+      "summary": "The truce collapses as Ophis and Great Red stir in their slumber, threatening the balance between the factions. The PCs must unite the factions and stop the apocalypse."
+    },
+    {
+      "title": "The Ultimate Choice",
+      "summary": "The PCs face the ultimate threat, and are given a choice: rule the Underworld, reform the Evil Piece system, or end it entirely."
+    ]
+  },
+  "quests": [
+    {
+      "title": "The Stolen Necklace",
+      "summary": "A rival house, Clan Sitri, has stolen a priceless necklace from Clan Gremory. Recover it before the school's Winter Ball or face humiliation."
+    },
+    "The Fire Dance":
+    "A series of arson attacks plague St. Jude's, targeting Devils. Uncover the culprit and retrieve a stolen artifact before it falls into enemy hands."
+    "The Fall Ball:",
+    "A prestigious dance held annually at St. Jude's where Devil nobles dance and make alliances. Successfully woo a rival's princess/prince to secure an alliance."
+    "The Holy Sword Quest":
+    "Excalibur fragments have fallen into the hands of rogue exorcists. Retrieve them before war breaks out between the factions."
+    "The Dragon's Lair":
+    "The PCs must journey to the ruins of an ancient civilization to face the last dragon kings and retrieve an artifact that could change the balance of power."
+    "The Ultimate Decision":
+    "The apocalypse approaches, and the PCs must choose their path: rule, reform, or destroy the Evil Piece system."
+  ],
+  "secrets":
+    "The real Satan, Lucifer, is secretly manipulating events from the shadows, planning to return to power."
+    "Lady Vesper is actually the fallen Archangel, Gabriel, plotting revenge on the Grigori."
+    "The Grigori are experimenting on fallen angels to create powerful weapons."
+    "The Khaos Brigade has an ancient artifact that can break the Evil Piece system."
+    "Heaven has a secret plan to wipe out all Devils and take control of the Underworld."
+}

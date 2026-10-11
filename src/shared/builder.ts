@@ -90,7 +90,77 @@ export function extractJson(reply: string): unknown {
       // try the next one
     }
   }
+  // Last resort: pull each list out on its own, keeping every item that reads cleanly.
+  const lists = salvageLists(text)
+  if (Object.keys(lists).length) return lists
   throw new Error('The model’s reply couldn’t be read as a campaign, even after repairs.')
+}
+
+/** List fields (and the names models use for them) that salvageLists looks for. */
+const SALVAGE_KEYS: Record<string, string[]> = {
+  locations: ['locations', 'places'],
+  npcs: ['npcs', 'characters'],
+  factions: ['factions'],
+  outline: ['outline', 'acts', 'chapters'],
+  quests: ['quests', 'startingQuests', 'starting_quests'],
+  secrets: ['secrets', 'dmSecrets', 'dm_secrets']
+}
+
+/**
+ * For JSON too broken to repair as a whole (mismatched brackets, a list that
+ * mixes objects, "Title": "text" lines and bare sentences, a list missing its
+ * brackets): finds each list by its key and reads what it can from it.
+ */
+export function salvageLists(text: string): Record<string, unknown[]> {
+  const marks: { field: string; at: number; start: number }[] = []
+  for (const [field, names] of Object.entries(SALVAGE_KEYS)) {
+    for (const name of names) {
+      for (const m of text.matchAll(new RegExp(`"${name}"\\s*:\\s*\\[?`, 'gi'))) marks.push({ field, at: m.index!, start: m.index! + m[0].length })
+    }
+  }
+  marks.sort((a, b) => a.at - b.at)
+  const out: Record<string, unknown[]> = {}
+  marks.forEach((mark, i) => {
+    if (out[mark.field]) return
+    const region = text.slice(mark.start, i + 1 < marks.length ? marks[i + 1]!.at : text.length)
+    const items = readListRegion(region)
+    if (items.length) out[mark.field] = items
+  })
+  return out
+}
+
+function readListRegion(region: string): unknown[] {
+  // The whole list, if it repairs (not when it holds "Title": "text" pairs, which repairs split apart).
+  const close = region.lastIndexOf(']')
+  const pairs = /"\s*:/.test(region.replace(/\{[^{}]*\}/g, ' '))
+  if (close > 0 && !pairs) {
+    try {
+      const v = JSON.parse(jsonrepair(escapeStrayQuotes(`[${region.slice(0, close)}]`)))
+      if (Array.isArray(v) && v.length && v.every((x) => x && (typeof x === 'string' || typeof x === 'object'))) return v
+    } catch {
+      // read it piece by piece below
+    }
+  }
+  // Objects one by one…
+  const items: unknown[] = []
+  for (const m of region.matchAll(/\{[^{}]*\}/g)) {
+    try {
+      items.push(JSON.parse(jsonrepair(m[0])))
+    } catch {
+      // skip an object that won't read
+    }
+  }
+  // …then loose strings, pairing "Title": "description" (or "Title:" "description").
+  const strings = [...region.replace(/\{[^{}]*\}/g, ' ').matchAll(/"((?:[^"\\]|\\.){2,})"\s*(:)?/g)].map((m) => ({ text: m[1]!.replace(/\\"/g, '"').trim(), title: !!m[2] || m[1]!.trim().endsWith(':') }))
+  for (let i = 0; i < strings.length; i++) {
+    const s = strings[i]!
+    const next = strings[i + 1]
+    if (s.title && next && !next.title) {
+      items.push(`${s.text.replace(/:$/, '')}: ${next.text}`)
+      i++
+    } else if (s.text) items.push(s.text.replace(/:$/, ''))
+  }
+  return items
 }
 
 /**
@@ -284,7 +354,7 @@ const PIECE_SHAPES: Record<DraftPiece, string> = {
   locations: `{ "locations": [{ "name": "", "description": "one or two sentences", "keys": ["trigger words"] }] }`,
   npcs: `{ "npcs": [{ "name": "", "role": "", "description": "", "personality": "", "want": "", "secret": "" }] }`,
   factions: `{ "factions": [{ "name": "", "goal": "", "description": "" }] }`,
-  story: `{ "outline": [{ "title": "Act or chapter", "summary": "" }], "quests": ["starting quest"], "secrets": ["DM-only truths"] }`
+  story: `{ "outline": [{ "title": "Act or chapter", "summary": "" }], "quests": ["one sentence per quest"], "secrets": ["one sentence per secret"] }`
 }
 
 function pieceCounts(c: CampaignConcept): Record<'locations' | 'npcs' | 'factions' | 'acts', string> {
@@ -332,7 +402,7 @@ export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPi
     locations: `Write ${n.locations} key locations.`,
     npcs: `Write ${n.npcs} memorable NPCs, each wanting something, with a secret the DM can reveal.`,
     factions: `Write ${n.factions} factions with conflicting goals.`,
-    story: `Write the story: an outline of ${n.acts}, 2–4 starting quests and 3–5 DM-only secrets.`
+    story: `Write the story: an outline of ${n.acts}, 2–4 starting quests and 3–5 DM-only secrets. Quests and secrets are plain sentences in a list, not objects.`
   }
   const sofar = draftSoFar(d, piece)
   return `Campaign concept:\n${lines.join('\n')}${sofar ? `\n\nThe campaign so far:\n${sofar}` : ''}\n\n${ask[piece]} Keep each text short. Reply with a single JSON object shaped exactly like this:\n${PIECE_SHAPES[piece]}`
@@ -340,8 +410,18 @@ export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPi
 
 /** Reads a piece's reply and puts it into the draft (only that piece's fields change). */
 export function mergePiece(d: CampaignDraft, piece: DraftPiece, reply: string): CampaignDraft {
-  const got = parseSections(reply)
+  let got: CampaignDraft
+  try {
+    got = parseSections(reply)
+  } catch {
+    got = emptyDraft()
+  }
   const keys = DRAFT_PIECES.find((p) => p.id === piece)!.keys as readonly (keyof CampaignDraft)[]
+  // A repair can "succeed" and still lose lists; fill any that came back empty from the list rescue.
+  if (keys.some((k) => Array.isArray(got[k]) && (got[k] as unknown[]).length === 0)) {
+    const rescued = CampaignDraftSchema.parse(coerceDraft(salvageLists(reply.replace(/```(?:json|JSON)?/g, ''))))
+    for (const k of keys) if (Array.isArray(got[k]) && (got[k] as unknown[]).length === 0) (got as Record<string, unknown>)[k] = rescued[k]
+  }
   if (piece === 'overview' ? !got.name.trim() && !got.pitch.trim() && !got.setting.trim() : keys.every((k) => (got[k] as unknown[]).length === 0)) {
     throw new Error(`The model didn’t write ${DRAFT_PIECES.find((p) => p.id === piece)!.label}.`)
   }

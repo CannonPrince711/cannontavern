@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX } from '../src/shared/builder'
+import { CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX, salvageLists } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -204,5 +204,34 @@ describe('campaign builder: drafting in pieces', () => {
     const more = parseSections('{"locations": [{"name": "Kuoh Academy", "description": "The school."}], "npcs": [{"name": "Rias", "role": "King"}]}')
     expect(more.locations[0]!.name).toBe('Kuoh Academy')
     expect(more.npcs[0]!.role).toBe('King')
+  })
+})
+
+describe('campaign builder: rescuing badly broken lists', () => {
+  it('reads a real story reply with swapped brackets, mixed quest formats and bracketless secrets', () => {
+    const reply = readFileSync(new URL('./fixtures/draft-story-broken.txt', import.meta.url), 'utf8')
+    const d = mergePiece(emptyDraft('X'), 'story', reply)
+    expect(d.outline.map((o) => o.title)).toEqual([
+      "Welcome to St. Jude's",
+      'Hellfire in the Hallways',
+      "The Devil's Dance",
+      'The Holy Sword Crisis',
+      'Dragon Kings and God-Slayers',
+      'Apocalypse Dawn',
+      'The Ultimate Choice'
+    ])
+    expect(d.outline[0]!.summary).toContain('retrieve a stolen necklace')
+    expect(d.quests.length).toBeGreaterThanOrEqual(5)
+    expect(d.quests).toContain('The Fire Dance: A series of arson attacks plague St. Jude\'s, targeting Devils. Uncover the culprit and retrieve a stolen artifact before it falls into enemy hands.')
+    expect(d.quests[0]).toContain('The Stolen Necklace')
+    expect(d.secrets).toHaveLength(5)
+    expect(d.secrets[1]).toContain('Lady Vesper is actually the fallen Archangel')
+  })
+
+  it('pairs "Title": "description" lines and keeps plain sentences', () => {
+    expect(salvageLists('{"quests": ["Find the bell", "Rescue Ola": "She is in the tower"], "secrets": "The keeper lied." "The bell is alive."}')).toEqual({
+      quests: ['Find the bell', 'Rescue Ola: She is in the tower'],
+      secrets: ['The keeper lied.', 'The bell is alive.']
+    })
   })
 })
