@@ -63,7 +63,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
           </button>
         )}
         <p className="truncate text-[11px] text-muted-foreground">
-          {character ? `${character.displayName}${character.class ? ` · ${character.class} ${character.level ?? ''}` : ''}` : 'No character'} · {session.messages.length} messages
+          {character ? `${character.displayName}${character.class ? ` · ${character.class} ${character.level ?? ''}` : ''}` : 'No character'} · {session.messages.length} {session.messages.length === 1 ? 'message' : 'messages'}
         </p>
       </div>
 

@@ -131,6 +131,19 @@ registerCommand({
 })
 
 registerCommand({
+  name: 'compress',
+  usage: '/compress',
+  description: 'Compress this session into a recap now (also happens automatically when you leave it)',
+  run: async ({ session }) => {
+    toast.info('Compressing this session…')
+    const updated = await invoke('sessions:compress', session.path, true)
+    const recap = updated?.frontmatter.recap
+    if (!recap) return
+    await useChat.getState().post({ role: 'system', text: `**Session recap**\n\n${recap}`, swipes: [], swipeIndex: 0, hidden: true })
+  }
+})
+
+registerCommand({
   name: 'new',
   usage: '/new',
   description: 'Start a new session in this campaign',

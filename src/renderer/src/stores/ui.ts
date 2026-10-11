@@ -19,6 +19,10 @@ interface UiStore {
   creatingCampaign: boolean
   settingsOpen: boolean
   settingsSection: SettingsSection
+  paletteOpen: boolean
+  /** Text pushed into the chat composer (from the command palette); n changes on every push. */
+  composerPrefill: { text: string; n: number } | null
+  prefillComposer: (text: string) => void
   openSettings: (section?: SettingsSection) => void
   closeSettings: () => void
 }
@@ -30,6 +34,9 @@ export const useUi = create<UiStore>((set) => ({
   creatingCampaign: false,
   settingsOpen: false,
   settingsSection: 'general',
+  paletteOpen: false,
+  composerPrefill: null,
+  prefillComposer: (text) => set((s) => ({ composerPrefill: { text, n: (s.composerPrefill?.n ?? 0) + 1 } })),
   openSettings: (section) => set((s) => ({ settingsOpen: true, settingsSection: section ?? s.settingsSection })),
   closeSettings: () => set({ settingsOpen: false })
 }))

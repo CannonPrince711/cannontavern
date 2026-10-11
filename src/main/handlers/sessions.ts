@@ -8,6 +8,7 @@ import { AppError } from '../errors'
 import { handle, send } from '../ipc'
 import { createCampaign, createCharacter, readCampaign, readCharacter, saveCharacter, saveParty } from '../library'
 import { createSession, deleteMessage, forkSession, postMessage, readSession, updateFrontmatter, updateMessage } from '../sessions'
+import { recapService } from '../recap'
 import { settingsStore } from '../settings-store'
 import { vaultService } from '../vault/service'
 import { extensionHost } from '../extensions/host'
@@ -39,6 +40,18 @@ export function registerSessionHandlers(): void {
   handle('sessions:get', (_e, p) => readSession(vaultService.require(), p), z.tuple([path]))
 
   handle(
+    'sessions:compress',
+    (_e, p, force) => (force ? recapService.compress(p, { force: true }) : (recapService.onLeave(p), Promise.resolve(null))),
+    z.tuple([path, z.boolean().optional()])
+  )
+
+  handle(
+    'sessions:recaps',
+    async (_e, p, limit) => recapService.recapsFor(await readSession(vaultService.require(), p), limit),
+    z.tuple([path, z.number().int().min(1).max(20)])
+  )
+
+  handle(
     'sessions:create',
     async (_e, { campaignPath, characterPath, title }) => {
       const vault = vaultService.require()
@@ -54,6 +67,7 @@ export function registerSessionHandlers(): void {
         firstMessage: character?.card.first_mes
       })
       extensionHost.notify('onSessionStart', null, session.path)
+      recapService.onSessionCreated(session)
       return publish(session)
     },
     z.tuple([z.object({ campaignPath: path, characterPath: path.optional(), title: z.string().max(200).optional() })])

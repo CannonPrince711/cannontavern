@@ -264,6 +264,10 @@ export const PromptSettingsSchema = z.object({
   lorebookTokenBudget: z.number().int().min(0).default(1024),
   /** Update the rolling summary every N messages; 0 disables it. */
   summaryEvery: z.number().int().min(0).default(20),
+  /** Compress a session into a recap when the player leaves it. */
+  autoRecap: z.boolean().default(true),
+  /** How many earlier sessions' recaps a session's prompt includes. */
+  recapCount: z.number().int().min(0).max(20).default(3),
   autoState: z.boolean().default(false)
 })
 

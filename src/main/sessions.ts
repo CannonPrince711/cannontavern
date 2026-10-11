@@ -33,6 +33,9 @@ function frontmatterOf(data: Record<string, unknown>, path: VaultPath): SessionF
     updated: str(data.updated),
     summary: str(data.summary) || undefined,
     summary_upto: str(data.summary_upto) || undefined,
+    recap: str(data.recap) || undefined,
+    recap_upto: str(data.recap_upto) || undefined,
+    recap_at: str(data.recap_at) || undefined,
     combat: data.combat && typeof data.combat === 'object' ? (data.combat as CombatState) : undefined,
     swipes: data.swipes && typeof data.swipes === 'object' ? (data.swipes as Record<string, string[]>) : undefined,
     tags: Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === 'string') : undefined
@@ -185,7 +188,10 @@ export async function forkSession(vault: Vault, path: VaultPath, messageId: stri
       forked_from: toWikilink(path, { full: true, alias: fm.title }),
       swipes: Object.keys(swipes).length ? swipes : undefined,
       summary: undefined,
-      summary_upto: undefined
+      summary_upto: undefined,
+      recap: undefined,
+      recap_upto: undefined,
+      recap_at: undefined
     },
     kept.startsWith('\n') ? kept : `\n${kept}`
   )

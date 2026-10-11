@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, ExternalLink, FilePlus2, Loader2, RotateCcw, Save } from 'lucide-react'
 import { DEFAULT_DM_PROMPT } from '@shared/prompt'
-import { PROMPT_BLOCK_IDS } from '@shared/types'
+import { normalizeBlockOrder } from '@shared/prompt'
 import { askText } from '@/components/AskDialog'
 import { Button } from '@/components/ui/button'
 import { Field, NativeSelect, SettingsGroup, Switch } from '@/components/ui/controls'
@@ -19,6 +19,7 @@ const BLOCK_LABELS: Record<string, { label: string; hint: string }> = {
   lorebook: { label: 'Lorebook entries', hint: 'Entries triggered by recent messages' },
   sheet: { label: 'Character sheet', hint: 'HP, AC, abilities with modifiers, inventory' },
   combat: { label: 'Combat state', hint: 'Initiative order, HP and conditions (only during a fight)' },
+  recaps: { label: 'Previous sessions', hint: 'Recaps of earlier sessions in the campaign' },
   summary: { label: 'Session summary', hint: 'Rolling memory of older events' },
   history: { label: 'Chat history', hint: 'Recent messages, trimmed to fit' },
   extensions: { label: 'Extensions', hint: 'Blocks added by enabled extensions' }
@@ -117,7 +118,7 @@ export function PromptSection(): React.JSX.Element {
   const set = (patch: Partial<typeof prompt>): void => void updateSettings({ prompt: patch })
 
   // Keep every known block in the list, even if settings predate one.
-  const blocks = [...prompt.blocks, ...PROMPT_BLOCK_IDS.filter((id) => !prompt.blocks.some((b) => b.id === id)).map((id) => ({ id, enabled: true }))]
+  const blocks = normalizeBlockOrder(prompt.blocks)
   const move = (i: number, dir: -1 | 1): void => {
     const next = [...blocks]
     const j = i + dir
@@ -169,6 +170,16 @@ export function PromptSection(): React.JSX.Element {
         >
           <Switch aria-label="Automatic sheet updates" checked={prompt.autoState} onCheckedChange={(v) => set({ autoState: v })} />
         </Field>
+        <Field
+          inline
+          label="Compress finished sessions"
+          description="When you leave a session (switch away, start a new one or close the app), the chat is compressed into a short recap saved in the session note. Later sessions in the campaign get those recaps instead of the full transcripts."
+        >
+          <Switch aria-label="Compress finished sessions" checked={prompt.autoRecap} onCheckedChange={(v) => set({ autoRecap: v })} />
+        </Field>
+        <div className="grid grid-cols-2 gap-4 py-3">
+          <NumberInput label="Recaps of earlier sessions to include (0 = none)" value={prompt.recapCount} min={0} max={20} onChange={(v) => set({ recapCount: v })} />
+        </div>
       </SettingsGroup>
     </div>
   )

@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tooltip'
+import { ListSkeleton } from '@/components/ui/skeleton'
 import { invoke } from '@/lib/ipc'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
@@ -151,6 +152,7 @@ function CampaignSwitcher(): React.JSX.Element {
 
 export function LeftSidebar(): React.JSX.Element {
   const index = useVault((s) => s.index)
+  const loaded = useVault((s) => s.loaded)
   const activeCampaign = useVault((s) => s.activeCampaign)
   const selectedCharacter = useVault((s) => s.selectedCharacter)
   const selectedSession = useVault((s) => s.selectedSession)
@@ -217,7 +219,9 @@ export function LeftSidebar(): React.JSX.Element {
           }
         />
         <NewCharacterDialog open={newCharacter} onOpenChange={setNewCharacter} />
-        {characters.length === 0 ? (
+        {!loaded ? (
+          <ListSkeleton rows={3} avatar />
+        ) : characters.length === 0 ? (
           <EmptyState
             illustration={<HoodArt />}
             title={q ? 'No matches' : 'No characters yet'}
@@ -261,7 +265,9 @@ export function LeftSidebar(): React.JSX.Element {
           addLabel="New session"
           onAdd={index && index.campaigns.length ? () => (selectSession(null), useUi.setState({ creatingCampaign: false })) : undefined}
         />
-        {groups.length === 0 ? (
+        {!loaded ? (
+          <ListSkeleton rows={4} />
+        ) : groups.length === 0 ? (
           <EmptyState
             illustration={<ScrollArt />}
             title={q ? 'No matches' : 'No sessions'}

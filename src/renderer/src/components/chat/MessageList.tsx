@@ -4,6 +4,7 @@ import type { Message } from '@shared/types'
 import { Logo } from '@/components/Logo'
 import { useChat } from '@/stores/chat'
 import { MessageItem, type MessageActions } from './MessageItem'
+import { PreviouslyCard } from './PreviouslyCard'
 
 function isSceneStart(messages: Message[], i: number): boolean {
   const m = messages[i]!
@@ -91,6 +92,7 @@ export function MessageList({
       aria-live="polite"
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-5">
+        <PreviouslyCard sessionPath={session.path} campaignPath={session.campaignPath} />
         {messages.length === 0 && !streaming && (
           <p className="py-16 text-center font-serif text-lg text-muted-foreground italic">
             The page is blank. Describe what your character does, or press Enter to let the DM set the scene.

@@ -9,6 +9,7 @@ import '@/lib/image-commands'
 import { useDiceFx } from '@/stores/dice'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
+import { useUi } from '@/stores/ui'
 
 const DRAFT_KEY = (path: string): string => `dnd-tavern:draft:${path}`
 
@@ -21,6 +22,17 @@ export function Composer(): React.JSX.Element {
   const [text, setText] = useState('')
   const [active, setActive] = useState(0)
   const ref = useRef<HTMLTextAreaElement>(null)
+  const prefill = useUi((s) => s.composerPrefill)
+
+  useEffect(() => {
+    if (!prefill) return
+    setText(prefill.text)
+    requestAnimationFrame(() => {
+      const el = ref.current
+      el?.focus()
+      el?.setSelectionRange(prefill.text.length, prefill.text.length)
+    })
+  }, [prefill])
 
   // Unsent drafts survive switching sessions (browser storage: convenience only).
   useEffect(() => {

@@ -99,10 +99,10 @@ export function GeneralSection(): React.JSX.Element {
         <Field inline label="Launch on startup" description="Start DND Tavern when you sign in to Windows.">
           <Switch aria-label="Launch on startup" checked={settings.behavior.launchOnStartup} onCheckedChange={(v) => void updateSettings({ behavior: { launchOnStartup: v } })} />
         </Field>
-        <Field inline label="Minimise to tray" description="Closing the window keeps DND Tavern running in the notification area.">
+        <Field inline label="Minimise to tray" description="Shows an icon in the notification area; closing the window hides it there instead of quitting. Quit from the icon’s menu.">
           <Switch aria-label="Minimise to tray" checked={settings.behavior.minimizeToTray} onCheckedChange={(v) => void updateSettings({ behavior: { minimizeToTray: v } })} />
         </Field>
-        <Field inline label="Check for updates" description="Off by default. DND Tavern never contacts a server unless you turn this on.">
+        <Field inline label="Check for updates" description="Off by default. When on, asks GitHub once per launch whether a newer release exists and shows a download link. Nothing installs automatically.">
           <Switch aria-label="Check for updates" checked={settings.behavior.autoUpdateCheck} onCheckedChange={(v) => void updateSettings({ behavior: { autoUpdateCheck: v } })} />
         </Field>
       </SettingsGroup>

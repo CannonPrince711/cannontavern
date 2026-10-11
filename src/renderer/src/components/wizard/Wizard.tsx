@@ -5,6 +5,7 @@ import { Logo } from '@/components/Logo'
 import { cn } from '@/lib/utils'
 import { useApp } from '@/stores/app'
 import { BackendStep } from './BackendStep'
+import { ExtrasStep } from './ExtrasStep'
 import { FinishStep } from './FinishStep'
 import { VaultStep } from './VaultStep'
 import { WelcomeStep } from './WelcomeStep'
@@ -18,6 +19,7 @@ const STEPS: { id: string; label: string; component: React.ComponentType<StepPro
   { id: 'welcome', label: 'Welcome', component: WelcomeStep },
   { id: 'vault', label: 'Vault', component: VaultStep },
   { id: 'backend', label: 'Text model', component: BackendStep },
+  { id: 'extras', label: 'Images & character', component: ExtrasStep },
   { id: 'finish', label: 'Finish', component: FinishStep }
 ]
 
@@ -55,8 +57,8 @@ export function Wizard(): React.JSX.Element {
               >
                 {i < step ? <Check className="size-3.5" /> : i + 1}
               </span>
-              <span className={cn('text-xs', i === step ? 'text-foreground' : 'text-muted-foreground')}>{s.label}</span>
-              {i < STEPS.length - 1 && <span className="mx-1 h-px w-8 bg-border" aria-hidden />}
+              <span className={cn('text-xs whitespace-nowrap', i === step ? 'text-foreground' : 'text-muted-foreground')}>{s.label}</span>
+              {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-border" aria-hidden />}
             </li>
           ))}
         </ol>

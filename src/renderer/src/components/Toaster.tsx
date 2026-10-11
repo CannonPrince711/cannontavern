@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, Copy, Info, X, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Info, X, XCircle } from 'lucide-react'
+import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { useToasts, type Toast } from '@/stores/toasts'
 
@@ -38,6 +39,18 @@ function ToastItem({ t }: { t: Toast }): React.JSX.Element {
           <p className="text-sm font-medium break-words">{t.title}</p>
           {t.source && <p className="text-[11px] text-muted-foreground">{t.source}</p>}
           {t.detail && t.level !== 'error' && <p className="mt-0.5 text-xs text-muted-foreground">{t.detail}</p>}
+          {t.link && (
+            <button
+              type="button"
+              onClick={() => {
+                void invoke('app:openExternal', t.link!.url)
+                dismiss(t.id)
+              }}
+              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              <ExternalLink className="size-3" /> {t.link.label}
+            </button>
+          )}
           {t.detail && t.level === 'error' && (
             <button
               type="button"

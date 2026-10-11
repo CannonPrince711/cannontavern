@@ -1,4 +1,4 @@
-import { Palette, PanelLeft, PanelRight, Settings, Star } from 'lucide-react'
+import { Palette, PanelLeft, PanelRight, Search, Settings, Star } from 'lucide-react'
 import { THEMES } from '@shared/themes'
 import type { ThemeId } from '@shared/types'
 import { Logo } from '@/components/Logo'
@@ -101,6 +101,11 @@ export function TitleBar(): React.JSX.Element {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <Tip label="Search everything (Ctrl+K)">
+          <Button variant="ghost" size="icon-sm" aria-label="Open command palette" onClick={() => useUi.setState({ paletteOpen: true })}>
+            <Search />
+          </Button>
+        </Tip>
         <Tip label={leftCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
           <Button
             variant="ghost"

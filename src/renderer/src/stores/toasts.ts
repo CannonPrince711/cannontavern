@@ -19,8 +19,8 @@ export const useToasts = create<ToastStore>((set, get) => ({
   push(t) {
     const id = nextId++
     set({ toasts: [...get().toasts.slice(-4), { ...t, id }] })
-    // Errors stay until dismissed so their details can be copied.
-    if (t.level !== 'error') setTimeout(() => get().dismiss(id), t.level === 'warning' ? 7000 : 4000)
+    // Errors (and toasts with a link) stay until dismissed.
+    if (t.level !== 'error' && !t.link) setTimeout(() => get().dismiss(id), t.level === 'warning' ? 7000 : 4000)
   },
   dismiss(id) {
     set({ toasts: get().toasts.filter((t) => t.id !== id) })

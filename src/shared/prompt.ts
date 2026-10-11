@@ -3,7 +3,7 @@
  * the prompt) and the renderer (which can preview it).
  *
  * Blocks, in the user's order, each switchable:
- *   preset · character · campaign · lorebook · sheet · combat · summary · history · extensions
+ *   preset · character · campaign · lorebook · sheet · combat · recaps · summary · history · extensions
  * Every non-history block goes into the system prompt in order; "history"
  * becomes the chat messages, trimmed newest-first to fit the context budget.
  */
@@ -19,6 +19,8 @@ import type {
   PromptBlockId
 } from './types'
 import type { Campaign } from './types'
+import { PROMPT_BLOCK_IDS } from './types'
+import { renderRecaps, type SessionRecap } from './recap'
 
 export const DEFAULT_DM_PROMPT = `You are the Dungeon Master of a Dungeons & Dragons 5th edition adventure played with {{user}}.
 
@@ -46,6 +48,8 @@ export interface PromptInput {
   sheet: DndSheet | null
   combat: CombatState | null
   summary: string | null
+  /** Recaps of earlier sessions in the campaign, oldest first. */
+  recaps?: SessionRecap[]
   messages: Message[]
   /** Block order and on/off switches from settings. */
   order: { id: string; enabled: boolean }[]
@@ -220,6 +224,21 @@ function stripMarkdown(s: string): string {
 
 // ─── Assembly ───────────────────────────────────────────────────────────────
 
+/**
+ * Saved block orders predate newer blocks; insert any missing built-in block
+ * just before the next built-in block that follows it by default.
+ */
+export function normalizeBlockOrder(order: { id: string; enabled: boolean }[]): { id: string; enabled: boolean }[] {
+  const out = [...order]
+  PROMPT_BLOCK_IDS.forEach((id, i) => {
+    if (out.some((b) => b.id === id)) return
+    const after = PROMPT_BLOCK_IDS.slice(i + 1).find((next) => out.some((b) => b.id === next))
+    const at = after ? out.findIndex((b) => b.id === after) : out.length
+    out.splice(at, 0, { id, enabled: true })
+  })
+  return out
+}
+
 export function buildPrompt(input: PromptInput): BuiltPrompt {
   const vars = { user: input.userName, char: input.character?.name ?? input.userName }
   const est = (t: string): number => estimateTokens(t, input.tokenizer)
@@ -251,6 +270,9 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         break
       case 'combat':
         if (input.combat?.active && input.combat.combatants.length) add('combat', 'Combat', renderCombat(input.combat))
+        break
+      case 'recaps':
+        if (input.recaps?.length) add('recaps', `Previous sessions (${input.recaps.length})`, renderRecaps(input.recaps))
         break
       case 'summary':
         if (input.summary?.trim()) add('summary', 'Story so far', `Story so far:\n${input.summary.trim()}`)

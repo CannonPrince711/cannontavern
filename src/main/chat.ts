@@ -5,8 +5,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
-import { buildPrompt, messageToTurn, selectLore, type BuiltPrompt } from '@shared/prompt'
-import type { Settings, TextBackend } from '@shared/settings'
+import { buildPrompt, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
+import type { TextBackend } from '@shared/settings'
 import type { CharacterNote, Message, PromptPreview, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
@@ -15,6 +15,8 @@ import { postMessage, readSession, updateFrontmatter, updateMessage } from './se
 import { settingsStore } from './settings-store'
 import { redactRequest, resolveTextBackend, textAdapter } from './backends/text'
 import type { GenerateResult } from './backends/text/types'
+import { backendChain } from './backends/chain'
+import { recapService } from './recap'
 import { vaultService } from './vault/service'
 import { extensionHost } from './extensions/host'
 import { getMainWindow } from './window'
@@ -53,21 +55,14 @@ export function extractState(text: string): { text: string; changes: Record<stri
   return { text: clean.replace(/\n{3,}/g, '\n\n').trim(), changes }
 }
 
-/** The backends to try, in order: the chat role (or default) first, then the rest if the fallback chain is on. */
-export function backendChain(s: Settings, role: 'chat' | 'summary' | 'imagePrompt' = 'chat'): TextBackend[] {
-  const primaryId = s.roles[role] ?? s.defaultTextBackendId
-  const primary = s.textBackends.find((b) => b.id === primaryId) ?? s.textBackends[0]
-  if (!primary) return []
-  if (!s.fallbackChain) return [primary]
-  return [primary, ...s.textBackends.filter((b) => b.id !== primary.id)]
-}
-
 /** Errors worth trying the next backend for (not user aborts or bad settings). */
 function shouldFallBack(err: unknown): boolean {
   const code = (err as { code?: string })?.code ?? ''
   if (code === 'ABORTED' || code === 'BAD_EXTRA_BODY' || code === 'BAD_TEMPLATE') return false
   return true
 }
+
+export { backendChain }
 
 class ChatService {
   private jobs = new Map<string, Job>()
@@ -77,6 +72,9 @@ class ChatService {
     const vault = vaultService.require()
     const s = settingsStore.get()
     const session = await readSession(vault, sessionPath)
+    const recapsOn = s.prompt.recapCount > 0 && normalizeBlockOrder(s.prompt.blocks).some((b) => b.id === 'recaps' && b.enabled)
+    if (recapsOn && !opts.upto) await recapService.ensurePrevious(session)
+    const recaps = recapsOn ? await recapService.recapsFor(session, s.prompt.recapCount) : []
 
     const characterPath = session.frontmatter.characters[0] ? await resolveCharacterLink(vault, session.frontmatter.characters[0]) : null
     const character = characterPath ? await readCharacter(vault, characterPath).catch(() => null) : null
@@ -106,8 +104,9 @@ class ChatService {
       sheet: character?.card.dnd ?? null,
       combat: session.frontmatter.combat ?? null,
       summary: session.frontmatter.summary ?? null,
+      recaps,
       messages,
-      order: s.prompt.blocks,
+      order: normalizeBlockOrder(s.prompt.blocks),
       budget: s.prompt.contextBudget || backend?.generation.contextSize || 8192,
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,

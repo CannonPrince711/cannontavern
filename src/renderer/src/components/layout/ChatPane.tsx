@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Circle, Cpu, FolderOpen } from 'lucide-react'
 import type { Message } from '@shared/types'
 import { ChatHeader } from '@/components/chat/ChatHeader'
 import { Composer } from '@/components/chat/Composer'
+import { ChatSkeleton } from '@/components/ui/skeleton'
 import { MessageList } from '@/components/chat/MessageList'
 import type { MessageActions } from '@/components/chat/MessageItem'
 import { CreateCampaignPanel, NewSessionPanel } from '@/components/chat/StartPanels'
 import { EmptyState } from '@/components/EmptyState'
 import { LanternArt } from '@/components/illustrations'
 import { Button } from '@/components/ui/button'
+import { invoke } from '@/lib/ipc'
 import { rollCheckFor } from '@/lib/rolls'
 import { toast } from '@/stores/toasts'
 import { useImages } from '@/stores/images'
@@ -73,18 +75,40 @@ function SetupState(): React.JSX.Element {
   )
 }
 
+function useDelayedFlag(value: boolean, ms: number): boolean {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    if (!value) {
+      setShown(false)
+      return
+    }
+    const t = setTimeout(() => setShown(true), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return value && shown
+}
+
 export function ChatPane(): React.JSX.Element {
   const index = useVault((s) => s.index)
+  const loaded = useVault((s) => s.loaded)
   const activeCampaign = useVault((s) => s.activeCampaign)
   const selectedSession = useVault((s) => s.selectedSession)
   const selectSession = useVault((s) => s.selectSession)
   const session = useChat((s) => s.session)
+  // Only show the skeleton if opening takes long enough to notice (no flicker on fast loads).
+  const opening = useDelayedFlag(useChat((s) => s.loading && s.session?.path !== selectedSession), 150)
   const isStreaming = useChat((s) => s.streaming !== null)
   const hasText = useApp((s) => (s.settings?.textBackends.length ?? 0) > 0)
   const creatingCampaign = useUi((s) => s.creatingCampaign)
   const hasImage = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
 
+  // Leaving a session ends it: the main process compresses it into a recap
+  // (when "Compress finished sessions" is on).
+  const previousSession = useRef<string | null>(null)
   useEffect(() => {
+    const prev = previousSession.current
+    previousSession.current = selectedSession
+    if (prev && prev !== selectedSession) void invoke('sessions:compress', prev).catch(() => {})
     void useChat.getState().open(selectedSession)
   }, [selectedSession])
 
@@ -141,7 +165,8 @@ export function ChatPane(): React.JSX.Element {
   }, [selectSession, hasImage])
 
   let content: React.ReactNode
-  if (!index || !hasText) content = <SetupState />
+  if (!loaded || (opening && selectedSession)) content = <ChatSkeleton />
+  else if (!index || !hasText) content = <SetupState />
   else if (index.campaigns.length === 0 || creatingCampaign) content = <CreateCampaignPanel />
   else if (!session) content = <NewSessionPanel key={activeCampaign} />
   else
@@ -158,7 +183,7 @@ export function ChatPane(): React.JSX.Element {
 
   return (
     <section className="flex h-full min-w-0 flex-col" aria-label="Chat">
-      {(session && !creatingCampaign) || !index || !hasText || index.campaigns.length === 0 || creatingCampaign ? content : <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>}
+      {(session && !creatingCampaign) || !loaded || opening || !index || !hasText || index.campaigns.length === 0 || creatingCampaign ? content : <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>}
     </section>
   )
 }

@@ -16,6 +16,9 @@ import { handleExtensionProtocol, registerExtensionScheme } from './extensions/p
 import { extensionHost } from './extensions/host'
 import { registerExtensionHandlers } from './handlers/extensions'
 import { vaultService } from './vault/service'
+import { syncTray, attachTrayBehaviour } from './tray'
+import { checkForUpdates } from './updates'
+import { recapService } from './recap'
 import { applyAppearance, createMainWindow, getMainWindow } from './window'
 
 app.setAppUserModelId('com.dndtavern.app')
@@ -63,6 +66,8 @@ if (!app.requestSingleInstanceLock()) {
       if (next.behavior.launchOnStartup !== prev.behavior.launchOnStartup && app.isPackaged) {
         app.setLoginItemSettings({ openAtLogin: next.behavior.launchOnStartup })
       }
+      if (next.behavior.minimizeToTray !== prev.behavior.minimizeToTray) syncTray()
+      if (next.behavior.autoUpdateCheck && !prev.behavior.autoUpdateCheck) void checkForUpdates()
       send(getMainWindow(), 'settings:changed', settingsStore.getPublic())
     })
 
@@ -81,10 +86,16 @@ if (!app.requestSingleInstanceLock()) {
     await extensionHost.installBundled().catch((err) => console.warn('[extensions] could not install examples:', err))
     await extensionHost.reload().catch((err) => console.warn('[extensions] load failed:', err))
 
-    await createMainWindow(settingsStore.get().appearance)
+    const win = await createMainWindow(settingsStore.get().appearance)
+    attachTrayBehaviour(win)
+    syncTray()
+    // Give the renderer a moment to subscribe to toasts.
+    setTimeout(() => void checkForUpdates(), 5000)
+    // The session open when the app last closed has ended: compress it.
+    setTimeout(() => void recapService.compressLastPlayed().catch((err) => console.warn('[recap] startup check failed:', err)), 15_000)
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) void createMainWindow(settingsStore.get().appearance)
+      if (BrowserWindow.getAllWindows().length === 0) void createMainWindow(settingsStore.get().appearance).then(attachTrayBehaviour)
     })
   })
 

@@ -119,6 +119,11 @@ export interface SessionFrontmatter {
   summary?: string
   /** Last message id included in the summary. */
   summary_upto?: Id
+  /** Compressed recap written when the session ended (see shared/recap.ts). */
+  recap?: string
+  /** Last message id the recap covers; a newer message makes it stale. */
+  recap_upto?: Id
+  recap_at?: string
   combat?: CombatState
   /** Alternative swipes keyed by message id; the active one lives in the body. */
   swipes?: Record<Id, string[]>
@@ -275,6 +280,7 @@ export const PROMPT_BLOCK_IDS = [
   'lorebook',
   'sheet',
   'combat',
+  'recaps',
   'summary',
   'history',
   'extensions'
@@ -500,6 +506,8 @@ export interface ToastEvent {
   title: string
   detail?: string
   source?: string
+  /** Optional https link shown as a button (opened in the default browser). */
+  link?: { label: string; url: string }
 }
 
 export interface TestResult {

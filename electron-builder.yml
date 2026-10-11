@@ -11,6 +11,8 @@ extraResources:
   - from: extensions
     to: extensions
     filter: ['**/*']
+  - from: resources/icon.png
+    to: icon.png
 npmRebuild: false
 win:
   executableName: DND Tavern

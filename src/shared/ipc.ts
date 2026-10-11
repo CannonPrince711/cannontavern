@@ -8,6 +8,7 @@
  * EVENT_CHANNELS. Every invoke result travels as an `IpcResult` envelope so
  * errors keep their code and detail across the boundary.
  */
+import type { SessionRecap } from './recap'
 import type {
   AppInfo,
   Campaign,
@@ -135,6 +136,10 @@ export interface InvokeMap {
 
   // Sessions
   'sessions:get': Invoke<[path: VaultPath], Session>
+  /** Compress a session into its recap now (force) or if it is out of date. */
+  'sessions:compress': Invoke<[path: VaultPath, force?: boolean], Session | null>
+  /** Recaps of the sessions before this one in its campaign, oldest first. */
+  'sessions:recaps': Invoke<[path: VaultPath, limit: number], SessionRecap[]>
   'sessions:create': Invoke<
     [opts: { campaignPath: VaultPath; characterPath?: VaultPath; title?: string }],
     Session
@@ -272,6 +277,8 @@ const invokeChannels = {
   'presets:get': 1,
   'presets:create': 1,
   'presets:save': 1,
+  'sessions:compress': 1,
+  'sessions:recaps': 1,
   'sessions:get': 1,
   'sessions:create': 1,
   'sessions:fork': 1,

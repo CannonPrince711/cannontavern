@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppearance, useReducedMotion } from '@/hooks/useAppearance'
 import { AskDialog } from '@/components/AskDialog'
 import { CharacterEditor } from '@/components/characters/CharacterEditor'
+import { CommandPalette } from '@/components/CommandPalette'
 import { DiceOverlay } from '@/components/dice/DiceOverlay'
 import { Lightbox } from '@/components/images/Lightbox'
 import { ExtensionWorkers } from '@/components/extensions/ExtensionsUi'
@@ -80,6 +81,7 @@ export function App(): React.JSX.Element {
           <DiceOverlay />
           <Lightbox />
           {ready && <ExtensionWorkers />}
+          {ready && setupComplete && <CommandPalette />}
           {ready && !setupComplete && <Wizard />}
           <Toaster />
         </div>
