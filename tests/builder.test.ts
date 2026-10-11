@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, parseDraft, PREMISE_MAX } from '../src/shared/builder'
+import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, parseDraft, PREMISE_MAX } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -139,5 +140,30 @@ describe('campaign builder: long premises', () => {
   it('names fields readably', () => {
     expect(fieldLabel('houseRules')).toBe('House rules')
     expect(fieldLabel('max_tokens')).toBe('Max tokens')
+  })
+})
+
+describe('campaign builder: quotes inside text', () => {
+  it('reads a real reply with dialogue and nicknames in double quotes', () => {
+    const reply = readFileSync(new URL('./fixtures/draft-stray-quotes.txt', import.meta.url), 'utf8')
+    const d = parseDraft(reply)
+    expect(d.name).toBe("The Shadow's Eminence")
+    expect(d.hook).toContain('the mysterious vigilante, "Shadow," fighting the diabolical Diabolos Cult')
+    expect(d.opening).toContain('"Lord Shadow! The safehouse has been breached.')
+    expect(d.opening).toContain('You allow yourself a slight, unseen smile.')
+    expect(d.locations.map((l) => l.name)).toEqual(['Midgar Academy', 'The Undercity'])
+    expect(d.npcs[0]).toMatchObject({ name: 'Alpha', want: 'To serve "Lord Shadow"' })
+    expect(d.quests).toEqual(['Rescue the agent'])
+  })
+
+  it('also reads it when the reply was cut off', () => {
+    const reply = readFileSync(new URL('./fixtures/draft-stray-quotes.txt', import.meta.url), 'utf8').slice(0, 1500)
+    const d = parseDraft(reply)
+    expect(d.hook).toContain('"Shadow,"')
+  })
+
+  it('leaves valid JSON alone', () => {
+    const valid = JSON.stringify({ a: 'say "hi", then go', b: ['x', 1, true, null], c: { d: 'line\nbreak' } }, null, 2)
+    expect(escapeStrayQuotes(valid)).toBe(valid)
   })
 })

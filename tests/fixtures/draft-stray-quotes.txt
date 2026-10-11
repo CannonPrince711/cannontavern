@@ -1,0 +1,24 @@
+{
+  "name": "The Shadow's Eminence",
+  "pitch": "You're ordinary people from Earth transported into a high-fantasy world, believing it's a game. Your secret, world-spanning evil cult is real, and by chasing your edgy fantasies, you've stumbled into a genuine, apocalyptic shadow war.",
+  "setting": "The Midgar Empire: a sprawling realm of towering gothic cities, magical academies, and deep shadows. The capital is a massive, multi-ring city powered by crystallized magic. The Academy is where young nobles learn magic and swordplay. The Bushin Festival is an international martial arts tournament. The Abandoned District is a lawless ruin where your hidden base lies.",
+  "tone": "Romantic, Political intrigue, Epic",
+  "houseRules": "",
+  "hook": "You're attending the Midgar Academy to learn magic, but your boring life as a mundane noble masks your secret identity as the mysterious vigilante, "Shadow," fighting the diabolical Diabolos Cult. One night, an agent's desperate call for help shatters your cover and plunges you into a deadly conspiracy.",
+  "opening": "You stand on the rooftop of the Midgar Academy dormitory, the moonlight glinting off your black slime suit. Below, the mundane life of the city churns—completely unaware of the darkness rotting the empire's core. Your earpiece crackles. The voice of your first loyal agent, a woman you rescued from a monstrous mutation, sounds desperate.
+
+"Lord Shadow! The safehouse has been breached. The Knight Order isn't just ignoring us—they're leading the purge! I knew it! The knights are compromised!"
+
+You allow yourself a slight, unseen smile.",
+  "locations": [
+    {"name": "Midgar Academy", "description": "Where young nobles learn magic and swordplay, and where "mob" personas fake incompetence.", "keys": ["academy"]},
+    {"name": "The Undercity", "description": "Lawless ruins hiding the base.", "keys": ["undercity"]}
+  ],
+  "npcs": [
+    {"name": "Alpha", "role": "First agent", "description": "Your first loyal agent.", "personality": "Fanatical", "want": "To serve "Lord Shadow"", "secret": "She knows more than she says."}
+  ],
+  "factions": [{"name": "Diabolos Cult", "goal": "Harvest the Blighted", "description": "An ancient cult."}],
+  "outline": [{"title": "Act 1", "summary": "The purge."}],
+  "quests": ["Rescue the agent"],
+  "secrets": ["The cult is real."]
+}

@@ -54,7 +54,7 @@ export function emptyDraft(name = ''): CampaignDraft {
   return { name, pitch: '', setting: '', tone: '', houseRules: '', hook: '', opening: '', locations: [], npcs: [], factions: [], outline: [], quests: [], secrets: [] }
 }
 
-export const BUILDER_SYSTEM = `You are an expert Dungeons & Dragons 5th edition campaign designer. You turn a short concept into a ready-to-run campaign: vivid but concise, with clear hooks, memorable NPCs who each want something, factions with conflicting goals, and secrets the DM can reveal over time. Avoid well-known published settings and characters; invent your own names. Reply with JSON only.`
+export const BUILDER_SYSTEM = `You are an expert Dungeons & Dragons campaign designer. You turn a concept into a ready-to-run campaign: vivid but concise, with clear hooks, memorable NPCs who each want something, factions with conflicting goals, and secrets the DM can reveal over time. Avoid well-known published settings and characters; invent your own names. Reply with JSON only. Inside text values, write quotations and dialogue with single quotes ('like this'), never double quotes.`
 
 const SHAPE = `{
   "name": "campaign name",
@@ -110,14 +110,58 @@ export function extractJson(reply: string): unknown {
       // try the next candidate
     }
   }
-  for (const c of candidates) {
+  // Then with stray quotes escaped ("the vigilante "Shadow," fighting…"), then jsonrepair on top.
+  const attempts = candidates.flatMap((c) => [() => JSON.parse(escapeStrayQuotes(c)), () => JSON.parse(jsonrepair(escapeStrayQuotes(c))), () => JSON.parse(jsonrepair(c))])
+  for (const attempt of attempts) {
     try {
-      return JSON.parse(jsonrepair(c))
+      return attempt()
     } catch {
-      // try the next candidate
+      // try the next one
     }
   }
   throw new Error('The model’s reply couldn’t be read as a campaign, even after repairs.')
+}
+
+/**
+ * Escapes double quotes that can't end a JSON string, the commonest small-model
+ * mistake: dialogue or a nickname quoted inside a value. A quote ends a string
+ * only when what follows is `:`, `}`, `]`, the end, or a comma followed by the
+ * start of another value. Raw line breaks inside strings become \n escapes.
+ * Valid JSON passes through unchanged.
+ */
+export function escapeStrayQuotes(text: string): string {
+  const skipSpace = (i: number): number => {
+    while (i < text.length && /\s/.test(text[i]!)) i++
+    return i
+  }
+  const ends = (from: number): boolean => {
+    const j = skipSpace(from)
+    const next = text[j]
+    if (next === undefined || next === ':' || next === '}' || next === ']') return true
+    if (next !== ',') return false
+    const k = skipSpace(j + 1)
+    const after = text[k]
+    return after === undefined || '"{[}]-'.includes(after) || /\d/.test(after) || /^(true|false|null)\b/.test(text.slice(k, k + 6))
+  }
+  let out = ''
+  let inString = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!
+    if (!inString) {
+      if (c === '"') inString = true
+      out += c
+    } else if (c === '\\') {
+      out += c + (text[i + 1] ?? '')
+      i++
+    } else if (c === '"') {
+      if (ends(i + 1)) {
+        inString = false
+        out += c
+      } else out += '\\"'
+    } else if (c === '\n') out += '\\n'
+    else if (c !== '\r') out += c
+  }
+  return out
 }
 
 const norm = (k: string): string => k.toLowerCase().replace(/[^a-z]/g, '')
