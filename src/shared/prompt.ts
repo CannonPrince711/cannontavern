@@ -409,3 +409,144 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
     droppedMessages: source.length - kept.length
   }
 }
+
+// ─── Party sessions: one shared prompt, a short speaker part at the end ─────
+
+export interface PartyPromptInput extends Omit<PromptInput, 'character' | 'sheet' | 'partyCards' | 'lore'> {
+  /** Every character at the table, in party order. */
+  partyCards: CharacterCard[]
+  /** Lore every speaker may see (NPC entries without their secrets). */
+  lore: LoreEntry[]
+  /** Who writes next: the DM, or one of the party (by name). */
+  turn: { speaker: 'dm' } | { speaker: 'player'; name: string }
+  /** DM-only lore (full NPC entries) for the DM's part. */
+  dmLore?: LoreEntry[]
+}
+
+/** The story as one neutral transcript, the same whoever writes next. */
+export function transcriptLine(m: Message, userName: string): string | null {
+  if (m.hidden) return null
+  switch (m.role) {
+    case 'dm':
+      return m.text.trim() ? `DM: ${m.text.trim()}` : null
+    case 'player':
+      return m.text.trim() ? `${m.name || userName}: ${m.text.trim()}` : null
+    case 'roll':
+      return `[Dice: ${m.name ? `${m.name} — ` : ''}${stripMarkdown(m.text)}]`
+    case 'system':
+      return `[${m.name ? `${m.name}: ` : ''}${stripMarkdown(m.text)}]`
+    case 'image':
+      return m.image?.prompt ? `[An illustration was shown: ${m.image.prompt}]` : null
+  }
+}
+
+/**
+ * For sessions with several AI-played characters. Local servers (KoboldCpp,
+ * llama.cpp, Ollama) skip re-reading the part of a prompt that matches their
+ * last request, so everything every speaker shares comes first and is
+ * identical for all of them: the campaign's public side, the party, the lore
+ * and the story as a transcript. Only the short last part changes: the DM's
+ * instructions and secrets, or one character's.
+ */
+export function buildPartyPrompt(input: PartyPromptInput): BuiltPrompt {
+  const est = (t: string): number => estimateTokens(t, input.tokenizer)
+  const names = input.partyCards.map((c) => c.name)
+  const user = names[0] ?? input.userName
+  // What rarely changes goes before the story, what changes turn to turn after it, so a new lore
+  // entry or an HP change only means re-reading a few lines, not the whole transcript.
+  const fixed: PromptBlock[] = []
+  const moving: PromptBlock[] = []
+  const DYNAMIC = new Set(['lorebook', 'sheet', 'combat', 'location'])
+  const add = (id: PromptBlockId | string, label: string, content: string): void => {
+    const text = content.trim()
+    if (text) (DYNAMIC.has(id) ? moving : fixed).push({ id, label, role: 'system', content: text, tokens: est(text) })
+  }
+
+  // The shared part, in the user's block order (instructions go to the end instead).
+  const enabled = new Set(input.order.filter((b) => b.enabled).map((b) => b.id))
+  add('intro', 'Table', `A Dungeons & Dragons game. The DM runs the world; the player characters are ${names.join(', ')}.`)
+  for (const { id, enabled: on } of input.order) {
+    if (!on) continue
+    switch (id as PromptBlockId) {
+      case 'character':
+        add('character', `Party (${names.length})`, `The player characters:\n\n${input.partyCards.map((c) => applyMacros(renderCharacter(c), { user, char: c.name })).join('\n\n---\n\n')}`)
+        break
+      case 'campaign':
+        add('campaign', 'Campaign & party', [input.rules ?? '', renderCampaign(input.campaign, input.party, true)].filter(Boolean).join('\n\n'))
+        if (input.location) add('location', 'Location', `The party is currently at: ${input.location}`)
+        break
+      case 'lorebook':
+        if (input.lore.length) add('lorebook', `Lorebook (${input.lore.length})`, renderLore(input.lore))
+        break
+      case 'sheet': {
+        const sheets = input.partyCards.filter((c) => c.dnd).map((c) => renderSheet(c.name, c.dnd!))
+        if (sheets.length) add('sheet', `Character sheets (${sheets.length})`, sheets.join('\n\n'))
+        break
+      }
+      case 'combat':
+        if (input.combat?.active && input.combat.combatants.length) add('combat', 'Combat', renderCombat(input.combat))
+        break
+      case 'recaps':
+        if (input.recaps?.length) add('recaps', `Previous sessions (${input.recaps.length})`, renderRecaps(input.recaps))
+        break
+      case 'summary':
+        if (input.summary?.trim()) add('summary', 'Story so far', `Story so far:\n${input.summary.trim()}`)
+        break
+      case 'extensions':
+        for (const b of input.extensionBlocks ?? []) add(b.id, b.label, b.content)
+        break
+    }
+  }
+
+  // The speaker's part, last.
+  let tail: string
+  if (input.turn.speaker === 'dm') {
+    const base = input.preset?.system_prompt.trim() || DEFAULT_DM_PROMPT
+    const secrets = [
+      enabled.has('campaign') && input.campaign?.body.trim() ? input.campaign.body.trim() : '',
+      input.dmLore?.length ? renderLore(input.dmLore) : ''
+    ].filter(Boolean)
+    tail = [
+      'You are the Dungeon Master.',
+      applyMacros(input.autoState ? `${base}\n\n${AUTO_STATE_INSTRUCTION}` : base, { user: names.join(', '), char: names.join(', ') }),
+      secrets.length ? `DM-only notes (use them, never reveal them outright):\n${secrets.join('\n\n')}` : '',
+      `Write the DM's next message, answering the party. Reply with the message only, without a "DM:" label.`
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  } else {
+    const name = input.turn.name
+    const others = names.filter((n) => n !== name)
+    const prompt = (input.playerPrompt?.trim() || COMPANION_PROMPT).split('{{party}}').join(others.join(', ') || 'the party')
+    tail = [applyMacros(prompt, { user, char: name }), `Write ${name}'s next turn. Reply with it only, without a "${name}:" label.`].join('\n\n')
+  }
+
+  const lines = enabled.has('history') ? input.messages.map((m) => transcriptLine(m, user)).filter((l): l is string => !!l) : []
+  const head = `${fixed.map((b) => b.content).join('\n\n')}\n\nThe story so far:\n`
+  const after = moving.length ? `\n\n${moving.map((b) => b.content).join('\n\n')}` : ''
+  const available = Math.max(0, input.budget - est(head) - est(after) - est(tail) - input.maxReplyTokens)
+  const kept: string[] = []
+  let used = 0
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const cost = est(lines[i]!) + 1
+    if (kept.length > 0 && used + cost > available) break
+    kept.unshift(lines[i]!)
+    used += cost
+  }
+  const blocks: PromptBlock[] = [...fixed, { id: 'history', label: 'Story (shared transcript)', role: 'user', content: `${kept.length} of ${lines.length} messages`, tokens: used }, ...moving]
+  blocks.push({ id: 'turn', label: input.turn.speaker === 'dm' ? 'DM instructions' : `${input.turn.name}'s instructions`, role: 'user', content: tail, tokens: est(tail) })
+
+  return {
+    system: `${head}${kept.join('\n\n')}${after}`,
+    messages: [{ role: 'user', content: tail }],
+    blocks,
+    totalTokens: est(head) + used + est(after) + est(tail),
+    droppedMessages: lines.length - kept.length
+  }
+}
+
+/** Drops a "Kiba:" or "**DM:**" label a model sometimes puts in front of its reply. */
+export function stripSpeakerLabel(text: string, name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(`^\\s*\\**${escaped}\\**\\s*:\\s*\\**\\s*`, 'i'), '')
+}

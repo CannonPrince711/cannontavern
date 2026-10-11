@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseLorebookBody, serializeLorebookBody, defaultSheet, normalizeSheet } from '@shared/notes'
-import { buildPrompt, COMPANION_PROMPT, DEFAULT_DM_PROMPT, messageToTurn, renderSheet, selectLore, type PromptInput } from '@shared/prompt'
+import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, DEFAULT_DM_PROMPT, messageToTurn, renderSheet, selectLore, stripSpeakerLabel, type PromptInput } from '@shared/prompt'
 import { PROMPT_BLOCK_IDS, type LoreEntry, type Message } from '@shared/types'
 import { extractState } from '../src/main/chat'
 
@@ -165,5 +165,58 @@ describe('AI companions', () => {
     expect(COMPANION_PROMPT).toContain('{{char}}')
     expect(COMPANION_PROMPT).toContain('{{party}}')
     expect(COMPANION_PROMPT).toMatch(/Never write for the other player characters or the DM/)
+  })
+})
+
+describe('party prompt (shared for every speaker)', () => {
+  const card = (name: string, description: string) => ({ name, description, personality: '', scenario: '', first_mes: '', mes_example: '', system_prompt: '', tags: [] })
+  const m = (id: string, role: Message['role'], text: string, name?: string): Message => ({ id, role, ...(name ? { name } : {}), text, swipes: [text], swipeIndex: 0, createdAt: '' })
+  const input = {
+    userName: 'Issei',
+    partyCards: [card('Issei', 'A Pawn.'), card('Kiba', 'A Knight.'), card('Akeno', 'A Queen.')],
+    campaign: { path: 'c', name: 'Peerage', setting: 'Kuoh', tone: 'Action', house_rules: '', lorebooks: [], body: '## Secrets\n- God is dead.' },
+    party: null,
+    preset: null,
+    lore: [{ title: 'Rias', keys: ['rias'], content: 'NPC. A Devil noble.', always_on: true, priority: 6, enabled: true }],
+    dmLore: [{ title: 'Rias', keys: ['rias'], content: 'NPC. A Devil noble.\n- Secret: she is betrothed.', always_on: true, priority: 6, enabled: true }],
+    combat: null,
+    summary: null,
+    messages: [m('1', 'dm', 'A Stray attacks!'), m('2', 'player', 'I punch it.', 'Issei'), m('3', 'player', 'I flank it.', 'Kiba')],
+    order: PROMPT_BLOCK_IDS.map((id) => ({ id, enabled: true })),
+    budget: 8000,
+    maxReplyTokens: 500,
+    tokenizer: 'chars4' as const,
+    autoState: false
+  }
+  const dm = buildPartyPrompt({ ...input, turn: { speaker: 'dm' } })
+  const akeno = buildPartyPrompt({ ...input, turn: { speaker: 'player', name: 'Akeno' } })
+  const kiba = buildPartyPrompt({ ...input, turn: { speaker: 'player', name: 'Kiba' } })
+
+  it('gives every speaker the same prompt up to their own instructions', () => {
+    expect(akeno.system).toBe(dm.system)
+    expect(kiba.system).toBe(dm.system)
+    expect(dm.system).toContain('DM: A Stray attacks!\n\nIssei: I punch it.\n\nKiba: I flank it.')
+  })
+
+  it('keeps DM secrets out of the shared part', () => {
+    expect(dm.system).not.toContain('God is dead')
+    expect(dm.system).not.toContain('betrothed')
+    expect(dm.messages[0]!.content).toContain('God is dead')
+    expect(dm.messages[0]!.content).toContain('she is betrothed')
+    expect(akeno.messages[0]!.content).not.toContain('God is dead')
+  })
+
+  it('ends with the speaker’s own instructions', () => {
+    expect(dm.messages).toHaveLength(1)
+    expect(dm.messages[0]!.content).toMatch(/Write the DM's next message/)
+    expect(akeno.messages[0]!.content).toContain('You are playing Akeno')
+    expect(akeno.messages[0]!.content).toContain('Issei, Kiba')
+    expect(akeno.messages[0]!.content).toMatch(/Write Akeno's next turn/)
+  })
+
+  it('strips a speaker label the model added', () => {
+    expect(stripSpeakerLabel('Akeno: Thunder crackles.', 'Akeno')).toBe('Thunder crackles.')
+    expect(stripSpeakerLabel('**DM:** The Stray howls.', 'DM')).toBe('The Stray howls.')
+    expect(stripSpeakerLabel('Akeno smiles.', 'Akeno')).toBe('Akeno smiles.')
   })
 })

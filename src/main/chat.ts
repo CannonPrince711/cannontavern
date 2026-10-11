@@ -6,9 +6,9 @@
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
 import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
-import { buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
+import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
-import type { CharacterNote, Message, PromptPreview, Session, VaultPath } from '@shared/types'
+import type { CharacterNote, LoreEntry, Message, PromptPreview, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
 import { readCampaign, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
@@ -43,6 +43,8 @@ interface Job {
 }
 
 export interface ChatContext {
+  /** Party prompt (shared transcript, see buildPartyPrompt): stop at the next speaker's label. */
+  stop?: string[]
   session: Session
   character: CharacterNote | null
   prompt: BuiltPrompt
@@ -122,6 +124,15 @@ class ChatService {
     const npcs = await campaignNpcs(vault, vaultService.getIndex(), session.campaignPath).catch(() => [])
     const npcEntries = npcs.map((n) => npcLoreEntry(n.card, n.body, { forPlayer: speaker === 'player' }))
     const lore = selectLore(mergeNpcLore(entries, npcEntries), messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
+    // In a party, every speaker shares the same lore (NPCs without secrets); the DM gets the secrets in its own part.
+    const partyLore = () => {
+      // Companions are party members, not NPCs: their cards are already in the prompt.
+      const others = npcs.filter((n) => !members.some((c) => c.path === n.path))
+      const pick = (forPlayer: boolean): LoreEntry[] =>
+        selectLore(mergeNpcLore(entries, others.map((n) => npcLoreEntry(n.card, n.body, { forPlayer }))), messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
+      const npcTitles = new Set(others.map((n) => n.card.name.trim().toLowerCase()))
+      return { shared: pick(true), dm: pick(false).filter((e) => npcTitles.has(e.title.trim().toLowerCase())) }
+    }
 
     const characterName = character?.card.name || session.frontmatter.persona || s.general.playerName
     // The DM sees companions as player characters too.
@@ -134,7 +145,38 @@ class ChatService {
     const others = self
       ? [...new Set([...(mode === 'ai-dm' ? [playerName] : []), ...members.filter((c) => c !== self).map((c) => c.card.name)])].filter((n) => n !== self.card.name)
       : []
-    const prompt = buildPrompt({
+    // With AI companions, one shared prompt for everyone so local servers can reuse it between turns.
+    const partyMode = companionNotes.length > 0 && mode !== 'user-dm'
+    const order = normalizeBlockOrder(s.prompt.blocks)
+    const budget = Math.min(s.prompt.contextBudget || window, window)
+    const partyNames = members.map((c) => c.card.name)
+    const turnName = speaker === 'player' ? (self ?? players[0])?.card.name ?? characterName : null
+    const prompt = partyMode
+      ? (() => {
+          const pl = partyLore()
+          return buildPartyPrompt({
+            userName: persona,
+            partyCards: members.map((c) => c.card),
+            turn: turnName ? { speaker: 'player', name: turnName } : { speaker: 'dm' },
+            campaign,
+            party,
+            preset,
+            lore: pl.shared,
+            dmLore: pl.dm,
+            combat: session.frontmatter.combat ?? null,
+            summary: session.frontmatter.summary ?? null,
+            recaps,
+            location: partyLocation(map),
+            rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
+            messages,
+            order,
+            budget,
+            maxReplyTokens: backend?.generation.maxTokens ?? 800,
+            tokenizer,
+            autoState: speaker === 'dm' && s.prompt.autoState && !!players[0]?.card.dnd
+          })
+        })()
+      : buildPrompt({
       userName: persona,
       speaker,
       playerPrompt: self ? COMPANION_PROMPT.split('{{party}}').join(others.join(', ') || 'the party') : s.prompt.playerPrompt,
@@ -152,14 +194,14 @@ class ChatService {
       location: partyLocation(map),
       rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
       messages,
-      order: normalizeBlockOrder(s.prompt.blocks),
-      budget: Math.min(s.prompt.contextBudget || window, window),
+      order,
+      budget,
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,
       autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd && !self
     })
-    // Extensions may add or change blocks (only when the "extensions" block is on).
-    if (s.prompt.blocks.some((b) => b.id === 'extensions' && b.enabled)) {
+    // Extensions may add or change blocks (only when the "extensions" block is on; not in the shared party prompt).
+    if (!partyMode && s.prompt.blocks.some((b) => b.id === 'extensions' && b.enabled)) {
       const blocks = await extensionHost.applyPromptBuild(prompt.blocks, sessionPath)
       if (blocks !== prompt.blocks) {
         const system = blocks.filter((b) => b.id !== 'history').map((b) => b.content).join('\n\n')
@@ -169,7 +211,9 @@ class ChatService {
         prompt.totalTokens = Math.ceil(system.length / 4) + historyTokens
       }
     }
-    return { session, character, prompt, persona, speaker, speakerName }
+    const ownLabel = turnName ?? 'DM'
+    const stop = partyMode ? ['DM', ...partyNames].filter((n) => n !== ownLabel).map((n) => `\n${n}:`) : undefined
+    return { session, character, prompt, persona, speaker, speakerName: turnName ?? speakerName, ...(stop ? { stop } : {}) }
   }
 
   async inspect(sessionPath: VaultPath): Promise<PromptPreview> {
@@ -326,7 +370,7 @@ class ChatService {
         )
         result = await textAdapter(backend.type).generate(
           resolveTextBackend(backend),
-          { system: ctx.prompt.system, messages: turns, userLabel: ctx.persona, assistantLabel: ctx.speakerName },
+          { system: ctx.prompt.system, messages: turns, userLabel: ctx.persona, assistantLabel: ctx.speakerName, ...(ctx.stop ? { stop: ctx.stop } : {}) },
           {
             signal: job.controller.signal,
             onToken: (delta) => {
@@ -354,7 +398,8 @@ class ChatService {
     const aborted = (lastError as { code?: string } | null)?.code === 'ABORTED'
     let raw = result?.text ?? streamed
     if (raw && !aborted) raw = await extensionHost.applyResponse(raw, job.sessionPath)
-    const { text, changes } = extractState(raw)
+    const { text: stated, changes } = extractState(raw)
+    const text = stripSpeakerLabel(stated, speakerName || 'DM')
 
     try {
       let session: Session | null = null
