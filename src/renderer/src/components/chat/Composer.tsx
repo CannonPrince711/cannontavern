@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dices, Pause, Play, SendHorizontal, Square, StepForward, Timer } from 'lucide-react'
 import { aiSpeakers, playModeOf, type PlayMode } from '@shared/play'
 import { chime, TurnTimerRing, useCountdown } from '@/components/TurnTimer'
+import { TipsBubble } from './TipsBubble'
 import { toast } from '@/stores/toasts'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
@@ -164,6 +165,7 @@ export function Composer(): React.JSX.Element {
   return (
     <div className="relative border-t p-3">
       <DiceTray />
+      <TipsBubble />
       {mode === 'ai-only' && <AutoplayBar />}
       {suggestions.length > 0 && !text.includes(' ') && (
         <ul

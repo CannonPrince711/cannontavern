@@ -338,6 +338,10 @@ export const SettingsSchema = z.object({
       /** AI-only play: turns per press of Auto-play, and the pause between them. */
       autoplayTurns: z.number().int().min(1).max(100).default(10),
       autoplayDelaySec: z.number().min(0).max(30).default(2),
+      /** The tips & ideas bubble above the message box. */
+      tipsBubble: z.boolean().default(true),
+      /** Refresh its AI ideas after every reply (uses the summaries model each time). */
+      ideasAuto: z.boolean().default(false),
       /** Optional countdown for your turn in chat and for each combatant in combat. */
       turnTimer: z
         .object({

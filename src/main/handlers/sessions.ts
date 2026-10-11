@@ -10,6 +10,7 @@ import { handle, send } from '../ipc'
 import { createCampaign, createCharacter, readCampaign, readCharacter, saveCharacter, saveParty } from '../library'
 import { createSession, deleteMessage, forkSession, postMessage, readSession, updateFrontmatter, updateMessage } from '../sessions'
 import { recapService } from '../recap'
+import { suggestIdeas } from '../tips'
 import { settingsStore } from '../settings-store'
 import { vaultService } from '../vault/service'
 import { extensionHost } from '../extensions/host'
@@ -159,6 +160,7 @@ export function registerSessionHandlers(): void {
   handle('chat:regenerate', (_e, { sessionPath }) => chatService.regenerate(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:continue', (_e, { sessionPath }) => chatService.continue(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:stop', (_e, requestId) => chatService.stop(requestId), z.tuple([z.string()]))
+  handle('chat:ideas', (_e, p) => suggestIdeas(p), z.tuple([path]))
   handle('chat:inspectPrompt', (_e, { sessionPath }) => chatService.inspect(sessionPath), z.tuple([z.object({ sessionPath: path })]))
 
   // ── Characters & campaigns (basics; import/export live in characters.ts) ─

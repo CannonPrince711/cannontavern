@@ -170,6 +170,8 @@ export interface InvokeMap {
   'chat:regenerate': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:continue': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:stop': Invoke<[requestId: Id], void>
+  /** Three AI ideas for the user's next move (tips bubble). */
+  'chat:ideas': Invoke<[sessionPath: VaultPath], string[]>
   'chat:inspectPrompt': Invoke<[opts: { sessionPath: VaultPath }], PromptPreview>
 
   // Images (progress arrives as images:* events)
@@ -318,6 +320,7 @@ const invokeChannels = {
   'chat:continue': 1,
   'chat:stop': 1,
   'chat:inspectPrompt': 1,
+  'chat:ideas': 1,
   'images:generate': 1,
   'images:cancel': 1,
   'extensions:list': 1,

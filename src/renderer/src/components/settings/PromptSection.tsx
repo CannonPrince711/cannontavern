@@ -131,6 +131,12 @@ function PlaySettings(): React.JSX.Element {
           <Save /> Save
         </Button>
       </div>
+      <Field inline label="Tips & ideas bubble" description="The lightbulb above the message box: AI ideas for your next move (as the player, the DM or the director) and rotating tips.">
+        <Switch aria-label="Tips and ideas bubble" checked={settings.play.tipsBubble} onCheckedChange={(v) => void updateSettings({ play: { tipsBubble: v } })} />
+      </Field>
+      <Field inline label="Refresh ideas after every reply" description="Uses the summaries model once per reply.">
+        <Switch aria-label="Refresh ideas after every reply" checked={settings.play.ideasAuto} onCheckedChange={(v) => void updateSettings({ play: { ideasAuto: v } })} />
+      </Field>
       <div className="grid grid-cols-2 gap-4 py-3">
         <NumberInput label="AI only: turns per Auto-play" value={settings.play.autoplayTurns} min={1} max={100} onChange={(v) => void updateSettings({ play: { autoplayTurns: v } })} />
         <NumberInput label="AI only: pause between turns" value={settings.play.autoplayDelaySec} min={0} max={30} step={0.5} onChange={(v) => void updateSettings({ play: { autoplayDelaySec: v } })} suffix="s" />
