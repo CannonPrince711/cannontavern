@@ -1,16 +1,15 @@
-import { Palette, PanelLeft, PanelRight, Search, Settings, Star } from 'lucide-react'
+import { Palette, PanelLeft, PanelRight, Search, Settings } from 'lucide-react'
 import { THEMES } from '@shared/themes'
 import type { ThemeId } from '@shared/types'
 import { Logo } from '@/components/Logo'
+import { TextModelSwitcher } from '@/components/ModelSwitcher'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tooltip'
@@ -33,7 +32,6 @@ export function TitleBar(): React.JSX.Element {
   const campaign = useActiveCampaign()
   const openSettings = useUi((s) => s.openSettings)
 
-  const backend = settings?.textBackends.find((b) => b.id === settings.defaultTextBackendId)
   const theme = settings?.appearance.theme ?? 'dark'
 
   return (
@@ -62,44 +60,7 @@ export function TitleBar(): React.JSX.Element {
       <div className="flex-1" />
 
       <div className="no-drag flex items-center gap-1 pr-2">
-        <DropdownMenu>
-          <Tip label={backend ? `Text backend: ${backend.name}` : 'No text backend configured'}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Active text backend"
-                className="mr-1 flex h-6 max-w-56 items-center gap-1.5 rounded-full border bg-card/60 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <span className={cn('size-1.5 shrink-0 rounded-full', backend ? 'bg-emerald' : 'bg-muted-foreground/50')} aria-hidden />
-                <span className="truncate">{backend ? backend.model || backend.name : 'No backend'}</span>
-              </button>
-            </DropdownMenuTrigger>
-          </Tip>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>Text backend</DropdownMenuLabel>
-            {settings?.textBackends.length ? (
-              <DropdownMenuRadioGroup
-                value={settings.defaultTextBackendId ?? ''}
-                onValueChange={(id) => void updateSettings({ defaultTextBackendId: id })}
-              >
-                {settings.textBackends.map((b) => (
-                  <DropdownMenuRadioItem key={b.id} value={b.id}>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{b.name}</span>
-                      {b.model && <span className="block truncate text-[11px] text-muted-foreground">{b.model}</span>}
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            ) : (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">None configured yet.</p>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => openSettings('text')}>
-              <Star /> Manage backends…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <TextModelSwitcher variant="pill" className="mr-1" />
 
         <Tip label="Search everything (Ctrl+K)">
           <Button variant="ghost" size="icon-sm" aria-label="Open command palette" onClick={() => useUi.setState({ paletteOpen: true })}>

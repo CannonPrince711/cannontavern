@@ -42,7 +42,9 @@ export const a1111Adapter: ImageAdapter = {
       sampler_name: req.sampler || undefined,
       seed,
       n_iter: 1,
-      batch_size: 1
+      batch_size: 1,
+      // Switch checkpoints from the model switcher (and keep it loaded afterwards).
+      ...(b.a1111.model ? { override_settings: { sd_model_checkpoint: b.a1111.model }, override_settings_restore_afterwards: false } : {})
     }
     let path = '/sdapi/v1/txt2img'
     if (req.source) {

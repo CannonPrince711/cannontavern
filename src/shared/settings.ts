@@ -215,6 +215,12 @@ function imageBackendSchema<S extends SecretSchema>(secret: S) {
         quality: z.string().default('')
       })
       .prefault({}),
+    a1111: z
+      .object({
+        /** Checkpoint title from /sdapi/v1/sd-models; empty keeps whatever the server has loaded. */
+        model: z.string().default('')
+      })
+      .prefault({}),
     custom: z
       .object({
         url: z.string().default(''),

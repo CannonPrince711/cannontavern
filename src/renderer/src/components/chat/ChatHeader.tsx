@@ -4,6 +4,7 @@ import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
 import { PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
+import { ImageModelSwitcher, TextModelSwitcher } from '@/components/ModelSwitcher'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
@@ -17,7 +18,6 @@ import { useVault } from '@/stores/vault'
 export function ChatHeader({ character, onInspect }: { character: CharacterSummary | null; onInspect?: () => void }): React.JSX.Element {
   const session = useChat((s) => s.session)!
   const settings = useApp((s) => s.settings)!
-  const updateSettings = useApp((s) => s.updateSettings)
   const characters = useVault((s) => s.index?.characters)
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(session.frontmatter.title)
@@ -70,7 +70,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
       </div>
 
       <Tip label={PLAY_MODE_INFO[mode].description}>
-        <NativeSelect value={mode} onChange={(e) => void meta({ mode: e.target.value as PlayMode })} className="w-28 @min-[760px]:w-36" aria-label="Play mode">
+        <NativeSelect value={mode} onChange={(e) => void meta({ mode: e.target.value as PlayMode })} className="w-[7.5rem] @min-[760px]:w-36" aria-label="Play mode">
           {PLAY_MODES.map((m) => (
             <option key={m} value={m}>
               {PLAY_MODE_INFO[m].short}
@@ -92,36 +92,8 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </label>
       )}
 
-      <NativeSelect
-        value={settings.roles.chat ?? settings.defaultTextBackendId ?? ''}
-        onChange={(e) => void updateSettings(settings.roles.chat ? { roles: { chat: e.target.value } } : { defaultTextBackendId: e.target.value })}
-        className="w-32 @min-[760px]:w-44"
-        aria-label="Text backend"
-        disabled={settings.textBackends.length === 0}
-      >
-        {settings.textBackends.length === 0 && <option value="">No text backend</option>}
-        {settings.textBackends.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name}
-            {b.model ? ` · ${b.model}` : ''}
-          </option>
-        ))}
-      </NativeSelect>
-
-      {settings.imageBackends.length > 0 && (
-        <NativeSelect
-          value={settings.defaultImageBackendId ?? ''}
-          onChange={(e) => void updateSettings({ defaultImageBackendId: e.target.value })}
-          className="w-28 @min-[760px]:w-36"
-          aria-label="Image backend"
-        >
-          {settings.imageBackends.map((b) => (
-            <option key={b.id} value={b.id}>
-              🖼 {b.name}
-            </option>
-          ))}
-        </NativeSelect>
-      )}
+      <TextModelSwitcher className="w-32 @min-[760px]:w-48" />
+      <ImageModelSwitcher compact className="w-28 @min-[760px]:w-40" />
 
       {onInspect && (
         <Tip label="Prompt inspector">

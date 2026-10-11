@@ -515,6 +515,18 @@ export interface ToastEvent {
   link?: { label: string; url: string }
 }
 
+/** What the image model switcher can offer for a backend. */
+export interface ImageModelList {
+  models: string[]
+  /** The model in use ('' when the server decides). */
+  current: string
+  /** ComfyUI workflows (empty for other backends). */
+  workflows: { id: string; name: string; purpose: string; canSetModel: boolean }[]
+  currentWorkflowId: string | null
+  /** Why there is nothing to pick, when that's the case. */
+  note?: string
+}
+
 export interface TestResult {
   ok: boolean
   ms: number

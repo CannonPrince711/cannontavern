@@ -19,6 +19,7 @@ import type {
   DndSheet,
   ErrorInfo,
   ExtensionInfo,
+  ImageModelList,
   ExtensionPermission,
   Id,
   Lorebook,
@@ -88,6 +89,11 @@ export interface InvokeMap {
   'textBackends:duplicate': Invoke<[id: Id], PublicSettings>
   'textBackends:reorder': Invoke<[ids: Id[]], PublicSettings>
   'textBackends:test': Invoke<[backend: TextBackendInput], TestResult>
+  /** Model switchers: list a saved backend's models; make a backend (and model) the active one. */
+  'textBackends:models': Invoke<[id: string], string[]>
+  'textBackends:use': Invoke<[id: string, model?: string], PublicSettings>
+  'imageBackends:models': Invoke<[id: string], ImageModelList>
+  'imageBackends:use': Invoke<[id: string, choice?: { model?: string; workflowId?: string }], PublicSettings>
   'textBackends:fetchModels': Invoke<[backend: TextBackendInput], string[]>
 
   // Image backends
@@ -244,6 +250,10 @@ const invokeChannels = {
   'textBackends:reorder': 1,
   'textBackends:test': 1,
   'textBackends:fetchModels': 1,
+  'textBackends:models': 1,
+  'textBackends:use': 1,
+  'imageBackends:models': 1,
+  'imageBackends:use': 1,
   'imageBackends:save': 1,
   'imageBackends:delete': 1,
   'imageBackends:duplicate': 1,

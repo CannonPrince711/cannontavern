@@ -4,7 +4,7 @@ import { joinVaultPath } from '@shared/names'
 import { EmptyState } from '@/components/EmptyState'
 import { FrameArt } from '@/components/illustrations'
 import { Button } from '@/components/ui/button'
-import { NativeSelect } from '@/components/ui/controls'
+import { ImageModelSwitcher } from '@/components/ModelSwitcher'
 import { Textarea } from '@/components/ui/input'
 import { useApp } from '@/stores/app'
 import { useChat } from '@/stores/chat'
@@ -64,17 +64,7 @@ export function ImagesPanel(): React.JSX.Element {
 
   return (
     <div className="space-y-3 p-3">
-      <NativeSelect
-        aria-label="Image backend"
-        value={settings.defaultImageBackendId ?? ''}
-        onChange={(e) => void updateSettings({ defaultImageBackendId: e.target.value })}
-      >
-        {settings.imageBackends.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name}
-          </option>
-        ))}
-      </NativeSelect>
+      <ImageModelSwitcher className="w-full" />
       <div className="grid grid-cols-2 gap-1.5">
         <Button variant="outline" size="sm" onClick={() => void generate({ sessionPath: session.path, kind: 'scene' })}>
           <Camera /> Illustrate scene
