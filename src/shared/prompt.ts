@@ -41,6 +41,13 @@ Never narrate the results of {{char}}'s actions, never describe what other chara
 
 Keep replies to one or two short paragraphs.`
 
+/** For an AI companion: one character in the party, beside the others ({{party}}). */
+export const COMPANION_PROMPT = `You are playing {{char}}, a companion in a Dungeons & Dragons party, alongside the other player characters: {{party}}. The Dungeon Master describes the world, voices everyone else and decides what happens.
+
+Write only {{char}}'s part for this turn: a reaction, a line of dialogue, or what they attempt, in third person and present tense. Stay true to the character card and sheet. Back the party up, but have your own opinions and goals, and don't just echo the others. Never write for the other player characters or the DM, never narrate results or invent facts about the world, and never roll dice or claim a result. If {{char}} has nothing useful to add, give a brief in-character reaction.
+
+Keep it to one to three sentences.`
+
 export const AUTO_STATE_INSTRUCTION = `After your narration, if the player character's state changed, add one hidden line in this exact format: <state>{"hp":-4,"add_item":"rope"}</state>. Allowed keys: hp, temp_hp, gold, xp (numbers are changes, e.g. -4), add_item, remove_item, add_condition, remove_condition (strings). Omit the line if nothing changed.`
 
 export interface PromptPreset {
@@ -65,6 +72,8 @@ export interface PromptInput {
   speaker?: Speaker
   /** Custom player prompt for speaker "player"; empty uses DEFAULT_PLAYER_PROMPT. */
   playerPrompt?: string | null
+  /** The character the AI is writing as, when it plays one of several (a companion). */
+  selfName?: string
   /** Recaps of earlier sessions in the campaign, oldest first. */
   recaps?: SessionRecap[]
   /** Where the party is on the campaign map. */
@@ -260,10 +269,12 @@ export function selectLore(
  * One stored message → one chat turn (or null when it shouldn't be sent).
  * Messages in the role the AI is writing (`speaker`) become assistant turns.
  */
-export function messageToTurn(m: Message, userName: string, speaker: Speaker = 'dm'): ChatTurn | null {
+export function messageToTurn(m: Message, userName: string, speaker: Speaker = 'dm', selfName?: string): ChatTurn | null {
   if (m.hidden) return null
   switch (m.role) {
     case 'player':
+      // Playing one companion, the other characters' lines are someone else's.
+      if (speaker === 'player' && selfName && m.name && m.name !== selfName) return { role: 'user', content: `${m.name}: ${m.text}` }
       if (speaker === 'player') return m.text.trim() ? { role: 'assistant', content: m.text } : null
       return { role: 'user', content: m.name && m.name !== userName ? `${m.name}: ${m.text}` : m.text }
     case 'dm':
@@ -368,7 +379,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
   const historyEnabled = blocks.some((b) => b.id === 'history')
 
   const turns = input.messages
-    .map((m) => messageToTurn(m, input.userName, speaker))
+    .map((m) => messageToTurn(m, input.userName, speaker, input.selfName))
     .filter((t): t is ChatTurn => t !== null)
     .map((t) => ({ ...t, content: applyMacros(t.content, vars) }))
 

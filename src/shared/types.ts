@@ -114,6 +114,8 @@ export interface SessionFrontmatter {
   /** Wikilink, e.g. "[[Campaign]]". */
   campaign: string
   characters: string[]
+  /** Wikilinks to characters or NPCs the AI plays as party members (AI is DM mode). */
+  companions?: string[]
   persona?: string
   /** Who plays which side (see shared/play.ts); missing means ai-dm. */
   mode?: PlayMode

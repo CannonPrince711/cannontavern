@@ -137,6 +137,10 @@ export function registerSessionHandlers(): void {
       if (patch.persona !== undefined) fm.persona = patch.persona.trim() || undefined
       if (patch.summary !== undefined) fm.summary = patch.summary.trim() || undefined
       if (patch.mode !== undefined) fm.mode = patch.mode === 'ai-dm' ? undefined : patch.mode
+      if (patch.companions !== undefined) {
+        const notes = await Promise.all(patch.companions.map((cp) => readCharacter(vault, cp)))
+        fm.companions = notes.length ? notes.map((c) => toWikilink(c.path, { full: true, alias: c.card.name })) : undefined
+      }
       if (patch.characterPath !== undefined) {
         if (patch.characterPath) {
           const c = await readCharacter(vault, patch.characterPath)
@@ -147,15 +151,15 @@ export function registerSessionHandlers(): void {
     },
     z.tuple([
       path,
-      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional(), mode: z.enum(PLAY_MODES).optional() })
+      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional(), mode: z.enum(PLAY_MODES).optional(), companions: z.array(path).max(8).optional() })
     ])
   )
 
   // ── Chat ──────────────────────────────────────────────────────────────────
   handle(
     'chat:send',
-    (_e, { sessionPath, text, persona, speaker }) => chatService.send(sessionPath, text, persona, speaker),
-    z.tuple([z.object({ sessionPath: path, text: z.string().max(200_000), persona: z.string().max(200).optional(), speaker: z.enum(['dm', 'player']).optional() })])
+    (_e, { sessionPath, text, persona, speaker, as }) => chatService.send(sessionPath, text, persona, speaker, as),
+    z.tuple([z.object({ sessionPath: path, text: z.string().max(200_000), persona: z.string().max(200).optional(), speaker: z.enum(['dm', 'player']).optional(), as: z.string().max(1000).optional() })])
   )
   handle('chat:regenerate', (_e, { sessionPath }) => chatService.regenerate(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:continue', (_e, { sessionPath }) => chatService.continue(sessionPath), z.tuple([z.object({ sessionPath: path })]))

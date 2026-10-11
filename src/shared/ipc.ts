@@ -198,14 +198,15 @@ export interface InvokeMap {
   'sessions:deleteMessage': Invoke<[path: VaultPath, id: Id], Session>
   'sessions:saveCombat': Invoke<[path: VaultPath, combat: CombatState | null], Session>
   'sessions:updateMeta': Invoke<
-    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode }],
+    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode; companions?: VaultPath[] }],
     Session
   >
   'sessions:undoState': Invoke<[path: VaultPath, messageId: Id], Session>
 
   // Chat generation (tokens arrive as chat:* events)
   /** Posts the user's text (in their role for the session's mode) and starts the next AI reply. */
-  'chat:send': Invoke<[opts: { sessionPath: VaultPath; text: string; persona?: string; speaker?: Speaker }], { requestId: Id }>
+  /** `as`: a companion (wikilink or path) for the AI to play this turn, with speaker "player". */
+  'chat:send': Invoke<[opts: { sessionPath: VaultPath; text: string; persona?: string; speaker?: Speaker; as?: string }], { requestId: Id }>
   'chat:regenerate': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:continue': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:stop': Invoke<[requestId: Id], void>

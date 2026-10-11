@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
 import { aiSpeakers, lastAiMessage, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
-import { buildPrompt, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
+import { buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import type { CharacterNote, Message, PromptPreview, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
@@ -37,6 +37,8 @@ interface Job {
   messageId: string
   /** The story role the AI writes in this reply. */
   speaker: Speaker
+  /** For a companion's turn: the character (wikilink or path) the AI plays. */
+  as?: string
   controller: AbortController
 }
 
@@ -81,7 +83,7 @@ class ChatService {
   private jobs = new Map<string, Job>()
 
   /** Loads everything the prompt needs for a session. */
-  async context(sessionPath: VaultPath, opts: { upto?: string; backend?: TextBackend; speaker?: Speaker } = {}): Promise<ChatContext> {
+  async context(sessionPath: VaultPath, opts: { upto?: string; backend?: TextBackend; speaker?: Speaker; as?: string } = {}): Promise<ChatContext> {
     const vault = vaultService.require()
     const s = settingsStore.get()
     const session = await readSession(vault, sessionPath)
@@ -92,7 +94,12 @@ class ChatService {
     // Every character in the session (several when players share a table); the first is "the" character.
     const partyPaths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
     const partyNotes = (await Promise.all(partyPaths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((c): c is CharacterNote => !!c)
-    const character = partyNotes[0] ?? null
+    // AI companions: party members the AI plays beside the player's character (AI is DM mode).
+    const companionNotes = playModeOf(session.frontmatter) === 'ai-dm' ? await this.companions(session) : []
+    const asPath = opts.as ? ((await resolveCharacterLink(vault, opts.as).catch(() => null)) ?? opts.as) : null
+    const self = asPath ? (companionNotes.find((c) => c.path === asPath) ?? null) : null
+    const players = partyNotes
+    const character = self ?? partyNotes[0] ?? null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
     const map = await readMap(vault, session.campaignPath).catch(() => null)
     const preset = s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null
@@ -116,16 +123,21 @@ class ChatService {
     const lore = selectLore(mergeNpcLore(entries, npcEntries), messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
 
     const characterName = character?.card.name || session.frontmatter.persona || s.general.playerName
-    // Writing as the DM, the other side is the player character; writing as the character, it's the DM.
+    // The DM sees companions as player characters too.
+    const table = self ? [] : [...players, ...companionNotes]
+    const playerName = session.frontmatter.persona || players[0]?.card.name || s.general.playerName
+    // Writing as the DM, the other side is the player character(s); writing as a character, it's the DM.
     const persona =
-      speaker === 'player' ? 'DM' : partyNotes.length > 1 ? partyNotes.map((c) => c.card.name).join(', ') : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
+      speaker === 'player' ? 'DM' : table.length > 1 ? table.map((c) => c.card.name).join(', ') : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
     const speakerName = speaker === 'player' ? characterName : 'DM'
+    const others = self ? [...new Set([playerName, ...players.map((c) => c.card.name), ...companionNotes.filter((c) => c !== self).map((c) => c.card.name)])] : []
     const prompt = buildPrompt({
       userName: persona,
       speaker,
-      playerPrompt: s.prompt.playerPrompt,
+      playerPrompt: self ? COMPANION_PROMPT.split('{{party}}').join(others.join(', ') || 'the party') : s.prompt.playerPrompt,
+      ...(self ? { selfName: self.card.name } : {}),
       character: character?.card ?? null,
-      partyCards: partyNotes.length > 1 ? partyNotes.map((c) => c.card) : undefined,
+      partyCards: table.length > 1 ? table.map((c) => c.card) : undefined,
       campaign,
       party,
       preset,
@@ -141,7 +153,7 @@ class ChatService {
       budget: Math.min(s.prompt.contextBudget || window, window),
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,
-      autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd
+      autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd && !self
     })
     // Extensions may add or change blocks (only when the "extensions" block is on).
     if (s.prompt.blocks.some((b) => b.id === 'extensions' && b.enabled)) {
@@ -182,7 +194,7 @@ class ChatService {
    * character, the DM, or a director's note in AI-only play), then starts the
    * next AI reply.
    */
-  async send(sessionPath: VaultPath, text: string, persona?: string, speaker?: Speaker): Promise<{ requestId: string }> {
+  async send(sessionPath: VaultPath, text: string, persona?: string, speaker?: Speaker, as?: string): Promise<{ requestId: string }> {
     const vault = vaultService.require()
     let session = await readSession(vault, sessionPath)
     const mode = playModeOf(session.frontmatter)
@@ -201,7 +213,16 @@ class ChatService {
       session = await postMessage(vault, sessionPath, message)
       this.publish(session)
     }
-    return this.start('new', sessionPath, newMessageId(), speaker ?? nextSpeaker(mode, session.messages))
+    return this.start('new', sessionPath, newMessageId(), speaker ?? nextSpeaker(mode, session.messages), as)
+  }
+
+  /** The session's AI companions, read from their notes (missing ones skipped). */
+  private async companions(session: Session): Promise<CharacterNote[]> {
+    const vault = vaultService.require()
+    const links = session.frontmatter.companions ?? []
+    const paths = await Promise.all(links.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
+    const notes = await Promise.all(paths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))
+    return notes.filter((n): n is CharacterNote => !!n)
   }
 
   /** A new swipe for the last AI reply (or a fresh reply if the last message isn't one). */
@@ -229,10 +250,10 @@ class ChatService {
     return [...this.jobs.values()].some((j) => j.sessionPath === sessionPath)
   }
 
-  private start(kind: JobKind, sessionPath: VaultPath, messageId: string, speaker: Speaker): { requestId: string } {
+  private start(kind: JobKind, sessionPath: VaultPath, messageId: string, speaker: Speaker, as?: string): { requestId: string } {
     if (this.isBusy(sessionPath)) throw new AppError('BUSY', 'A reply is already being written for this session.')
     if (settingsStore.get().textBackends.length === 0) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
-    const job: Job = { requestId: randomUUID(), kind, sessionPath, messageId, speaker, controller: new AbortController() }
+    const job: Job = { requestId: randomUUID(), kind, sessionPath, messageId, speaker, ...(as ? { as } : {}), controller: new AbortController() }
     this.jobs.set(job.requestId, job)
     void this.run(job).finally(() => {
       this.jobs.delete(job.requestId)
@@ -255,7 +276,7 @@ class ChatService {
 
     for (const backend of chain) {
       try {
-        const ctx = await this.context(job.sessionPath, { upto: job.kind === 'swipe' ? job.messageId : undefined, backend, speaker: job.speaker })
+        const ctx = await this.context(job.sessionPath, { upto: job.kind === 'swipe' ? job.messageId : undefined, backend, speaker: job.speaker, ...(job.as ? { as: job.as } : {}) })
         const turns = ctx.prompt.messages
         speakerName = ctx.speakerName
         send(win, 'chat:started', {

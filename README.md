@@ -179,6 +179,8 @@ Each session (and, as a default, each campaign) has a mode, switched from the ch
 
 As the DM, writing `[CHECK perception DC 13]` rolls the check for the character instead of asking the AI. In AI-only sessions, **Next turn** asks for one reply and **Auto-play** keeps going for a number of turns, rolling any checks the DM asks for. Messages keep their story role whoever wrote them, so you can switch modes mid-session.
 
+**AI companions** (AI is the DM): the people button in the chat header picks characters or NPCs for the AI to play as party members. After each of your messages, every companion takes a short turn as its own character, from its own card and sheet, then the DM answers the whole party, treating companions as player characters it never acts for. Two or three companions work best; up to four. Stop ends the party turn.
+
 ## Campaigns, editions and sourcebooks
 
 - **Campaign builder** (campaign menu or Ctrl+K): describe a premise, tone, setting, length and who plays. The AI drafts a campaign (pitch, setting, hook, opening scene, locations, NPCs with wants and secrets, factions, an outline, quests and DM secrets) that you review and edit before anything is written. Or fill it in by hand. It creates the campaign note, the party sheet, a linked lorebook with what players may learn, a note per NPC, a starter map with the locations, and Session 01.

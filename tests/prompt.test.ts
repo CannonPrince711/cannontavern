@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseLorebookBody, serializeLorebookBody, defaultSheet, normalizeSheet } from '@shared/notes'
-import { buildPrompt, DEFAULT_DM_PROMPT, messageToTurn, renderSheet, selectLore, type PromptInput } from '@shared/prompt'
+import { buildPrompt, COMPANION_PROMPT, DEFAULT_DM_PROMPT, messageToTurn, renderSheet, selectLore, type PromptInput } from '@shared/prompt'
 import { PROMPT_BLOCK_IDS, type LoreEntry, type Message } from '@shared/types'
 import { extractState } from '../src/main/chat'
 
@@ -145,5 +145,25 @@ describe('extractState', () => {
   })
   it('drops malformed blocks without crashing', () => {
     expect(extractState('Hi <state>{oops</state> there').text).toBe('Hi  there')
+  })
+})
+
+describe('AI companions', () => {
+  const m = (name: string, text: string, role: Message['role'] = 'player'): Message => ({ id: text, role, name, text, swipes: [text], swipeIndex: 0, createdAt: '' })
+  it('shows a companion its own lines as its own and everyone else’s as theirs', () => {
+    expect(messageToTurn(m('Alpha', 'I draw my blade.'), 'DM', 'player', 'Alpha')).toEqual({ role: 'assistant', content: 'I draw my blade.' })
+    expect(messageToTurn(m('Kestrel', 'I check the door.'), 'DM', 'player', 'Alpha')).toEqual({ role: 'user', content: 'Kestrel: I check the door.' })
+    // Without a companion, the AI playing the character owns every player line (You're DM mode).
+    expect(messageToTurn(m('Kestrel', 'I check the door.'), 'DM', 'player')).toEqual({ role: 'assistant', content: 'I check the door.' })
+  })
+
+  it('tells the DM who said what', () => {
+    expect(messageToTurn(m('Alpha', 'I draw my blade.'), 'Kestrel, Alpha', 'dm')).toEqual({ role: 'user', content: 'Alpha: I draw my blade.' })
+  })
+
+  it('keeps the companion prompt focused on one character', () => {
+    expect(COMPANION_PROMPT).toContain('{{char}}')
+    expect(COMPANION_PROMPT).toContain('{{party}}')
+    expect(COMPANION_PROMPT).toMatch(/Never write for the other player characters or the DM/)
   })
 })

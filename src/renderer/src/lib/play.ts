@@ -1,5 +1,8 @@
 /**
- * Mode-aware sending and AI-only auto-play.
+ * Mode-aware sending, AI companions and AI-only auto-play.
+ *
+ * - AI is DM with companions: after your message, each companion takes a
+ *   short turn as their own character, then the DM answers everyone.
  *
  * - You are DM: a message with "[CHECK perception DC 13]" rolls the check for
  *   the character (with dice) instead of asking the AI, so you narrate the result.
@@ -10,7 +13,7 @@ import { create } from 'zustand'
 import { findChecks, playModeOf } from '@shared/play'
 import { on } from '@/lib/ipc'
 import { useApp } from '@/stores/app'
-import { useChat } from '@/stores/chat'
+import { onChatStop, useChat } from '@/stores/chat'
 import { toast } from '@/stores/toasts'
 import { rollCheckFor } from './rolls'
 
@@ -43,7 +46,26 @@ export async function submitMessage(text: string): Promise<void> {
     await nextTurn()
     return
   }
+  const companions = mode === 'ai-dm' ? (session.frontmatter.companions ?? []) : []
+  if (companions.length && text) {
+    // The party turn: you, then each companion, then the DM.
+    party = { sessionPath: session.path, queue: [...companions.slice(1).map((as) => ({ as })), {}] }
+    await chat.send(text, 'player', companions[0])
+    return
+  }
   await chat.send(text)
+}
+
+/** What's left of the current party turn: companions (by link), then the DM ({}). */
+let party: { sessionPath: string; queue: { as?: string }[] } | null = null
+
+/** The next step of a party turn, once the previous reply has finished. */
+function continueParty(): void {
+  const session = useChat.getState().session
+  const next = party && session?.path === party.sessionPath ? party.queue.shift() : undefined
+  if (!next || !party?.queue.length) party = null
+  if (!next) return
+  void (next.as ? useChat.getState().send('', 'player', next.as) : useChat.getState().send('', 'dm'))
 }
 
 /** AI-only: one more turn (rolling open checks first, so the DM narrates the result). */
@@ -98,6 +120,12 @@ function step(): void {
 export function initAutoplay(): () => void {
   const offs = [
     on('chat:done', () => {
+      // Let the chat store finish with this reply before starting the next one.
+      if (party) setTimeout(continueParty, 50)
+    }),
+    on('chat:error', () => (party = null)),
+    onChatStop(() => (party = null)),
+    on('chat:done', () => {
       if (useAutoplay.getState().left <= 0) return
       const delay = (useApp.getState().settings?.play.autoplayDelaySec ?? 2) * 1000
       clearTimeout(timer)
@@ -107,7 +135,10 @@ export function initAutoplay(): () => void {
   ]
   // Switching sessions ends a run.
   const unsub = useChat.subscribe((s, prev) => {
-    if (s.session?.path !== prev.session?.path && useAutoplay.getState().left > 0) useAutoplay.getState().stop()
+    if (s.session?.path !== prev.session?.path) {
+      party = null
+      if (useAutoplay.getState().left > 0) useAutoplay.getState().stop()
+    }
   })
   return () => {
     offs.forEach((off) => off())

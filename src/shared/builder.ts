@@ -8,8 +8,8 @@ import type { LoreEntry } from './types'
 import { PLAY_MODES } from './play'
 import { EDITIONS } from './editions'
 
-export const CAMPAIGN_TONES = ['Heroic', 'Grim', 'Horror', 'Mystery', 'Comedic', 'Political intrigue', 'Exploration', 'Swashbuckling', 'Romantic', 'Epic'] as const
-export const CAMPAIGN_SETTINGS = ['Classic high fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange', 'Your own idea'] as const
+export const CAMPAIGN_TONES = ['Heroic', 'Grim', 'Horror', 'Mystery', 'Comedic', 'Political intrigue', 'Exploration', 'Swashbuckling', 'Romantic', 'Epic', 'Action', 'Anime', 'Slice of life'] as const
+export const CAMPAIGN_SETTINGS = ['Classic high fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange', 'Modern day', 'Urban fantasy', 'School / academy', 'Sci-fi', 'Post-apocalyptic', 'Your own idea'] as const
 
 /** Long enough for a full pasted campaign prompt. */
 export const PREMISE_MAX = 12_000
@@ -54,7 +54,7 @@ export function emptyDraft(name = ''): CampaignDraft {
   return { name, pitch: '', setting: '', tone: '', houseRules: '', hook: '', opening: '', locations: [], npcs: [], factions: [], outline: [], quests: [], secrets: [] }
 }
 
-export const BUILDER_SYSTEM = `You are an expert Dungeons & Dragons campaign designer. You turn a concept into a ready-to-run campaign: vivid but concise, with clear hooks, memorable NPCs who each want something, factions with conflicting goals, and secrets the DM can reveal over time. Avoid well-known published settings and characters; invent your own names. Reply with JSON only. Inside text values, write quotations and dialogue with single quotes ('like this'), never double quotes.`
+export const BUILDER_SYSTEM = `You are an expert Dungeons & Dragons campaign designer. You turn a concept into a ready-to-run campaign: vivid but concise, with clear hooks, memorable NPCs who each want something, factions with conflicting goals, and secrets the DM can reveal over time. If the concept is based on an existing story or setting, use its names and lore; otherwise avoid well-known published settings and characters and invent your own names. Reply with JSON only. Inside text values, write quotations and dialogue with single quotes ('like this'), never double quotes.`
 
 const SHAPE = `{
   "name": "campaign name",

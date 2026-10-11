@@ -29,6 +29,9 @@ function frontmatterOf(data: Record<string, unknown>, path: VaultPath): SessionF
     title: str(data.title) || noteName(path),
     campaign: str(data.campaign),
     characters: Array.isArray(data.characters) ? data.characters.filter((c): c is string => typeof c === 'string') : [],
+    ...(Array.isArray(data.companions) && data.companions.some((c) => typeof c === 'string')
+      ? { companions: data.companions.filter((c): c is string => typeof c === 'string') }
+      : {}),
     persona: str(data.persona) || undefined,
     mode: isPlayMode(data.mode) ? data.mode : undefined,
     created: str(data.created),

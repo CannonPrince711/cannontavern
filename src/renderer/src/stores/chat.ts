@@ -24,7 +24,8 @@ interface ChatStore {
   lastError: ErrorInfo | null
   init: () => () => void
   open: (path: string | null) => Promise<void>
-  send: (text: string, speaker?: Speaker) => Promise<void>
+  /** `as`: a companion for the AI to play this turn (with speaker "player"). */
+  send: (text: string, speaker?: Speaker, as?: string) => Promise<void>
   regenerate: () => Promise<void>
   continueReply: () => Promise<void>
   stop: () => Promise<void>
@@ -33,6 +34,13 @@ interface ChatStore {
   remove: (id: string) => Promise<void>
   fork: (id: string) => Promise<Session | null>
   post: (message: Omit<Message, 'id' | 'createdAt'>) => Promise<void>
+}
+
+const stopListeners = new Set<() => void>()
+/** Runs when the user presses Stop (e.g. to end a party turn). */
+export function onChatStop(fn: () => void): () => void {
+  stopListeners.add(fn)
+  return () => stopListeners.delete(fn)
 }
 
 export const useChat = create<ChatStore>((set, get) => {
@@ -114,10 +122,10 @@ export const useChat = create<ChatStore>((set, get) => {
       }
     },
 
-    async send(text, speaker) {
+    async send(text, speaker, as) {
       const session = get().session
       if (!session) return
-      await start('new', () => invoke('chat:send', { sessionPath: session.path, text, ...(speaker ? { speaker } : {}) }))
+      await start('new', () => invoke('chat:send', { sessionPath: session.path, text, ...(speaker ? { speaker } : {}), ...(as ? { as } : {}) }))
     },
 
     async regenerate() {
@@ -135,6 +143,7 @@ export const useChat = create<ChatStore>((set, get) => {
     },
 
     async stop() {
+      stopListeners.forEach((fn) => fn())
       const s = get().streaming
       if (s?.requestId) await invoke('chat:stop', s.requestId).catch(() => {})
     },

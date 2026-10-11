@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ExternalLink, Map as MapIcon, Pencil, ScanSearch, UserRound } from 'lucide-react'
+import { Check, ExternalLink, Map as MapIcon, Pencil, ScanSearch, UserRound, Users } from 'lucide-react'
 import { useMap } from '@/components/map/MapView'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
@@ -7,6 +7,7 @@ import { PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/p
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { ImageModelSwitcher, TextModelSwitcher } from '@/components/ModelSwitcher'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { NativeSelect } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
@@ -93,6 +94,8 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </label>
       )}
 
+      {mode === 'ai-dm' && <CompanionsMenu />}
+
       <TextModelSwitcher className="w-32 @min-[760px]:w-48" />
       <ImageModelSwitcher compact className="w-28 @min-[760px]:w-40" />
 
@@ -114,5 +117,63 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </Button>
       </Tip>
     </header>
+  )
+}
+
+/** Link target of a wikilink: "[[DND Tavern/NPCs/Alpha|Alpha]]" → "dnd tavern/npcs/alpha". */
+function linkKey(link: string): string {
+  return (/^\[\[([^\]|#]+)/.exec(link)?.[1] ?? link).replace(/\.md$/i, '').trim().toLowerCase()
+}
+
+/** AI companions: characters or NPCs the AI plays as party members, each taking a turn after yours. */
+function CompanionsMenu(): React.JSX.Element {
+  const session = useChat((s) => s.session)!
+  const index = useVault((s) => s.index)
+  const links = session.frontmatter.companions ?? []
+  const own = new Set(session.frontmatter.characters.map(linkKey))
+  const chosen = new Set(links.map(linkKey))
+  const isChosen = (path: string): boolean => {
+    const k = path.replace(/\.md$/i, '').toLowerCase()
+    return chosen.has(k) || [...chosen].some((c) => !c.includes('/') && k.endsWith(`/${c}`))
+  }
+  const candidates = [...(index?.characters ?? []), ...(index?.npcs ?? [])].filter((c) => !own.has(c.path.replace(/\.md$/i, '').toLowerCase()))
+  const selected = candidates.filter((c) => isChosen(c.path))
+
+  const toggle = async (path: string): Promise<void> => {
+    const next = isChosen(path) ? selected.filter((c) => c.path !== path).map((c) => c.path) : [...selected.map((c) => c.path), path]
+    if (next.length > 4) return toast.info('Up to 4 companions', 'More than that slows every turn and blurs their voices.')
+    try {
+      useChat.setState({ session: await invoke('sessions:updateMeta', session.path, { companions: next }) })
+    } catch (err) {
+      toast.error(err)
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <Tip label="AI companions: party members the AI plays, each taking a turn after yours">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="AI companions" className="gap-1.5 px-2">
+            <Users />
+            {links.length > 0 && <span className="text-xs tabular-nums">{links.length}</span>}
+          </Button>
+        </DropdownMenuTrigger>
+      </Tip>
+      <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          The AI plays these as party members. After your message, each one acts, then the DM answers. 2–3 works best.
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {candidates.length === 0 && <DropdownMenuItem disabled>Create a character or NPC first</DropdownMenuItem>}
+        {candidates.map((c) => (
+          <DropdownMenuItem key={c.path} onSelect={(e) => (e.preventDefault(), void toggle(c.path))} className="gap-2">
+            <span className="grid size-4 place-items-center">{isChosen(c.path) && <Check className="size-3.5" />}</span>
+            <CharacterAvatar name={c.displayName} avatar={c.avatar} version={c.mtimeMs} size={20} />
+            <span className="truncate">{c.displayName}</span>
+            {c.path.toLowerCase().includes('/npcs/') && <span className="ml-auto text-[10px] text-muted-foreground">NPC</span>}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
