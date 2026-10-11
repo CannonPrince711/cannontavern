@@ -8,6 +8,7 @@ import { settingsStore } from '../settings-store'
 import { detectObsidianVaults, obsidianUri, validateVault } from '../vault/obsidian'
 import { vaultService } from '../vault/service'
 import { createSampleCampaign } from '../sample'
+import { buildVaultGraph } from '../graph'
 import { getMainWindow } from '../window'
 
 const pathArg = z.tuple([z.string().min(1).max(1024)])
@@ -41,6 +42,8 @@ export function registerVaultHandlers(): void {
   )
 
   handle('vault:getIndex', () => vaultService.getIndex())
+
+  handle('vault:graph', () => buildVaultGraph())
 
   handle('vault:createSampleCampaign', async () => {
     const vault = vaultService.require()

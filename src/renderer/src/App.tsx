@@ -7,6 +7,7 @@ import { useAppearance, useReducedMotion } from '@/hooks/useAppearance'
 import { AskDialog } from '@/components/AskDialog'
 import { CharacterEditor } from '@/components/characters/CharacterEditor'
 import { CampaignBuilder } from '@/components/builder/CampaignBuilder'
+import { GraphOverlay } from '@/components/graph/GraphView'
 import { CommandPalette } from '@/components/CommandPalette'
 import { DiceOverlay } from '@/components/dice/DiceOverlay'
 import { Lightbox } from '@/components/images/Lightbox'
@@ -85,6 +86,7 @@ export function App(): React.JSX.Element {
           {ready && <PromptInspector />}
           {ready && <LorebookEditor />}
           {ready && <CampaignBuilder />}
+          {ready && <GraphOverlay />}
           <AskDialog />
           <DiceOverlay />
           <Lightbox />

@@ -9,6 +9,7 @@
  * errors keep their code and detail across the boundary.
  */
 import type { SessionRecap } from './recap'
+import type { VaultGraph } from './graph'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { PlayMode, Speaker } from './play'
 import type {
@@ -113,6 +114,8 @@ export interface InvokeMap {
   'vault:pick': Invoke<[], string | null>
   'vault:validate': Invoke<[path: string], VaultValidation>
   'vault:configure': Invoke<[opts: { path: string; rootFolder: string }], VaultIndex>
+  /** Notes and their links, for the graph view. */
+  'vault:graph': Invoke<[], VaultGraph>
   'vault:getIndex': Invoke<[], VaultIndex | null>
   'vault:readNote': Invoke<[path: VaultPath], { path: VaultPath; content: string }>
   'vault:searchNotes': Invoke<[query: string], { path: VaultPath; name: string }[]>
@@ -288,6 +291,7 @@ const invokeChannels = {
   'vault:validate': 1,
   'vault:configure': 1,
   'vault:getIndex': 1,
+  'vault:graph': 1,
   'vault:readNote': 1,
   'vault:searchNotes': 1,
   'vault:openInObsidian': 1,

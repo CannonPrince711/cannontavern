@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type RightTab = 'sheet' | 'combat' | 'lore' | 'images' | 'extensions'
+export type RightTab = 'sheet' | 'combat' | 'lore' | 'images' | 'graph' | 'extensions'
 
 interface LayoutStore {
   leftCollapsed: boolean

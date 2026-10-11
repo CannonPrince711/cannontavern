@@ -1,4 +1,5 @@
-import { BookOpen, Image, Puzzle, ScrollText, Swords } from 'lucide-react'
+import { BookOpen, Image, Network, Puzzle, ScrollText, Swords } from 'lucide-react'
+import { GraphPanel } from '@/components/graph/GraphView'
 import { EmptyState } from '@/components/EmptyState'
 import { BookArt, FrameArt, HoodArt, RuneArt, SwordsArt } from '@/components/illustrations'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -44,6 +45,14 @@ const TABS: { id: RightTab; label: string; icon: React.ElementType; art: React.R
     text: 'Generated portraits and scenes are saved to the campaign’s Images folder.'
   },
   {
+    id: 'graph',
+    label: 'Graph',
+    icon: Network,
+    art: <RuneArt />,
+    title: 'No notes yet',
+    text: 'Your notes and the links between them.'
+  },
+  {
     id: 'extensions',
     label: 'Extensions',
     icon: Puzzle,
@@ -84,6 +93,8 @@ export function RightPanel(): React.JSX.Element {
             <CombatPanel />
           ) : t.id === 'images' ? (
             <ImagesPanel />
+          ) : t.id === 'graph' ? (
+            <GraphPanel />
           ) : t.id === 'extensions' ? (
             <ExtensionsPanel />
           ) : (
