@@ -3,6 +3,7 @@ import { Check, Circle, Cpu, FolderOpen } from 'lucide-react'
 import type { Message } from '@shared/types'
 import { lastAiMessage, playModeOf } from '@shared/play'
 import { ChatHeader } from '@/components/chat/ChatHeader'
+import { MiniMap, useMapSync } from '@/components/map/MapView'
 import { Composer } from '@/components/chat/Composer'
 import { ChatSkeleton } from '@/components/ui/skeleton'
 import { MessageList } from '@/components/chat/MessageList'
@@ -90,6 +91,7 @@ function useDelayedFlag(value: boolean, ms: number): boolean {
 }
 
 export function ChatPane(): React.JSX.Element {
+  useMapSync()
   const index = useVault((s) => s.index)
   const loaded = useVault((s) => s.loaded)
   const activeCampaign = useVault((s) => s.activeCampaign)
@@ -174,6 +176,9 @@ export function ChatPane(): React.JSX.Element {
     content = (
       <>
         <ChatHeader character={character} onInspect={() => useUi.setState({ inspectorOpen: true })} />
+        <div className="relative">
+          <MiniMap />
+        </div>
         <MessageList characterName={character?.displayName} characterAvatar={character?.avatar} actions={actions} />
         <div className="mx-auto w-full max-w-3xl px-6 empty:hidden">
           <ImageJobs />

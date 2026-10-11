@@ -64,6 +64,8 @@ export interface PromptInput {
   playerPrompt?: string | null
   /** Recaps of earlier sessions in the campaign, oldest first. */
   recaps?: SessionRecap[]
+  /** Where the party is on the campaign map. */
+  location?: string | null
   messages: Message[]
   /** Block order and on/off switches from settings. */
   order: { id: string; enabled: boolean }[]
@@ -285,7 +287,11 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         if (input.character) add('character', 'Character card', renderCharacter(input.character))
         break
       case 'campaign':
-        add('campaign', 'Campaign & party', renderCampaign(input.campaign, input.party, speaker === 'player'))
+        add(
+          'campaign',
+          'Campaign & party',
+          [renderCampaign(input.campaign, input.party, speaker === 'player'), input.location ? `The party is currently at: ${input.location}` : ''].filter(Boolean).join('\n\n')
+        )
         break
       case 'lorebook':
         if (input.lore.length) add('lorebook', `Lorebook (${input.lore.length})`, renderLore(input.lore))

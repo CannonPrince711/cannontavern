@@ -12,7 +12,8 @@ import { resolveTextBackend, textAdapter } from './backends/text'
 import { backendChain, chatService } from './chat'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCharacter, resolveCharacterLink } from './library'
+import { readCampaign, readCharacter, resolveCharacterLink } from './library'
+import { readMap } from './maps'
 import { postMessage, readSession } from './sessions'
 import { settingsStore } from './settings-store'
 import { updateNote } from './vault/frontmatter'
@@ -219,6 +220,33 @@ class ImageService {
       }
       return { image, session: updated }
     }
+  }
+
+  /** Paints a top-down map of a campaign into its Images folder; returns the image path. */
+  async generateMap(campaignPath: VaultPath, extra?: string): Promise<string> {
+    const s = settingsStore.get()
+    const backend = s.imageBackends.find((b) => b.id === s.defaultImageBackendId) ?? s.imageBackends[0]
+    if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
+    const vault = vaultService.require()
+    const { campaign } = await readCampaign(vault, campaignPath)
+    const map = await readMap(vault, campaignPath)
+    const places = map.pins.map((p) => p.name).slice(0, 10).join(', ')
+    const prompt = await this.writePrompt(
+      `A top-down fantasy map of ${campaign.name}, drawn as cartography: parchment, ink and watercolour, coastlines, roads and terrain, no text or labels.${campaign.setting ? ` Setting: ${campaign.setting}` : ''}${places ? ` It includes: ${places}.` : ''}${extra ? ` ${extra}` : ''}`,
+      `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
+    )
+    const workflowId =
+      backend.type === 'comfyui'
+        ? (backend.comfy.workflows.find((w) => w.purpose === 'map') ?? backend.comfy.workflows.find((w) => w.id === backend.comfy.defaultWorkflowId) ?? backend.comfy.workflows[0])?.id
+        : undefined
+    const long = Math.max(backend.defaults.width, backend.defaults.height)
+    const req = buildImageRequest(backend, prompt, { width: long, height: Math.round((long * 0.75) / 8) * 8, workflowId })
+    const result = await imageAdapter(backend.type).generate(resolveImageBackend(backend), req, { onProgress: () => {} })
+    const dir = joinVaultPath(campaignPath, IMAGES_FOLDER)
+    await vault.mkdir(dir)
+    const path = await vault.uniquePath(dir, `${sanitizeFileName(campaign.name)} map`, `.${result.ext}`)
+    await vault.writeBinary(path, result.data)
+    return path
   }
 
   /** Automatic images after DM replies (every N turns, or on an apparent location change). */

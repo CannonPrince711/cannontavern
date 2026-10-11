@@ -286,7 +286,11 @@ export function GraphCanvas({ graph, visible, showMentions, focusId, matches, on
 
   const onPointerDown = (e: React.PointerEvent): void => {
     if (e.button !== 0) return
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    try {
+      ;(e.target as Element).setPointerCapture(e.pointerId)
+    } catch {
+      /* not a capturable pointer */
+    }
     const n = hit(e)
     drag.current = { kind: n ? 'node' : 'pan', id: n?.id, startX: e.clientX, startY: e.clientY, moved: false, tx: view.current.tx, ty: view.current.ty }
     if (n) {

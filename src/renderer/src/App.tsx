@@ -8,6 +8,7 @@ import { AskDialog } from '@/components/AskDialog'
 import { CharacterEditor } from '@/components/characters/CharacterEditor'
 import { CampaignBuilder } from '@/components/builder/CampaignBuilder'
 import { GraphOverlay } from '@/components/graph/GraphView'
+import { MapOverlay } from '@/components/map/MapView'
 import { CommandPalette } from '@/components/CommandPalette'
 import { DiceOverlay } from '@/components/dice/DiceOverlay'
 import { Lightbox } from '@/components/images/Lightbox'
@@ -87,6 +88,7 @@ export function App(): React.JSX.Element {
           {ready && <LorebookEditor />}
           {ready && <CampaignBuilder />}
           {ready && <GraphOverlay />}
+          {ready && <MapOverlay />}
           <AskDialog />
           <DiceOverlay />
           <Lightbox />

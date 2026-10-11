@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { BookOpen, CornerDownLeft, Dices, FileText, FolderOpen, Hash, MessageSquare, Plus, ScrollText, Network, Search, Settings, SquareTerminal, User, Wand2 } from 'lucide-react'
 import { useGraph } from '@/components/graph/GraphView'
+import { Map as MapIcon } from 'lucide-react'
+import { useMap } from '@/components/map/MapView'
 import { listCommands, runCommand } from '@/lib/commands'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -83,6 +85,7 @@ function useItems(query: string): Item[] {
         }
       },
       { id: 'new-campaign', group: 'Actions', label: 'New campaign', icon: FolderOpen, run: () => useUi.setState({ creatingCampaign: true }) },
+      { id: 'map', group: 'Actions', label: 'Campaign map', icon: MapIcon, keywords: 'pins travel location minimap', run: () => useMap.setState({ open: true }) },
       { id: 'graph', group: 'Actions', label: 'Graph view', icon: Network, keywords: 'obsidian links map notes', run: () => useGraph.setState({ open: true }) },
       { id: 'builder', group: 'Actions', label: 'Campaign builder', icon: Wand2, keywords: 'create generate ai world npc', run: () => useUi.setState({ buildingCampaign: true }) },
       { id: 'dice', group: 'Actions', label: 'Dice tray', icon: Dices, keywords: 'roll', run: () => useDiceFx.getState().setTrayOpen(!useDiceFx.getState().trayOpen) },

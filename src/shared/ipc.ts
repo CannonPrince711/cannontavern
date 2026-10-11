@@ -10,6 +10,7 @@
  */
 import type { SessionRecap } from './recap'
 import type { VaultGraph } from './graph'
+import type { CampaignMap, MapPin, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { PlayMode, Speaker } from './play'
 import type {
@@ -142,6 +143,12 @@ export interface InvokeMap {
     [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
   >
+  /** Campaign maps (image, pins, party marker) kept in a "type: map" note. */
+  'maps:get': Invoke<[campaignPath: VaultPath], CampaignMap>
+  'maps:save': Invoke<[campaignPath: VaultPath, map: { image: string; pins: MapPin[]; party: PartyMarker | null }], CampaignMap>
+  'maps:importImage': Invoke<[campaignPath: VaultPath], string | null>
+  'maps:images': Invoke<[campaignPath: VaultPath], string[]>
+  'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string], string>
   'campaigns:get': Invoke<[path: VaultPath], { campaign: Campaign; party: Party }>
   'campaigns:create': Invoke<[name: string], Campaign>
   'campaigns:saveParty': Invoke<[path: VaultPath, party: Party], Party>
@@ -306,6 +313,11 @@ const invokeChannels = {
   'characters:setAvatar': 1,
   'characters:updateSheet': 1,
   'campaigns:get': 1,
+  'maps:get': 1,
+  'maps:save': 1,
+  'maps:importImage': 1,
+  'maps:images': 1,
+  'maps:generate': 1,
   'campaigns:draft': 1,
   'campaigns:build': 1,
   'campaigns:create': 1,

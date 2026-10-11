@@ -328,7 +328,9 @@ export const SettingsSchema = z.object({
       /** Double-click to edit, middle-click to open in Obsidian, Ctrl+wheel to zoom. */
       mouseShortcuts: z.boolean().default(true),
       /** What the mouse's back/forward buttons do. */
-      mouseSideButtons: z.enum(['replies', 'sessions', 'off']).default('replies')
+      mouseSideButtons: z.enum(['replies', 'sessions', 'off']).default('replies'),
+      /** Corner thumbnail of the campaign map in the chat. */
+      miniMap: z.boolean().default(true)
     })
     .prefault({}),
   play: z
@@ -338,6 +340,8 @@ export const SettingsSchema = z.object({
       /** AI-only play: turns per press of Auto-play, and the pause between them. */
       autoplayTurns: z.number().int().min(1).max(100).default(10),
       autoplayDelaySec: z.number().min(0).max(30).default(2),
+      /** Post "The party travels to …" when the party token moves to a pin. */
+      announceTravel: z.boolean().default(true),
       /** The tips & ideas bubble above the message box. */
       tipsBubble: z.boolean().default(true),
       /** Refresh its AI ideas after every reply (uses the summaries model each time). */

@@ -2,6 +2,7 @@ import { app, BrowserWindow, protocol, shell } from 'electron'
 import { registerAppHandlers } from './handlers/app'
 import { registerBackendHandlers } from './handlers/backends'
 import { registerModelHandlers } from './handlers/models'
+import { registerMapHandlers } from './handlers/maps'
 import { registerCharacterHandlers } from './handlers/characters'
 import { registerImageHandlers } from './handlers/images'
 import { registerLoreHandlers } from './handlers/lore'
@@ -53,6 +54,7 @@ if (!app.requestSingleInstanceLock()) {
     registerVaultHandlers()
     registerBackendHandlers()
     registerModelHandlers()
+    registerMapHandlers()
     registerSessionHandlers()
     registerCharacterHandlers()
     registerLoreHandlers()

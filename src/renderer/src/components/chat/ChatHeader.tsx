@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, ExternalLink, Pencil, ScanSearch, UserRound } from 'lucide-react'
+import { Check, ExternalLink, Map as MapIcon, Pencil, ScanSearch, UserRound } from 'lucide-react'
+import { useMap } from '@/components/map/MapView'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
 import { PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
@@ -95,6 +96,11 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
       <TextModelSwitcher className="w-32 @min-[760px]:w-48" />
       <ImageModelSwitcher compact className="w-28 @min-[760px]:w-40" />
 
+      <Tip label="Campaign map">
+        <Button variant="ghost" size="icon-sm" aria-label="Open the map" onClick={() => useMap.setState({ open: true })}>
+          <MapIcon />
+        </Button>
+      </Tip>
       {onInspect && (
         <Tip label="Prompt inspector">
           <Button variant="ghost" size="icon-sm" aria-label="Open prompt inspector" onClick={onInspect}>

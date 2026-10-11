@@ -17,6 +17,8 @@ import { settingsStore } from './settings-store'
 import { redactRequest, resolveTextBackend, textAdapter } from './backends/text'
 import type { GenerateResult } from './backends/text/types'
 import { backendChain } from './backends/chain'
+import { readMap } from './maps'
+import { partyLocation } from '@shared/map'
 import { recapService } from './recap'
 import { vaultService } from './vault/service'
 import { extensionHost } from './extensions/host'
@@ -86,6 +88,7 @@ class ChatService {
     const characterPath = session.frontmatter.characters[0] ? await resolveCharacterLink(vault, session.frontmatter.characters[0]) : null
     const character = characterPath ? await readCharacter(vault, characterPath).catch(() => null) : null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
+    const map = await readMap(vault, session.campaignPath).catch(() => null)
     const preset = s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null
 
     let messages = session.messages
@@ -119,6 +122,7 @@ class ChatService {
       combat: session.frontmatter.combat ?? null,
       summary: session.frontmatter.summary ?? null,
       recaps,
+      location: partyLocation(map),
       messages,
       order: normalizeBlockOrder(s.prompt.blocks),
       budget: s.prompt.contextBudget || backend?.generation.contextSize || 8192,
