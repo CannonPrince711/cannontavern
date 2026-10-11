@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
-import { Crosshair, FileImage, ImagePlus, Loader2, MapPin as PinIcon, Plus, Shield, Trash2, Wand2, X } from 'lucide-react'
+import { Crosshair, FileImage, ImagePlus, Loader2, MapPin as PinIcon, PenLine, Plus, Shield, Trash2, Wand2, X } from 'lucide-react'
 import { nearestPin, PIN_KIND_INFO, PIN_KINDS, SCALE_UNITS, type CampaignMap, type MapPin, type PartyMarker, type PinKind, type ScaleUnit } from '@shared/map'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, Switch } from '@/components/ui/controls'
@@ -135,13 +135,16 @@ function ImageChooser({ campaignPath, onClose }: { campaignPath: string; onClose
     change({ image })
     onClose?.()
   }
-  const run = async (kind: 'file' | 'ai'): Promise<void> => {
+  const run = async (kind: 'file' | 'ai' | 'sketch'): Promise<void> => {
     setBusy(kind)
     try {
-      const path = kind === 'file' ? await invoke('maps:importImage', campaignPath) : await invoke('maps:generate', campaignPath, extra.trim() || undefined)
+      const path =
+        kind === 'file'
+          ? await invoke('maps:importImage', campaignPath)
+          : await invoke('maps:generate', campaignPath, extra.trim() || undefined, kind === 'sketch' ? { fromSketch: true } : undefined)
       if (path) use(path)
     } catch (err) {
-      toast.error(err, kind === 'ai' ? 'Could not generate the map' : 'Could not import the image')
+      toast.error(err, kind === 'file' ? 'Could not import the image' : 'Could not generate the map')
     } finally {
       setBusy(null)
     }
@@ -156,11 +159,16 @@ function ImageChooser({ campaignPath, onClose }: { campaignPath: string; onClose
         <Button onClick={() => void run('ai')} disabled={busy !== null || !hasImageBackend}>
           {busy === 'ai' ? <Loader2 className="animate-spin" /> : <Wand2 />} Generate with AI
         </Button>
+        {hasImageBackend && (
+          <Button variant="outline" className="col-span-2" onClick={() => void run('sketch')} disabled={busy !== null} title="Draw a rough map (coastlines, mountains, roads) in any paint program; the AI turns it into a finished map">
+            {busy === 'sketch' ? <Loader2 className="animate-spin" /> : <PenLine />} Paint from a sketch…
+          </Button>
+        )}
       </div>
       {hasImageBackend && (
         <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Optional details for the AI map, e.g. an island chain with a volcano" aria-label="Map details" />
       )}
-      {busy === 'ai' && <p className="text-xs text-muted-foreground">Painting the map with your image backend. This can take a minute.</p>}
+      {(busy === 'ai' || busy === 'sketch') && <p className="text-xs text-muted-foreground">Painting the map with your image backend. This can take a minute.</p>}
       {images && images.length > 0 && (
         <div className="space-y-2">
           <Label>Or use an image from this campaign</Label>

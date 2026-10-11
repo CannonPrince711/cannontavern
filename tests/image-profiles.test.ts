@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ImageBackendSchema, ImageProfileSchema, SettingsSchema } from '../src/shared/settings'
 import { applyImageProfile, backendFor, workflowFor } from '../src/main/backends/image/profile'
+import { imageSize, sizeLike } from '../src/main/backends/image/size'
 
 const backend = (id: string, type: 'a1111' | 'comfyui' | 'openai', extra: Record<string, unknown> = {}) =>
   ImageBackendSchema.parse({ id, name: id, type, baseUrl: 'http://127.0.0.1:7860', defaults: { width: 832, height: 1216, steps: 28, negativePrompt: 'lowres' }, ...extra })
@@ -61,5 +62,35 @@ describe('image generation options', () => {
     const r = applyImageProfile(forge, 'map', p, undefined)
     expect(r.over).toEqual({ width: 1024, height: 768, steps: 40, negative: 'lowres, text, labels' })
     expect(r.style).toBe('parchment map')
+  })
+})
+
+describe('battlemaps and sketches', () => {
+  it('sizes battlemaps as landscape by default', () => {
+    expect(applyImageProfile(forge, 'battlemap', ImageProfileSchema.parse({}), undefined).over).toEqual({ width: 1216, height: 832 })
+  })
+
+  it('reads image sizes from PNG, JPEG, GIF and WebP headers', () => {
+    const png = Buffer.alloc(24)
+    png.writeUInt32BE(0x89504e47, 0)
+    png.writeUInt32BE(1600, 16)
+    png.writeUInt32BE(900, 20)
+    expect(imageSize(png)).toEqual({ width: 1600, height: 900 })
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 0, 0, 0, 0, 0, 0, 0, 0])
+    expect(imageSize(jpeg)).toEqual({ width: 800, height: 600 })
+    const gif = Buffer.concat([Buffer.from('GIF89a'), Buffer.from([0x40, 0x01, 0xf0, 0x00]), Buffer.alloc(14)])
+    expect(imageSize(gif)).toEqual({ width: 320, height: 240 })
+    const webp = Buffer.alloc(30)
+    webp.write('RIFF', 0, 'latin1')
+    webp.write('WEBPVP8X', 8, 'latin1')
+    webp.writeUIntLE(1023, 24, 3)
+    webp.writeUIntLE(767, 27, 3)
+    expect(imageSize(webp)).toEqual({ width: 1024, height: 768 })
+    expect(imageSize(Buffer.from('not an image at all, really'))).toBeNull()
+  })
+
+  it('keeps a sketch’s proportions at the backend’s size', () => {
+    expect(sizeLike({ width: 1600, height: 900 }, 1216)).toEqual({ width: 1216, height: 688 })
+    expect(sizeLike({ width: 600, height: 800 }, 1216)).toEqual({ width: 912, height: 1216 })
   })
 })

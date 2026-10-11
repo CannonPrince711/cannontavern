@@ -8,7 +8,7 @@ export interface ImageJob {
   requestId: string
   label: string
   value: number
-  kind: 'prompt' | 'scene' | 'portrait'
+  kind: 'prompt' | 'scene' | 'portrait' | 'battlemap'
 }
 
 interface ImagesStore {

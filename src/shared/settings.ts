@@ -168,7 +168,7 @@ export type ComfyMapping = z.infer<typeof ComfyMappingSchema>
 export const ComfyWorkflowSchema = z.object({
   id: z.string(),
   name: z.string(),
-  purpose: z.enum(['portrait', 'scene', 'map', 'other']).default('other'),
+  purpose: z.enum(['portrait', 'scene', 'map', 'battlemap', 'other']).default('other'),
   /** Where the API-format JSON lives. */
   location: z.enum(['appdata', 'vault']).default('appdata'),
   /** Relative to %APPDATA%\DND Tavern\workflows\ or to the vault root. */
@@ -281,7 +281,7 @@ export const PromptSettingsSchema = z.object({
 })
 
 /** What an image is for; each can use its own backend, model and size. */
-export const IMAGE_PURPOSES = ['scene', 'portrait', 'map', 'other'] as const
+export const IMAGE_PURPOSES = ['scene', 'portrait', 'map', 'battlemap', 'other'] as const
 export type ImagePurpose = (typeof IMAGE_PURPOSES)[number]
 
 /** Generation options for one purpose. Empty / 0 / null means "the backend's own setting". */
@@ -331,6 +331,7 @@ export const SettingsSchema = z.object({
       scene: ImageProfileSchema.prefault({}),
       portrait: ImageProfileSchema.prefault({}),
       map: ImageProfileSchema.prefault({}),
+      battlemap: ImageProfileSchema.prefault({}),
       other: ImageProfileSchema.prefault({})
     })
     .prefault({}),

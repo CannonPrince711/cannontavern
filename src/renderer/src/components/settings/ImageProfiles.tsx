@@ -13,7 +13,8 @@ import { Disclosure, NumberInput } from './fields'
 const PURPOSE_INFO: Record<ImagePurpose, { label: string; hint: string; style: string }> = {
   scene: { label: 'Scenes', hint: 'Illustrations of the story', style: 'cinematic fantasy illustration' },
   portrait: { label: 'Portraits', hint: 'Characters and NPCs', style: 'character portrait, detailed face' },
-  map: { label: 'Maps', hint: 'Campaign maps', style: 'parchment map, ink and watercolour' },
+  map: { label: 'Maps', hint: 'Campaign maps', style: 'fantasy map, parchment, ink and watercolour' },
+  battlemap: { label: 'Battlemaps', hint: 'Top-down encounter maps', style: 'mapcraft, battle map, top-down view, from above, no humans' },
   other: { label: 'Other', hint: '/image with your own prompt', style: '' }
 }
 
@@ -130,12 +131,12 @@ function ProfileRow({ purpose }: { purpose: ImagePurpose }): React.JSX.Element {
           <NumberInput label="Steps" value={draft.steps} min={0} max={200} onChange={(v) => save({ steps: v })} />
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground">0 means automatic: the backend’s size{purpose === 'scene' ? ' as landscape' : purpose === 'portrait' ? ' as portrait' : purpose === 'map' ? ' at 4:3' : ''}, and its steps.</p>
+      <p className="text-[11px] text-muted-foreground">0 means automatic: the backend’s size{purpose === 'scene' ? ' as landscape' : purpose === 'portrait' ? ' as portrait' : purpose === 'map' ? ' at 4:3' : purpose === 'battlemap' ? ' as landscape' : ''}, and its steps.</p>
       <Field label="Style" htmlFor={`ip-style-${purpose}`} description="Added to the front of every prompt for this kind of image." className="py-0">
         <Input id={`ip-style-${purpose}`} value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} onBlur={() => save({})} placeholder={info.style ? `e.g. ${info.style}` : 'Optional'} />
       </Field>
       <Field label="Negative prompt" htmlFor={`ip-neg-${purpose}`} description="Added to the backend’s negative prompt." className="py-0">
-        <Input id={`ip-neg-${purpose}`} value={draft.negative} onChange={(e) => setDraft({ ...draft, negative: e.target.value })} onBlur={() => save({})} placeholder={purpose === 'map' ? 'e.g. text, labels, people' : 'Optional'} />
+        <Input id={`ip-neg-${purpose}`} value={draft.negative} onChange={(e) => setDraft({ ...draft, negative: e.target.value })} onBlur={() => save({})} placeholder={purpose === 'map' ? 'e.g. text, labels, people' : purpose === 'battlemap' ? 'e.g. text, grid, people, 3d render, isometric, perspective' : 'Optional'} />
       </Field>
     </Disclosure>
   )

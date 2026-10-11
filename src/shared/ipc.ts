@@ -156,7 +156,8 @@ export interface InvokeMap {
   'maps:save': Invoke<[campaignPath: VaultPath, map: { image: string; pins: MapPin[]; party: PartyMarker | null; aspect?: number; scale?: MapScale | null }], CampaignMap>
   'maps:importImage': Invoke<[campaignPath: VaultPath], string | null>
   'maps:images': Invoke<[campaignPath: VaultPath], string[]>
-  'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string], string>
+  /** With fromSketch, asks for a sketch to paint over (img2img); null when that was cancelled. */
+  'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string, opts?: { fromSketch?: boolean }], string | null>
   /** Campaign settings (Campaign.md frontmatter): rules edition, sourcebooks, default mode, setting, tone, house rules. */
   'campaigns:update': Invoke<
     [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode }],
@@ -217,7 +218,7 @@ export interface InvokeMap {
     [
       opts: {
         sessionPath?: VaultPath
-        kind: 'prompt' | 'scene' | 'portrait'
+        kind: 'prompt' | 'scene' | 'portrait' | 'battlemap'
         prompt?: string
         characterPath?: VaultPath
         /** For "scene": illustrate this message (default: the latest messages). */

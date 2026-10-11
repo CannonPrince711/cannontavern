@@ -96,6 +96,17 @@ export async function importMapImage(vault: Vault, campaignPath: VaultPath): Pro
   return dest
 }
 
+/** Asks for a sketch to turn into a map; null when cancelled. */
+export async function pickSketch(): Promise<{ data: Buffer; filename: string } | null> {
+  const win = getMainWindow()
+  const opts: Electron.OpenDialogOptions = { title: 'Choose a map sketch', properties: ['openFile'], filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] }
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+  const file = r.canceled ? null : r.filePaths[0]
+  if (!file) return null
+  if (!IMAGE_EXTENSIONS.includes(extname(file).slice(1).toLowerCase())) throw new AppError('BAD_IMAGE', 'Choose a PNG, JPEG, WebP or GIF image.')
+  return { data: await fs.readFile(file), filename: basename(file) }
+}
+
 /** Images already in the campaign's Images folder. */
 export async function campaignImages(vault: Vault, campaignPath: VaultPath): Promise<string[]> {
   const dir = joinVaultPath(campaignPath, IMAGES_FOLDER)

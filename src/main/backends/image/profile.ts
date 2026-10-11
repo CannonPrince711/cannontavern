@@ -21,11 +21,11 @@ export function workflowFor(backend: ImageBackend, purpose: ImagePurpose, profil
   return (byId(wanted) ?? byId(profile.workflowId) ?? wfs.find((w) => w.purpose === purpose) ?? byId(backend.comfy.defaultWorkflowId) ?? wfs[0])?.id
 }
 
-/** Default size for a purpose from the backend's defaults: scenes landscape, portraits portrait, maps 4:3. */
+/** Default size for a purpose from the backend's defaults: scenes and battlemaps landscape, portraits portrait, maps 4:3. */
 function autoSize(b: ImageBackend, purpose: ImagePurpose): { width: number; height: number } | Record<string, never> {
   const long = Math.max(b.defaults.width, b.defaults.height)
   const short = Math.min(b.defaults.width, b.defaults.height)
-  if (purpose === 'scene') return { width: long, height: short }
+  if (purpose === 'scene' || purpose === 'battlemap') return { width: long, height: short }
   if (purpose === 'portrait') return { width: short, height: long }
   if (purpose === 'map') return { width: long, height: Math.round((long * 0.75) / 8) * 8 }
   return {}

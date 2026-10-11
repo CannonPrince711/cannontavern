@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { PIN_KINDS, SCALE_UNITS } from '@shared/map'
 import { handle } from '../ipc'
 import { imageService } from '../images'
-import { campaignImages, importMapImage, readMap, saveMap } from '../maps'
+import { campaignImages, importMapImage, pickSketch, readMap, saveMap } from '../maps'
 import { vaultService } from '../vault/service'
 
 const path = z.string().min(1).max(1024)
@@ -40,5 +40,13 @@ export function registerMapHandlers(): void {
 
   handle('maps:importImage', (_e, campaignPath) => importMapImage(vaultService.require(), campaignPath), z.tuple([path]))
   handle('maps:images', (_e, campaignPath) => campaignImages(vaultService.require(), campaignPath), z.tuple([path]))
-  handle('maps:generate', (_e, campaignPath, extra) => imageService.generateMap(campaignPath, extra), z.tuple([path, z.string().max(1000).optional()]))
+  handle(
+    'maps:generate',
+    async (_e, campaignPath, extra, opts) => {
+      const sketch = opts?.fromSketch ? await pickSketch() : undefined
+      if (sketch === null) return null
+      return imageService.generateMap(campaignPath, extra, sketch)
+    },
+    z.tuple([path, z.string().max(1000).optional(), z.object({ fromSketch: z.boolean().optional() }).optional()])
+  )
 }

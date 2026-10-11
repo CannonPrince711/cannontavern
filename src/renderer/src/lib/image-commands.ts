@@ -5,8 +5,8 @@ import { useVault } from '@/stores/vault'
 
 registerCommand({
   name: 'image',
-  usage: '/image <prompt> | scene | portrait [name]',
-  description: 'Generate an image: describe it, illustrate the scene, or paint a portrait',
+  usage: '/image <prompt> | scene | portrait [name] | battlemap [place]',
+  description: 'Generate an image: describe it, illustrate the scene, paint a portrait, or draw a top-down battlemap',
   run: async ({ session, args }) => {
     const [first, ...rest] = args.trim().split(/\s+/)
     const generate = useImages.getState().generate
@@ -20,6 +20,10 @@ registerCommand({
       const character = name ? index?.characters.concat(index.npcs).find((c) => c.displayName.toLowerCase().startsWith(name) || c.name.toLowerCase().startsWith(name)) : undefined
       if (name && !character) throw new Error(`No character called “${rest.join(' ')}”.`)
       await generate({ sessionPath: session.path, kind: 'portrait', characterPath: character?.path })
+      return
+    }
+    if (first.toLowerCase() === 'battlemap') {
+      await generate({ sessionPath: session.path, kind: 'battlemap', prompt: rest.join(' ').trim() || undefined })
       return
     }
     await generate({ sessionPath: session.path, kind: 'prompt', prompt: args.trim() })

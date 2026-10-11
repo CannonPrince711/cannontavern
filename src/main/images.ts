@@ -9,6 +9,7 @@ import type { CharacterNote, Message, MessageImage, Session, VaultPath } from '@
 import { buildImageRequest, imageAdapter, resolveImageBackend } from './backends/image'
 import type { ImageRequest } from './backends/image/types'
 import { applyImageProfile, backendFor, workflowFor } from './backends/image/profile'
+import { imageSize, sizeLike } from './backends/image/size'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { backendChain, chatService } from './chat'
 import { AppError, toErrorInfo } from './errors'
@@ -74,7 +75,18 @@ class ImageService {
     }
   }
 
-  private async scenePrompt(session: Session, messageId?: string, extra?: string): Promise<string> {
+  /** A top-down battlemap of where the scene is happening. */
+  private async battlemapPrompt(session: Session | null, extra?: string): Promise<string> {
+    const fallback = `top-down battle map, from above, no people, ${extra ?? ''}`.replace(/,\s*$/, '')
+    if (!session) return extra ? this.writePrompt(`A top-down battle map, seen from directly above, of: ${extra}. Terrain, structures, cover and hazards; no people, no text, no grid.`, fallback) : ''
+    const { transcript } = this.sceneContext(session)
+    return this.writePrompt(
+      `Describe a top-down battle map of the place where this scene happens${extra ? ` (${extra})` : ''}, seen from directly above: ground, terrain, structures, furniture, cover and hazards. No people, no text, no grid, no perspective.\n\n${transcript}`,
+      `${fallback}${extra ? '' : `, ${session.frontmatter.title}`}`
+    )
+  }
+
+  private sceneContext(session: Session, messageId?: string): { transcript: string; focus: string } {
     const s = settingsStore.get()
     const visible = session.messages.filter((m) => !m.hidden && m.role !== 'image')
     let context: Message[]
@@ -93,6 +105,11 @@ class ImageService {
       .filter(Boolean)
       .join('\n\n')
     const focus = context[context.length - 1]?.text ?? ''
+    return { transcript, focus }
+  }
+
+  private async scenePrompt(session: Session, messageId?: string, extra?: string): Promise<string> {
+    const { transcript, focus } = this.sceneContext(session, messageId)
     return this.writePrompt(
       `Illustrate the current moment of this scene${extra ? ` (${extra})` : ''}:\n\n${transcript}`,
       focus.replace(/\[CHECK[^\]]*\]/gi, '').replace(/[*_#>]/g, '').slice(0, 350)
@@ -154,6 +171,9 @@ class ImageService {
         if (!charPath) throw new AppError('NO_CHARACTER', 'Choose a character for the portrait.')
         character = await readCharacter(vault, charPath)
         prompt = await this.portraitPrompt(character, prompt || undefined)
+      } else if (opts.kind === 'battlemap') {
+        if (!session && !prompt) throw new AppError('NO_SESSION', 'Open a session, or describe the place, e.g. /image battlemap a ruined chapel.')
+        prompt = await this.battlemapPrompt(session, prompt || undefined)
       }
       if (!prompt) throw new AppError('NO_PROMPT', 'Describe what to draw, e.g. /image a misty harbour at dusk.')
 
@@ -192,7 +212,11 @@ class ImageService {
 
       let updated: Session | undefined
       if (session) {
-        const caption = character ? `Portrait of ${character.card.name}` : (opts.prompt?.trim() || prompt).slice(0, 80)
+        const caption = character
+          ? `Portrait of ${character.card.name}`
+          : opts.kind === 'battlemap'
+            ? `Battlemap${opts.prompt?.trim() ? `: ${opts.prompt.trim().slice(0, 70)}` : ''}`
+            : (opts.prompt?.trim() || prompt).slice(0, 80)
         updated = await postMessage(vault, session.path, {
           id: newMessageId(),
           role: 'image',
@@ -217,7 +241,7 @@ class ImageService {
   }
 
   /** Paints a top-down map of a campaign into its Images folder; returns the image path. */
-  async generateMap(campaignPath: VaultPath, extra?: string): Promise<string> {
+  async generateMap(campaignPath: VaultPath, extra?: string, sketch?: { data: Buffer; filename: string }): Promise<string> {
     const s = settingsStore.get()
     const backend = backendFor(s, 'map')
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
@@ -230,8 +254,23 @@ class ImageService {
       `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
     )
     const profile = s.imageProfiles.map
-    const applied = applyImageProfile(backend, 'map', profile, workflowFor(backend, 'map', profile))
-    const req = buildImageRequest(applied.backend, applied.style ? `${applied.style}, ${prompt}` : prompt, applied.over)
+    const workflowId = workflowFor(backend, 'map', profile)
+    const applied = applyImageProfile(backend, 'map', profile, workflowId)
+    const over: Partial<ImageRequest> = { ...applied.over }
+    if (sketch) {
+      // Paint over the sketch (img2img), keeping its proportions.
+      const wf = backend.comfy.workflows.find((w) => w.id === workflowId)
+      if (backend.type === 'comfyui' && !wf?.mapping.sourceImage) {
+        throw new AppError('NO_IMG2IMG', `The ComfyUI workflow “${wf?.name ?? 'for maps'}” has no Load Image node, so it can’t start from a sketch. Import an img2img workflow and pick it for Maps in Generation options.`)
+      }
+      if (backend.type !== 'comfyui' && backend.type !== 'a1111') {
+        throw new AppError('NO_IMG2IMG', `${backend.name} can’t paint over a sketch. Use Automatic1111/Forge or a ComfyUI img2img workflow for Maps.`)
+      }
+      const dims = imageSize(sketch.data)
+      if (dims && !(profile.width && profile.height)) Object.assign(over, sizeLike(dims, Math.max(over.width ?? 0, over.height ?? 0, backend.defaults.width, backend.defaults.height)))
+      over.source = sketch
+    }
+    const req = buildImageRequest(applied.backend, applied.style ? `${applied.style}, ${prompt}` : prompt, over)
     const result = await imageAdapter(backend.type).generate(resolveImageBackend(applied.backend), req, { onProgress: () => {} })
     const dir = joinVaultPath(campaignPath, IMAGES_FOLDER)
     await vault.mkdir(dir)

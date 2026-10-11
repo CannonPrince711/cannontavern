@@ -157,7 +157,7 @@ When the DM asks for a check (`[CHECK perception DC 13]`), a button appears that
 | `/dmg Goblin 5`, `/heal Aria 4` | Change hit points |
 | `/rest short 2`, `/rest long` | Rests (hit dice, HP, spell slots) |
 | `/party` | Add your character to the combat tracker |
-| `/image <prompt>`, `/image scene`, `/image portrait` | Generate an illustration |
+| `/image <prompt>`, `/image scene`, `/image portrait [name]`, `/image battlemap [place]` | Generate an illustration, a portrait, or a top-down battlemap of the current scene (or of the place you describe) |
 | `/note <name>` | Pull any vault note into the conversation |
 | `/sys <text>` | Add a narrator/system note |
 | `/compress` | Compress this session into a recap now |
@@ -190,6 +190,8 @@ As the DM, writing `[CHECK perception DC 13]` rolls the check for the character 
 - **Campaign map** (map button in the chat header): use a picture (any file, an image from the campaign, or one painted by your image backend) or a blank grid. Add pins (location, point of interest, danger, note) with descriptions and linked notes, drag them around, and move the green party token. Dropping the party on a pin tells the DM ("The party travels to …") and puts the location in the prompt. Set the map's width for a scale bar. The map is a normal note with a readable pin list.
 - **Mini-map**: a game-style schematic in the corner of the chat, centred on the party's HERE marker, with a compass and scale bar. Click it to open the map; hide it from its corner button or the map view.
 - **Graph view**: an Obsidian-style graph of your campaign notes and the wikilinks between them, plus dashed links where a session mentions a character or NPC. The right panel's Graph tab shows the local graph around the open session; Ctrl+K → Graph view shows everything, with search and filters. Click a note to open it.
+
+In the map's image chooser, **Paint from a sketch…** turns a rough drawing (coastlines, mountains, roads, in any paint program) into a finished map with img2img, keeping its proportions. It needs Automatic1111/Forge, or a ComfyUI workflow with a Load Image node picked for Maps. Map LoRAs such as Fantasy Map (world maps) and Mapcraft (battlemaps) work well with the Maps and Battlemaps generation options.
 
 ## Multiplayer
 
@@ -260,7 +262,7 @@ Header values are stored encrypted, like API keys.
 
 ## Image backends and ComfyUI
 
-**Settings → Image backends**. Under **Generation options**, scenes, portraits, maps and plain `/image` prompts can each use their own backend, model or checkpoint, ComfyUI workflow, size, steps, style and negative prompt (for example a cartography checkpoint at 1024×768 for maps and a portrait model for characters); anything left empty uses the backend's settings and the model switcher. Turn on **Paint portraits for new characters and NPCs** (under Image triggers) and every new character or NPC without a portrait gets one, painted in the background one at a time and set as their picture: from New character (once it has a description), the campaign builder, `/npc`, or notes you add in Obsidian. Existing characters are left alone. Images are saved into the campaign's `Images/` folder and embedded in the session note as `![[…]]`. Generate them with `/image`, from a message's toolbar, as character portraits, or automatically every N DM turns or when the location changes (**Settings → Image backends → Triggers**).
+**Settings → Image backends**. Under **Generation options**, scenes, portraits, maps, battlemaps and plain `/image` prompts can each use their own backend, model or checkpoint, ComfyUI workflow, size, steps, style and negative prompt (for example a cartography checkpoint at 1024×768 for maps and a portrait model for characters); anything left empty uses the backend's settings and the model switcher. Turn on **Paint portraits for new characters and NPCs** (under Image triggers) and every new character or NPC without a portrait gets one, painted in the background one at a time and set as their picture: from New character (once it has a description), the campaign builder, `/npc`, or notes you add in Obsidian. Existing characters are left alone. Images are saved into the campaign's `Images/` folder and embedded in the session note as `![[…]]`. Generate them with `/image`, from a message's toolbar, as character portraits, or automatically every N DM turns or when the location changes (**Settings → Image backends → Triggers**).
 
 ### ComfyUI
 

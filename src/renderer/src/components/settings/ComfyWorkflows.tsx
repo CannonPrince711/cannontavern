@@ -89,6 +89,7 @@ function WorkflowEditor({ wf, onChange }: { wf: ComfyWorkflow; onChange: (wf: Co
             <option value="portrait">Portraits</option>
             <option value="scene">Scenes</option>
             <option value="map">Maps</option>
+            <option value="battlemap">Battlemaps</option>
             <option value="other">Anything</option>
           </NativeSelect>
         </Field>

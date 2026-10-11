@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Camera, ImagePlus, Loader2, UserRound, X } from 'lucide-react'
+import { Camera, Grid3x3, ImagePlus, Loader2, UserRound, X } from 'lucide-react'
 import { joinVaultPath } from '@shared/names'
 import { EmptyState } from '@/components/EmptyState'
 import { FrameArt } from '@/components/illustrations'
@@ -65,12 +65,15 @@ export function ImagesPanel(): React.JSX.Element {
   return (
     <div className="space-y-3 p-3">
       <ImageModelSwitcher className="w-full" />
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5">
         <Button variant="outline" size="sm" onClick={() => void generate({ sessionPath: session.path, kind: 'scene' })}>
-          <Camera /> Illustrate scene
+          <Camera /> Scene
         </Button>
         <Button variant="outline" size="sm" onClick={() => void generate({ sessionPath: session.path, kind: 'portrait' })} disabled={!session.frontmatter.characters.length}>
           <UserRound /> Portrait
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => void generate({ sessionPath: session.path, kind: 'battlemap' })} title="A top-down battlemap of where the scene is">
+          <Grid3x3 /> Battlemap
         </Button>
       </div>
       <form
