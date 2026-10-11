@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
+import { EDITION_INFO, EDITIONS } from '@shared/editions'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -19,7 +20,7 @@ type Stage = 'concept' | 'drafting' | 'review'
 // A stable empty list: a fresh [] from a store selector would re-render forever.
 const NONE: never[] = []
 
-const DEFAULT_CONCEPT: CampaignConcept = { name: '', premise: '', tones: [], setting: '', levels: '1–5', length: 'short', players: 1, mode: 'ai-dm', avoid: '' }
+const DEFAULT_CONCEPT: CampaignConcept = { name: '', premise: '', tones: [], setting: '', levels: '1–5', length: 'short', players: 1, mode: 'ai-dm', edition: '5e', avoid: '' }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -130,6 +131,16 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
         <div className="space-y-1.5">
           <Label htmlFor="cb-players">Player characters</Label>
           <Input id="cb-players" type="number" min={1} max={8} value={concept.players} onChange={(e) => set('players', Math.max(1, Math.min(8, Number(e.target.value) || 1)))} className="w-24" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Rules</Label>
+        <div className="flex gap-1.5">
+          {EDITIONS.map((e) => (
+            <Chip key={e} active={concept.edition === e} onClick={() => set('edition', e)}>
+              {EDITION_INFO[e].label}
+            </Chip>
+          ))}
         </div>
       </div>
       <div className="space-y-1.5">
@@ -333,7 +344,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
     }
     setBusy(true)
     try {
-      const r = await invoke('campaigns:build', draft, { mode, session, ...(character ? { characterPath: character } : {}) })
+      const r = await invoke('campaigns:build', draft, { mode, session, edition: concept.edition, ...(character ? { characterPath: character } : {}) })
       const vault = useVault.getState()
       vault.setIndex(r.index)
       vault.setActiveCampaign(r.campaignPath)

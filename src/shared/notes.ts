@@ -4,6 +4,7 @@
  * are ignored here and preserved by the writer.
  */
 import { isPlayMode } from './play'
+import { isEdition, type Edition } from './editions'
 import type {
   AbilityKey,
   Campaign,
@@ -33,7 +34,13 @@ export function proficiencyForLevel(level: number): number {
   return 2 + Math.floor((Math.max(1, level) - 1) / 4)
 }
 
-export function defaultSheet(): DndSheet {
+export function defaultSheet(edition: Edition = '5e'): DndSheet {
+  const base = defaultSheet5e()
+  if (edition !== '3.5e') return base
+  return { ...base, edition: '3.5e', bab: 0, base_saves: { fort: 0, ref: 0, will: 0 }, skill_ranks: {}, feats: [] }
+}
+
+function defaultSheet5e(): DndSheet {
   return {
     race: '',
     class: '',
@@ -148,6 +155,19 @@ export function normalizeSheet(raw: unknown): DndSheet {
   }
   const hd = obj(o.hit_dice)
   if (Object.keys(hd).length) sheet.hit_dice = { die: num(hd.die, 8), max: num(hd.max, level), used: num(hd.used) }
+  if (isEdition(o.edition) && o.edition !== '5e') sheet.edition = o.edition
+  const feats = strList(o.feats)
+  if (feats.length) sheet.feats = feats
+  if (sheet.edition === '3.5e') {
+    const bs = obj(o.base_saves)
+    sheet.bab = num(o.bab)
+    sheet.base_saves = { fort: num(bs.fort), ref: num(bs.ref), will: num(bs.will) }
+    sheet.skill_ranks = Object.fromEntries(
+      Object.entries(obj(o.skill_ranks))
+        .map(([k, v]) => [k.toLowerCase(), num(v)] as const)
+        .filter(([, v]) => v > 0)
+    )
+  }
   return sheet
 }
 
@@ -196,6 +216,8 @@ export function normalizeCampaign(path: string, name: string, data: Record<strin
     house_rules: str(data.house_rules),
     lorebooks: strList(data.lorebooks),
     mode: isPlayMode(data.mode) ? data.mode : undefined,
+    edition: isEdition(data.edition) ? data.edition : undefined,
+    sources: strList(data.sources),
     body
   }
 }

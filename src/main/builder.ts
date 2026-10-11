@@ -8,6 +8,7 @@ import { FOLDERS, CAMPAIGN_FILE } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { serializeLorebookBody } from '@shared/notes'
 import type { PlayMode } from '@shared/play'
+import { SOURCEBOOKS, type Edition } from '@shared/editions'
 import type { VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
 import { resolveTextBackend, textAdapter } from './backends/text'
@@ -44,6 +45,7 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
 
 export interface BuildOptions {
   mode: PlayMode
+  edition?: Edition
   /** Create "Session 01" (opening with the draft's scene unless you are the DM). */
   session: boolean
   characterPath?: VaultPath
@@ -77,7 +79,13 @@ export async function buildCampaign(draft: CampaignDraft, opts: BuildOptions): P
     links.push(toWikilink(lorePath, { full: true }))
   }
   await vault.mutate(joinVaultPath(campaign.path, CAMPAIGN_FILE), (cur) =>
-    cur === null ? null : updateNote(cur, { lorebooks: links, ...(opts.mode !== 'ai-dm' ? { mode: opts.mode } : {}) })
+    cur === null
+      ? null
+      : updateNote(cur, {
+          lorebooks: links,
+          ...(opts.mode !== 'ai-dm' ? { mode: opts.mode } : {}),
+          ...(opts.edition && opts.edition !== '5e' ? { edition: opts.edition, sources: SOURCEBOOKS[opts.edition].filter((b) => b.core).map((b) => b.name) } : {})
+        })
   )
 
   await saveParty(vault, campaign.path, {

@@ -12,6 +12,7 @@ import type { SessionRecap } from './recap'
 import type { VaultGraph } from './graph'
 import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
+import type { Edition } from './editions'
 import type { PlayMode, Speaker } from './play'
 import type {
   AppInfo,
@@ -146,7 +147,7 @@ export interface InvokeMap {
   /** Campaign builder: an AI draft from a concept, then the reviewed draft written to the vault. */
   'campaigns:draft': Invoke<[concept: CampaignConcept], CampaignDraft>
   'campaigns:build': Invoke<
-    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath }],
+    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
   >
   /** Campaign maps (image, pins, party marker) kept in a "type: map" note. */
@@ -155,6 +156,11 @@ export interface InvokeMap {
   'maps:importImage': Invoke<[campaignPath: VaultPath], string | null>
   'maps:images': Invoke<[campaignPath: VaultPath], string[]>
   'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string], string>
+  /** Campaign settings (Campaign.md frontmatter): rules edition, sourcebooks, default mode, setting, tone, house rules. */
+  'campaigns:update': Invoke<
+    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode }],
+    Campaign
+  >
   'campaigns:get': Invoke<[path: VaultPath], { campaign: Campaign; party: Party }>
   'campaigns:create': Invoke<[name: string], Campaign>
   'campaigns:saveParty': Invoke<[path: VaultPath, party: Party], Party>
@@ -324,6 +330,7 @@ const invokeChannels = {
   'characters:setAvatar': 1,
   'characters:updateSheet': 1,
   'campaigns:get': 1,
+  'campaigns:update': 1,
   'maps:get': 1,
   'maps:save': 1,
   'maps:importImage': 1,

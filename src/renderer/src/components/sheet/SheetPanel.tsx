@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BedDouble, Coffee, Heart, Minus, Pencil, Plus, ScrollText, Shield, Sparkles, Swords, Trash2, TrendingUp, X, Zap } from 'lucide-react'
-import { ABILITIES, CONDITIONS, SKILLS, XP_FOR_LEVEL, checkBonus, levelForXp } from '@shared/checks'
+import { ABILITIES, checkBonus, conditionsFor, levelForXp, skillsFor, xpForLevel } from '@shared/checks'
+import { EDITION_INFO, EDITIONS, editionOf, SAVES_35, SKILLS_35, type Edition } from '@shared/editions'
 import { defaultSheet } from '@shared/notes'
 import { modifier, signed } from '@shared/prompt'
 import { damage, heal, hitDie, levelUp, longRest, shortRest } from '@shared/sheet'
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
 import { useActiveCharacterPath, useCharacterNote } from '@/hooks/useActiveCharacter'
 import { rollCheckFor } from '@/lib/rolls'
+import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
 import { toast } from '@/stores/toasts'
@@ -85,6 +87,23 @@ function Section({ title, icon: Icon, children, action }: { title: string; icon:
   )
 }
 
+/** The active campaign's rules edition (for new sheets). */
+function useCampaignEdition(): Edition {
+  const campaign = useVault((s) => s.activeCampaign)
+  const [edition, setEdition] = useState<Edition>('5e')
+  useEffect(() => {
+    if (!campaign) return
+    let stale = false
+    invoke('campaigns:get', campaign)
+      .then((r) => !stale && setEdition(editionOf(r.campaign)))
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [campaign])
+  return edition
+}
+
 export function SheetPanel(): React.JSX.Element {
   const path = useActiveCharacterPath()
   const { note, updateSheet } = useCharacterNote(path)
@@ -93,6 +112,8 @@ export function SheetPanel(): React.JSX.Element {
   const [amount, setAmount] = useState('')
   const [newItem, setNewItem] = useState('')
   const [newSpell, setNewSpell] = useState('')
+  const [newFeat, setNewFeat] = useState('')
+  const campaignEdition = useCampaignEdition()
 
   if (!path) {
     return (
@@ -113,8 +134,16 @@ export function SheetPanel(): React.JSX.Element {
       <EmptyState
         illustration={<HoodArt />}
         title={`${note.card.name} has no sheet`}
-        description="Add a D&D 5e sheet: it’s stored in the character note’s frontmatter under dnd:."
-        action={<Button onClick={() => void updateSheet(defaultSheet())}>Add D&D sheet</Button>}
+        description="Add a D&D sheet: it’s stored in the character note’s frontmatter under dnd:."
+        action={
+          <div className="flex gap-2">
+            {EDITIONS.map((e) => (
+              <Button key={e} variant={e === campaignEdition ? 'default' : 'outline'} onClick={() => void updateSheet(defaultSheet(e))}>
+                Add {EDITION_INFO[e].short} sheet
+              </Button>
+            ))}
+          </div>
+        }
         className="pt-16"
       />
     )
@@ -123,12 +152,23 @@ export function SheetPanel(): React.JSX.Element {
   const set = (patch: Partial<DndSheet>): void => void updateSheet(patch)
   const roll = (target: string, save = false): void => void rollCheckFor(target, undefined, { save }).catch((e) => toast.error(e))
   const hpRatio = sheet.max_hp ? sheet.hp / sheet.max_hp : 0
-  const nextXp = XP_FOR_LEVEL[Math.min(20, sheet.level + 1)] ?? sheet.xp
-  const canLevel = sheet.level < 20 && levelForXp(sheet.xp) > sheet.level
+  const edition = editionOf(sheet)
+  const is35 = edition === '3.5e'
+  const levelXp = xpForLevel(sheet.level, edition)
+  const nextXp = xpForLevel(Math.min(20, sheet.level + 1), edition)
+  const canLevel = sheet.level < 20 && levelForXp(sheet.xp, edition) > sheet.level
+  const switchEdition = async (e: Edition): Promise<void> => {
+    if (e === edition) return
+    if (!(await askConfirm({ title: `Switch to ${EDITION_INFO[e].label}?`, description: e === '3.5e' ? 'Adds base attack bonus, Fort/Ref/Will saves and skill ranks (fill them in for your class). Ability scores, HP, inventory and spells stay.' : 'Uses 5e proficiencies instead of skill ranks and base saves. Ability scores, HP, inventory and spells stay.', confirmLabel: 'Switch' }))) return
+    set(e === '3.5e' ? { edition: '3.5e', bab: sheet.bab ?? 0, base_saves: sheet.base_saves ?? { fort: 0, ref: 0, will: 0 }, skill_ranks: sheet.skill_ranks ?? {}, feats: sheet.feats ?? [] } : { edition: '5e' })
+  }
   const n = Math.max(0, Math.round(Number(amount) || 0))
 
   const doLevelUp = async (): Promise<void> => {
-    if (!(await askConfirm({ title: `Level up to ${sheet.level + 1}?`, description: `Max HP rises by the average of a d${hitDie(sheet)} plus CON; proficiency updates automatically.`, confirmLabel: 'Level up' }))) return
+    const description = is35
+      ? `Max HP rises by the average of a d${hitDie(sheet)} plus CON. Update base attack, saves and skill ranks for your class.`
+      : `Max HP rises by the average of a d${hitDie(sheet)} plus CON; proficiency updates automatically.`
+    if (!(await askConfirm({ title: `Level up to ${sheet.level + 1}?`, description, confirmLabel: 'Level up' }))) return
     const r = levelUp(sheet)
     set(r.sheet)
     void useChat.getState().post({ role: 'system', text: `${note.card.name} reached level ${r.sheet.level} (+${r.hpGain} max HP).`, swipes: [], swipeIndex: 0 })
@@ -153,6 +193,15 @@ export function SheetPanel(): React.JSX.Element {
             <EditableText value={sheet.class} label="Class" placeholder="Class" onCommit={(v) => set({ class: v })} /> · Level{' '}
             <EditableNumber value={sheet.level} label="Level" min={1} max={20} onCommit={(v) => set({ level: v })} />
           </p>
+        </div>
+        <div>
+          <NativeSelect value={edition} onChange={(e) => void switchEdition(e.target.value as Edition)} aria-label="Rules edition" className="h-7 w-[4.75rem] text-xs">
+            {EDITIONS.map((e) => (
+              <option key={e} value={e}>
+                {EDITION_INFO[e].short}
+              </option>
+            ))}
+          </NativeSelect>
         </div>
       </div>
 
@@ -202,7 +251,9 @@ export function SheetPanel(): React.JSX.Element {
               </button>
             )
           },
-          { label: 'Prof', icon: Sparkles, node: <span>{signed(sheet.proficiency_bonus)}</span> }
+          is35
+            ? { label: 'BAB', icon: Sparkles, node: <EditableNumber value={sheet.bab ?? 0} label="Base attack bonus" min={0} max={40} onCommit={(v) => set({ bab: v })} /> }
+            : { label: 'Prof', icon: Sparkles, node: <span>{signed(sheet.proficiency_bonus)}</span> }
         ].map(({ label, icon: Icon, node }) => (
           <div key={label} className="rounded-lg border bg-card py-1.5">
             <div className="flex items-center justify-center gap-1 text-[10px] tracking-wider text-muted-foreground uppercase">
@@ -232,7 +283,7 @@ export function SheetPanel(): React.JSX.Element {
         </div>
         {sheet.level < 20 && (
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-gold" style={{ width: `${Math.min(100, ((sheet.xp - (XP_FOR_LEVEL[sheet.level] ?? 0)) / Math.max(1, nextXp - (XP_FOR_LEVEL[sheet.level] ?? 0))) * 100)}%` }} />
+            <div className="h-full bg-gold" style={{ width: `${Math.min(100, Math.max(0, ((sheet.xp - levelXp) / Math.max(1, nextXp - levelXp)) * 100))}%` }} />
           </div>
         )}
       </div>
@@ -254,7 +305,7 @@ export function SheetPanel(): React.JSX.Element {
                 <div className="text-[11px] text-muted-foreground">
                   <EditableNumber value={sheet[key]} label={`${name} score`} min={1} max={30} onCommit={(v) => set({ [key]: v } as Partial<DndSheet>)} />
                 </div>
-                <div className="mt-0.5 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+                <div className={cn('mt-0.5 flex items-center justify-center gap-1 text-[10px] text-muted-foreground', is35 && 'hidden')}>
                   <button
                     type="button"
                     aria-label={`${proficient ? 'Remove' : 'Add'} ${name} save proficiency`}
@@ -272,10 +323,66 @@ export function SheetPanel(): React.JSX.Element {
         </div>
       </Section>
 
+      {/* 3.5 saves */}
+      {is35 && (
+        <Section title="Saves" icon={Shield}>
+          <div className="grid grid-cols-3 gap-1.5">
+            {SAVES_35.map((sv) => {
+              const base = sheet.base_saves?.[sv.key] ?? 0
+              const total = base + modifier(sheet[sv.ability])
+              return (
+                <div key={sv.key} className="rounded-lg border bg-card px-1 py-1.5 text-center">
+                  <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{sv.name}</div>
+                  <button type="button" onClick={() => roll(sv.name.toLowerCase())} className="font-display text-lg font-semibold tabular-nums hover:text-gold" aria-label={`Roll ${sv.name} save (${signed(total)})`}>
+                    {signed(total)}
+                  </button>
+                  <div className="text-[10px] text-muted-foreground">
+                    base <EditableNumber value={base} label={`${sv.name} base save`} min={0} max={30} onCommit={(v) => set({ base_saves: { ...(sheet.base_saves ?? { fort: 0, ref: 0, will: 0 }), [sv.key]: v } })} /> + {sv.ability.toUpperCase()}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Section>
+      )}
+
       {/* Skills */}
-      <Section title="Skills" icon={Sparkles}>
-        <ul className="grid grid-cols-1 gap-0.5">
-          {SKILLS.map((s) => {
+      <Section title={is35 ? 'Skills (ranks)' : 'Skills'} icon={Sparkles}>
+        {is35 && (
+          <ul className="grid grid-cols-1 gap-0.5">
+            {SKILLS_35.map((s) => {
+              const ranks = sheet.skill_ranks?.[s.key] ?? 0
+              const total = ranks + modifier(sheet[s.ability])
+              const unusable = s.trainedOnly && ranks === 0
+              return (
+                <li key={s.key} className={cn('flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/60', unusable && 'opacity-50')}>
+                  <span className="w-7 text-center font-mono text-[11px] tabular-nums">
+                    <EditableNumber
+                      value={ranks}
+                      label={`${s.name} ranks`}
+                      min={0}
+                      max={30}
+                      onCommit={(v) => {
+                        const next = { ...(sheet.skill_ranks ?? {}) }
+                        if (v > 0) next[s.key] = v
+                        else delete next[s.key]
+                        set({ skill_ranks: next })
+                      }}
+                    />
+                  </span>
+                  <button type="button" onClick={() => roll(s.key)} className="flex flex-1 items-center justify-between text-left" aria-label={`Roll ${s.name} (${signed(total)})`} title={s.trainedOnly ? 'Trained only' : undefined}>
+                    <span className={cn('text-xs', ranks > 0 ? 'text-foreground' : 'text-muted-foreground')}>
+                      {s.name} <span className="text-[10px] uppercase opacity-60">{s.ability}</span>
+                    </span>
+                    <span className="font-mono text-xs tabular-nums">{signed(total)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <ul className={cn('grid grid-cols-1 gap-0.5', is35 && 'hidden')}>
+          {skillsFor('5e').map((s) => {
             const proficient = sheet.skills.includes(s.key)
             const { bonus } = checkBonus(sheet, { kind: 'skill', ability: s.ability, name: s.name, skill: s.key })
             return (
@@ -299,6 +406,37 @@ export function SheetPanel(): React.JSX.Element {
         </ul>
       </Section>
 
+      {/* Feats (3.5) */}
+      {is35 && (
+        <Section title="Feats" icon={Sparkles}>
+          {(sheet.feats ?? []).length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {(sheet.feats ?? []).map((f) => (
+                <span key={f} className="flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-xs">
+                  {f}
+                  <button type="button" aria-label={`Remove ${f}`} onClick={() => set({ feats: (sheet.feats ?? []).filter((x) => x !== f) })}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <form
+            className="flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (newFeat.trim()) set({ feats: [...new Set([...(sheet.feats ?? []), newFeat.trim()])] })
+              setNewFeat('')
+            }}
+          >
+            <Input value={newFeat} onChange={(e) => setNewFeat(e.target.value)} placeholder="Add a feat (e.g. Power Attack)" aria-label="New feat" className="h-8" />
+            <Button type="submit" size="sm" variant="outline" disabled={!newFeat.trim()}>
+              <Plus />
+            </Button>
+          </form>
+        </Section>
+      )}
+
       {/* Conditions */}
       <Section
         title="Conditions"
@@ -306,7 +444,7 @@ export function SheetPanel(): React.JSX.Element {
         action={
           <NativeSelect value="" aria-label="Add condition" className="w-32" onChange={(e) => e.target.value && set({ conditions: [...new Set([...sheet.conditions, e.target.value])] })}>
             <option value="">Add…</option>
-            {CONDITIONS.filter((c) => !sheet.conditions.includes(c)).map((c) => (
+            {conditionsFor(edition).filter((c) => !sheet.conditions.includes(c)).map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -445,7 +583,7 @@ export function SheetPanel(): React.JSX.Element {
           <Button
             variant="outline"
             size="sm"
-            className="flex-1"
+            className={cn('flex-1', is35 && 'hidden')}
             onClick={() => {
               const r = shortRest(sheet, 1)
               set(r.sheet)
@@ -461,14 +599,16 @@ export function SheetPanel(): React.JSX.Element {
             className="flex-1"
             onClick={() => {
               set(longRest(sheet))
-              void useChat.getState().post({ role: 'system', text: `${note.card.name} takes a long rest.`, swipes: [], swipeIndex: 0 })
+              void useChat.getState().post({ role: 'system', text: is35 ? `${note.card.name} rests for the night (+${Math.max(1, sheet.level)} HP, spells restored).` : `${note.card.name} takes a long rest.`, swipes: [], swipeIndex: 0 })
             }}
           >
-            <BedDouble /> Long rest
+            <BedDouble /> {is35 ? 'Rest for the night' : 'Long rest'}
           </Button>
         </div>
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Hit dice: {(sheet.hit_dice?.max ?? sheet.level) - (sheet.hit_dice?.used ?? 0)}/{sheet.hit_dice?.max ?? sheet.level} d{hitDie(sheet)}
+          {is35
+            ? `A night’s rest heals ${Math.max(1, sheet.level)} HP (1 per level) and restores spells.`
+            : `Hit dice: ${(sheet.hit_dice?.max ?? sheet.level) - (sheet.hit_dice?.used ?? 0)}/${sheet.hit_dice?.max ?? sheet.level} d${hitDie(sheet)}`}
         </p>
       </Section>
     </div>

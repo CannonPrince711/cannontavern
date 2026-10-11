@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Pencil, Plus, ScrollText, Search, UserPlus, Wand2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Wand2 } from 'lucide-react'
 import type { SessionSummary } from '@shared/types'
 import { NewCharacterDialog } from '@/components/characters/CharacterEditor'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
@@ -149,6 +149,11 @@ function CampaignSwitcher(): React.JSX.Element {
         <DropdownMenuItem onSelect={() => useUi.setState({ buildingCampaign: true })}>
           <Wand2 /> Campaign builder…
         </DropdownMenuItem>
+        {active && (
+          <DropdownMenuItem onSelect={() => useUi.setState({ campaignSettings: active.path })}>
+            <Settings2 /> Campaign settings…
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

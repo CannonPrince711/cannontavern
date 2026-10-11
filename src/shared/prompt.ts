@@ -20,10 +20,11 @@ import type {
 } from './types'
 import type { Campaign } from './types'
 import { PROMPT_BLOCK_IDS } from './types'
+import { SKILLS_35 } from './editions'
 import { renderRecaps, type SessionRecap } from './recap'
 import type { Speaker } from './play'
 
-export const DEFAULT_DM_PROMPT = `You are the Dungeon Master of a Dungeons & Dragons 5th edition adventure played with {{user}}.
+export const DEFAULT_DM_PROMPT = `You are the Dungeon Master of a Dungeons & Dragons adventure played with {{user}}.
 
 Narrate in the second person and present tense ("You push open the door…"). Describe the world vividly but concisely, give NPCs distinct voices, and keep the story moving. End most replies with a situation the player can react to.
 
@@ -32,7 +33,7 @@ Never act, speak or decide for {{user}}'s character. Never roll dice for the pla
 Track hit points, conditions and inventory consistently with the character sheet you are given. Keep replies to one to four paragraphs unless a scene calls for more.`
 
 /** Used when the AI plays the character (You are DM / AI only). */
-export const DEFAULT_PLAYER_PROMPT = `You are playing {{char}}, a player character in a Dungeons & Dragons 5th edition adventure. The Dungeon Master describes the world, voices every other character and decides what happens.
+export const DEFAULT_PLAYER_PROMPT = `You are playing {{char}}, a player character in a Dungeons & Dragons adventure. The Dungeon Master describes the world, voices every other character and decides what happens.
 
 Write only {{char}}'s part: what they say, do, notice and feel, in the same person and tense the DM uses for them. Stay true to the character card and sheet. Be an engaged player: ask questions, make plans, talk to people, take reasonable risks, and pursue the character's goals.
 
@@ -66,6 +67,8 @@ export interface PromptInput {
   recaps?: SessionRecap[]
   /** Where the party is on the campaign map. */
   location?: string | null
+  /** Edition and allowed sourcebooks (see editions.ts). */
+  rules?: string | null
   messages: Message[]
   /** Block order and on/off switches from settings. */
   order: { id: string; enabled: boolean }[]
@@ -136,6 +139,7 @@ export function renderCampaign(c: Campaign | null, p: Party | null, forPlayer = 
 }
 
 export function renderSheet(name: string, s: DndSheet): string {
+  if (s.edition === '3.5e') return renderSheet35(name, s)
   const abilities = (['str', 'dex', 'con', 'int', 'wis', 'cha'] as const)
     .map((a) => `${a.toUpperCase()} ${s[a]} (${signed(modifier(s[a]))})`)
     .join(' · ')
@@ -156,6 +160,38 @@ export function renderSheet(name: string, s: DndSheet): string {
   if (slots.length) lines.push(`Spell slots left: ${slots.join(', ')}`)
   if (s.spells.length) lines.push(`Spells: ${s.spells.map((sp) => sp.name).join(', ')}`)
   return `Character sheet\n${lines.join('\n')}`
+}
+
+function renderSheet35(name: string, s: DndSheet): string {
+  const mod = (a: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'): number => modifier(s[a])
+  const abilities = (['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((a) => `${a.toUpperCase()} ${s[a]} (${signed(mod(a))})`).join(' · ')
+  const bs = s.base_saves ?? { fort: 0, ref: 0, will: 0 }
+  const lines = [
+    `${name}: ${[s.race, s.class].filter(Boolean).join(' ')} ${s.level ? `level ${s.level}` : ''}`.trim(),
+    `HP ${s.hp}/${s.max_hp}${s.temp_hp ? ` (+${s.temp_hp} temp)` : ''} · AC ${s.ac} · Speed ${s.speed} ft · Base attack ${signed(s.bab ?? 0)} · Initiative ${signed(mod('dex'))}`,
+    abilities,
+    `Saves: Fortitude ${signed(bs.fort + mod('con'))}, Reflex ${signed(bs.ref + mod('dex'))}, Will ${signed(bs.will + mod('wis'))}`
+  ]
+  const ranks = Object.entries(s.skill_ranks ?? {}).filter(([, r]) => r > 0)
+  if (ranks.length) {
+    const skills = ranks.map(([k, r]) => {
+      const def = SKILLS_35.find((x) => x.key === k)
+      const total = r + (def ? mod(def.ability) : 0)
+      return `${def?.name ?? k} ${signed(total)} (${r} ranks)`
+    })
+    lines.push(`Skills: ${skills.join(', ')}`)
+  }
+  if (s.feats?.length) lines.push(`Feats: ${s.feats.join(', ')}`)
+  lines.push(`Conditions: ${s.conditions.length ? s.conditions.join(', ') : 'none'}`)
+  const items = s.inventory.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}${i.equipped ? ' (equipped)' : ''}`)
+  lines.push(`Inventory: ${items.length ? items.join(', ') : 'nothing'} · Gold ${s.gold}`)
+  const slots = Object.entries(s.spell_slots)
+    .filter(([, v]) => v.max > 0)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([lvl, v]) => `L${lvl} ${v.max - v.used}/${v.max}`)
+  if (slots.length) lines.push(`Spells per day left: ${slots.join(', ')}`)
+  if (s.spells.length) lines.push(`Spells: ${s.spells.map((sp) => sp.name).join(', ')}`)
+  return `Character sheet (D&D 3.5)\n${lines.join('\n')}`
 }
 
 export function renderCombat(c: CombatState): string {
@@ -290,7 +326,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         add(
           'campaign',
           'Campaign & party',
-          [renderCampaign(input.campaign, input.party, speaker === 'player'), input.location ? `The party is currently at: ${input.location}` : ''].filter(Boolean).join('\n\n')
+          [input.rules ?? '', renderCampaign(input.campaign, input.party, speaker === 'player'), input.location ? `The party is currently at: ${input.location}` : ''].filter(Boolean).join('\n\n')
         )
         break
       case 'lorebook':

@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import type { LoreEntry } from './types'
 import { PLAY_MODES } from './play'
+import { EDITIONS } from './editions'
 
 export const CAMPAIGN_TONES = ['Heroic', 'Grim', 'Horror', 'Mystery', 'Comedic', 'Political intrigue', 'Exploration', 'Swashbuckling', 'Romantic', 'Epic'] as const
 export const CAMPAIGN_SETTINGS = ['Classic high fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange', 'Your own idea'] as const
@@ -18,6 +19,7 @@ export const CampaignConceptSchema = z.object({
   length: z.enum(['one-shot', 'short', 'long']).default('short'),
   players: z.number().int().min(1).max(8).default(1),
   mode: z.enum(PLAY_MODES).default('ai-dm'),
+  edition: z.enum(EDITIONS).default('5e'),
   /** Lines and veils: things to keep out of the story. */
   avoid: z.string().max(1000).default('')
 })
@@ -72,6 +74,7 @@ export function builderPrompt(c: CampaignConcept): string {
     `Premise: ${c.premise.trim() || 'surprise me'}`,
     c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
     c.setting.trim() ? `Setting: ${c.setting.trim()}` : '',
+    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
     `Character levels: ${c.levels || '1–5'}`,
     `Players: ${c.players} ${c.players === 1 ? 'player character' : 'player characters'}`,
     `Size: ${size}`,

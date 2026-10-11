@@ -115,7 +115,11 @@ registerCommand({
     const sheet = active?.note.card.dnd
     if (!active || !sheet) throw new Error('Your character has no D&D sheet.')
     const [kind, n] = args.trim().split(/\s+/)
-    if (kind === 'long') {
+    if (sheet.edition === '3.5e') {
+      if (kind !== 'long') throw new Error('D&D 3.5 has no short rests. Use /rest long for a night’s rest.')
+      await updateActiveSheet(longRest(sheet))
+      await useChat.getState().post({ role: 'system', text: `${active.note.card.name} rests for the night: +${Math.max(1, sheet.level)} HP, spells restored.`, swipes: [], swipeIndex: 0 })
+    } else if (kind === 'long') {
       await updateActiveSheet(longRest(sheet))
       await useChat.getState().post({ role: 'system', text: `${active.note.card.name} takes a long rest: HP, spell slots and hit dice recovered.`, swipes: [], swipeIndex: 0 })
     } else {

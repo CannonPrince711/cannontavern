@@ -1,6 +1,7 @@
 import { CampaignConceptSchema, CampaignDraftSchema, type CampaignConcept, type CampaignDraft } from '@shared/builder'
 import { PLAY_MODES, type PlayMode } from '@shared/play'
 import { buildCampaign, draftCampaign } from '../builder'
+import { EDITIONS, type Edition } from '@shared/editions'
 import { z } from 'zod'
 import { CAMPAIGN_FILE, FOLDERS } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
@@ -72,8 +73,36 @@ export function registerLoreHandlers(): void {
     },
     z.tuple([
       CampaignDraftSchema,
-      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional() })
-    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string }]>
+      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional(), edition: z.enum(EDITIONS).optional() })
+    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string; edition?: Edition }]>
+  )
+
+  handle(
+    'campaigns:update',
+    async (_e, campaignPath, patch) => {
+      const vault = vaultService.require()
+      const fields: Record<string, unknown> = {}
+      if (patch.setting !== undefined) fields.setting = patch.setting.trim()
+      if (patch.tone !== undefined) fields.tone = patch.tone.trim()
+      if (patch.house_rules !== undefined) fields.house_rules = patch.house_rules.trim()
+      if (patch.edition !== undefined) fields.edition = patch.edition
+      if (patch.sources !== undefined) fields.sources = patch.sources.map((s) => s.trim()).filter(Boolean)
+      if (patch.mode !== undefined) fields.mode = patch.mode === 'ai-dm' ? undefined : patch.mode
+      await vault.mutate(joinVaultPath(campaignPath, CAMPAIGN_FILE), (cur) => (cur === null ? serializeNote({ type: 'campaign', ...fields }, '\n') : updateNote(cur, fields)))
+      void vaultService.reindex(joinVaultPath(campaignPath, CAMPAIGN_FILE))
+      return (await readCampaign(vault, campaignPath)).campaign
+    },
+    z.tuple([
+      path,
+      z.object({
+        setting: z.string().max(10_000).optional(),
+        tone: z.string().max(4000).optional(),
+        house_rules: z.string().max(10_000).optional(),
+        edition: z.enum(EDITIONS).optional(),
+        sources: z.array(z.string().max(200)).max(200).optional(),
+        mode: z.enum(PLAY_MODES).optional()
+      })
+    ])
   )
 
   handle(

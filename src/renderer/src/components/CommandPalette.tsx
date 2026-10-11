@@ -87,6 +87,17 @@ function useItems(query: string): Item[] {
       { id: 'new-campaign', group: 'Actions', label: 'New campaign', icon: FolderOpen, run: () => useUi.setState({ creatingCampaign: true }) },
       { id: 'map', group: 'Actions', label: 'Campaign map', icon: MapIcon, keywords: 'pins travel location minimap', run: () => useMap.setState({ open: true }) },
       { id: 'graph', group: 'Actions', label: 'Graph view', icon: Network, keywords: 'obsidian links map notes', run: () => useGraph.setState({ open: true }) },
+      {
+        id: 'campaign-settings',
+        group: 'Actions',
+        label: 'Campaign settings',
+        icon: Settings,
+        keywords: 'edition 3.5 5e sourcebooks rules house rules',
+        run: () => {
+          const c = useVault.getState().activeCampaign
+          if (c) useUi.setState({ campaignSettings: c })
+        }
+      },
       { id: 'builder', group: 'Actions', label: 'Campaign builder', icon: Wand2, keywords: 'create generate ai world npc', run: () => useUi.setState({ buildingCampaign: true }) },
       { id: 'dice', group: 'Actions', label: 'Dice tray', icon: Dices, keywords: 'roll', run: () => useDiceFx.getState().setTrayOpen(!useDiceFx.getState().trayOpen) },
       { id: 'inspector', group: 'Actions', label: 'Prompt inspector', icon: SquareTerminal, keywords: 'tokens context debug', run: () => useUi.setState({ inspectorOpen: true }) },

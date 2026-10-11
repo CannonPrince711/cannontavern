@@ -19,6 +19,8 @@ interface UiStore {
   creatingCampaign: boolean
   /** The campaign builder dialog is open. */
   buildingCampaign: boolean
+  /** Campaign folder whose settings dialog is open. */
+  campaignSettings: string | null
   settingsOpen: boolean
   settingsSection: SettingsSection
   paletteOpen: boolean
@@ -35,6 +37,7 @@ export const useUi = create<UiStore>((set) => ({
   editingCharacter: null,
   creatingCampaign: false,
   buildingCampaign: false,
+  campaignSettings: null,
   settingsOpen: false,
   settingsSection: 'general',
   paletteOpen: false,

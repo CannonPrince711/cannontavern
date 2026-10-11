@@ -5,6 +5,7 @@
  * note can be read and written back without renaming anything.
  */
 import type { PlayMode } from './play'
+import type { Edition } from './editions'
 
 export type Id = string
 /** Path relative to the vault root, always with forward slashes. */
@@ -193,6 +194,15 @@ export interface DndSheet {
   spell_slots: Record<string, SpellSlot>
   conditions: string[]
   hit_dice?: { die: number; max: number; used: number }
+  /** Rules edition of this sheet; missing means 5e. */
+  edition?: Edition
+  /** 3.5: base attack bonus. */
+  bab?: number
+  /** 3.5: base saves before ability modifiers. */
+  base_saves?: { fort: number; ref: number; will: number }
+  /** 3.5: ranks per skill, e.g. { "spot": 4, "move silently": 6 }. */
+  skill_ranks?: Record<string, number>
+  feats?: string[]
 }
 
 /** Character note frontmatter: a SillyTavern V2 card plus the D&D sheet. */
@@ -252,6 +262,9 @@ export interface Campaign {
   lorebooks: string[]
   /** Default play mode for new sessions. */
   mode?: PlayMode
+  /** Rules edition (missing means 5e) and the sourcebooks it allows. */
+  edition?: Edition
+  sources?: string[]
   body: string
 }
 

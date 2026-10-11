@@ -147,8 +147,9 @@ export function hitDie(sheet: DndSheet): number {
   return 8
 }
 
-/** Spends hit dice (each: 1dX + CON) and returns the new sheet and the HP regained. */
+/** Spends hit dice (each: 1dX + CON) and returns the new sheet and the HP regained. 3.5 has no short rests. */
 export function shortRest(sheet: DndSheet, spend: number, rng: Rng = cryptoRng): { sheet: DndSheet; healed: number; rolls: number[] } {
+  if (sheet.edition === '3.5e') return { sheet, healed: 0, rolls: [] }
   const die = hitDie(sheet)
   const hd = sheet.hit_dice ?? { die, max: sheet.level, used: 0 }
   const available = Math.max(0, hd.max - hd.used)
@@ -159,8 +160,21 @@ export function shortRest(sheet: DndSheet, spend: number, rng: Rng = cryptoRng):
   return { sheet: { ...sheet, hp: sheet.hp + healed, hit_dice: { ...hd, die, used: hd.used + n } }, healed, rolls }
 }
 
-/** Full HP, spell slots back, half the hit dice back, one level of exhaustion removed. */
+/**
+ * 5e: full HP, spell slots back, half the hit dice back, one level of exhaustion removed.
+ * 3.5: a night's rest heals 1 HP per level, restores spells, and ends fatigue.
+ */
 export function longRest(sheet: DndSheet): DndSheet {
+  if (sheet.edition === '3.5e') {
+    const slots = Object.fromEntries(Object.entries(sheet.spell_slots).map(([k, v]) => [k, { ...v, used: 0 }]))
+    return {
+      ...sheet,
+      hp: Math.min(sheet.max_hp, sheet.hp + Math.max(1, sheet.level)),
+      temp_hp: 0,
+      spell_slots: slots,
+      conditions: sheet.conditions.filter((c) => c !== 'fatigued').map((c) => (c === 'exhausted' ? 'fatigued' : c))
+    }
+  }
   const die = hitDie(sheet)
   const hd = sheet.hit_dice ?? { die, max: sheet.level, used: 0 }
   const regain = Math.max(1, Math.floor(hd.max / 2))
@@ -189,7 +203,8 @@ export function levelUp(sheet: DndSheet, method: 'average' | 'roll' = 'average',
       level,
       max_hp: sheet.max_hp + hpGain,
       hp: sheet.hp + hpGain,
-      proficiency_bonus: proficiencyForLevel(level),
+      // 3.5 has no proficiency bonus; BAB, saves and skill ranks are updated by hand.
+      proficiency_bonus: sheet.edition === '3.5e' ? sheet.proficiency_bonus : proficiencyForLevel(level),
       hit_dice: { ...hd, die, max: level }
     },
     hpGain

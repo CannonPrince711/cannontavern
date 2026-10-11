@@ -1,9 +1,11 @@
 /**
- * Ability checks, skill checks and saving throws against a D&D 5e sheet.
+ * Ability checks, skill checks and saving throws against a D&D sheet
+ * (5th edition by default, or 3.5 edition with skill ranks and Fort/Ref/Will).
  */
 import { modifier, signed } from './prompt'
 import { roll, type Rng, cryptoRng } from './dice'
 import type { AbilityKey, DndSheet, RollMode, RollResult } from './types'
+import { CONDITIONS_35, editionOf, levelForXp35, SAVES_35, SKILL_ALIASES_35, SKILLS_35, xpForLevel35, type Edition, type Save35 } from './editions'
 
 export const ABILITIES: { key: AbilityKey; name: string }[] = [
   { key: 'str', name: 'Strength' },
@@ -43,10 +45,24 @@ export const CONDITIONS = [
 /** XP needed to reach each level (index = level). */
 export const XP_FOR_LEVEL = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000]
 
-export function levelForXp(xp: number): number {
+export function levelForXp(xp: number, edition: Edition = '5e'): number {
+  if (edition === '3.5e') return levelForXp35(xp)
   let level = 1
   for (let l = 2; l <= 20; l++) if (xp >= XP_FOR_LEVEL[l]!) level = l
   return level
+}
+
+/** XP needed for a level in an edition. */
+export function xpForLevel(level: number, edition: Edition = '5e'): number {
+  return edition === '3.5e' ? xpForLevel35(level) : (XP_FOR_LEVEL[Math.max(1, Math.min(20, level))] ?? 0)
+}
+
+export function skillsFor(edition: Edition): { key: string; name: string; ability: AbilityKey }[] {
+  return edition === '3.5e' ? SKILLS_35 : SKILLS
+}
+
+export function conditionsFor(edition: Edition): string[] {
+  return edition === '3.5e' ? CONDITIONS_35 : CONDITIONS
 }
 
 export interface CheckTarget {
@@ -55,18 +71,47 @@ export interface CheckTarget {
   /** Display name, e.g. "Perception" or "Wisdom save". */
   name: string
   skill?: string
+  /** 3.5 saves: Fortitude, Reflex or Will. */
+  save35?: Save35
 }
 
-/** Resolves "dex", "dexterity", "perception", "sleight of hand"… to what's being rolled. */
-export function resolveTarget(raw: string, save = false): CheckTarget | null {
-  const q = raw.trim().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ')
+const SAVE_WORDS: Record<string, Save35> = { fort: 'fort', fortitude: 'fort', ref: 'ref', reflex: 'ref', will: 'will' }
+
+/**
+ * Resolves "dex", "dexterity", "perception", "sleight of hand", "reflex",
+ * "knowledge arcana"… to what's being rolled, for the sheet's edition.
+ */
+export function resolveTarget(raw: string, save = false, edition: Edition = '5e'): CheckTarget | null {
+  let q = raw.trim().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ')
+  // "dex save", "reflex saving throw" → a save.
+  const suffix = /\s+(save|saving throw)$/.exec(q)
+  if (suffix) {
+    save = true
+    q = q.slice(0, suffix.index)
+  }
+  const saveWord = SAVE_WORDS[q]
+  if (saveWord) {
+    const s = SAVES_35.find((x) => x.key === saveWord)!
+    // 5e has no Fort/Ref/Will; treat them as CON/DEX/WIS saves.
+    return edition === '3.5e'
+      ? { kind: 'save', ability: s.ability, name: `${s.name} save`, save35: s.key }
+      : { kind: 'save', ability: s.ability, name: `${ABILITIES.find((a) => a.key === s.ability)!.name} save` }
+  }
   const ability = ABILITIES.find((a) => a.key === q || a.name.toLowerCase() === q || q === a.name.toLowerCase().slice(0, 3))
   if (ability) {
-    return save
-      ? { kind: 'save', ability: ability.key, name: `${ability.name} save` }
-      : { kind: 'ability', ability: ability.key, name: ability.name }
+    if (!save) return { kind: 'ability', ability: ability.key, name: ability.name }
+    if (edition !== '3.5e') return { kind: 'save', ability: ability.key, name: `${ability.name} save` }
+    // 3.5: a CON/DEX/WIS save is a Fortitude/Reflex/Will save; there are no others.
+    const s = SAVES_35.find((x) => x.ability === ability.key)
+    return s ? { kind: 'save', ability: s.ability, name: `${s.name} save`, save35: s.key } : null
   }
   if (save) return null
+  if (edition === '3.5e') {
+    const k = q.replace(/^knowledge\s+(?!\()(.+)$/, 'knowledge ($1)')
+    const key = SKILL_ALIASES_35[k] ?? k
+    const skill = SKILLS_35.find((s) => s.key === key || s.name.toLowerCase() === key)
+    return skill ? { kind: 'skill', ability: skill.ability, name: skill.name, skill: skill.key } : null
+  }
   const skill = SKILLS.find((s) => s.key === q || s.name.toLowerCase() === q)
   return skill ? { kind: 'skill', ability: skill.ability, name: skill.name, skill: skill.key } : null
 }
@@ -74,6 +119,18 @@ export function resolveTarget(raw: string, save = false): CheckTarget | null {
 /** Total modifier for a check or save, and whether proficiency applied. */
 export function checkBonus(sheet: DndSheet, target: CheckTarget): { bonus: number; proficient: boolean } {
   const base = modifier(sheet[target.ability])
+  if (editionOf(sheet) === '3.5e') {
+    if (target.kind === 'save') {
+      const key = target.save35 ?? SAVES_35.find((s) => s.ability === target.ability)?.key
+      const b = key ? (sheet.base_saves?.[key] ?? 0) : 0
+      return { bonus: base + b, proficient: b > 0 }
+    }
+    if (target.kind === 'skill') {
+      const ranks = sheet.skill_ranks?.[target.skill!] ?? 0
+      return { bonus: base + ranks, proficient: ranks > 0 }
+    }
+    return { bonus: base, proficient: false }
+  }
   const proficient =
     target.kind === 'save' ? sheet.saves.includes(target.ability) : target.kind === 'skill' ? sheet.skills.includes(target.skill!) : false
   return { bonus: base + (proficient ? sheet.proficiency_bonus : 0), proficient }
@@ -92,8 +149,12 @@ export function rollCheck(
   const r = roll(expr, rng)
   if (dc !== undefined) {
     r.dc = dc
-    // A natural 20 or 1 doesn't auto-succeed ability checks in 5e RAW, so compare the total.
+    // 5e: compare the total. 3.5: a natural 20 always saves and a natural 1 always fails.
     r.success = r.total >= dc
+    if (sheet && editionOf(sheet) === '3.5e' && target.kind === 'save') {
+      if (r.crit) r.success = true
+      else if (r.fumble) r.success = false
+    }
   }
   return r
 }

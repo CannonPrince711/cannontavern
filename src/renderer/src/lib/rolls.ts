@@ -1,5 +1,6 @@
 import { parseCheckArgs, resolveTarget, rollCheck } from '@shared/checks'
 import { formatRoll, roll } from '@shared/dice'
+import { editionOf } from '@shared/editions'
 import type { RollMode, RollResult } from '@shared/types'
 import { loadActiveSheet } from '@/hooks/useActiveCharacter'
 import { useChat } from '@/stores/chat'
@@ -32,9 +33,10 @@ export async function rollExpression(expr: string): Promise<void> {
  * "Roll it" buttons on [CHECK …] requests).
  */
 export async function rollCheckFor(targetRaw: string, dc: number | undefined, opts: { save?: boolean; mode?: RollMode; continueAfter?: boolean } = {}): Promise<void> {
-  const target = resolveTarget(targetRaw, opts.save) ?? (opts.save ? null : resolveTarget(targetRaw, true))
-  if (!target) throw new Error(`“${targetRaw}” isn’t an ability${opts.save ? '' : ' or skill'}. Try dex, wisdom, stealth, perception…`)
   const { name, sheet } = await speaker()
+  const edition = editionOf(sheet?.note.card.dnd)
+  const target = resolveTarget(targetRaw, opts.save, edition) ?? (opts.save ? null : resolveTarget(targetRaw, true, edition))
+  if (!target) throw new Error(`“${targetRaw}” isn’t an ability${opts.save ? '' : ' or skill'}. Try ${edition === '3.5e' ? 'dex, spot, move silently, reflex' : 'dex, wisdom, stealth, perception'}…`)
   const r = rollCheck(sheet?.note.card.dnd ?? null, target, dc, opts.mode ?? 'normal')
   await postRoll(r, name)
   if (opts.continueAfter) await useChat.getState().send('')

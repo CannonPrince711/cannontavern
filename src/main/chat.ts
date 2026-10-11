@@ -19,6 +19,7 @@ import type { GenerateResult } from './backends/text/types'
 import { backendChain } from './backends/chain'
 import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
+import { editionOf, rulesLine } from '@shared/editions'
 import { recapService } from './recap'
 import { vaultService } from './vault/service'
 import { extensionHost } from './extensions/host'
@@ -123,6 +124,7 @@ class ChatService {
       summary: session.frontmatter.summary ?? null,
       recaps,
       location: partyLocation(map),
+      rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
       messages,
       order: normalizeBlockOrder(s.prompt.blocks),
       budget: s.prompt.contextBudget || backend?.generation.contextSize || 8192,
