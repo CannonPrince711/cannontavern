@@ -7,6 +7,7 @@ import { registerTableHandlers, stopTable } from './handlers/table'
 import { registerCharacterHandlers } from './handlers/characters'
 import { registerImageHandlers } from './handlers/images'
 import { registerLoreHandlers } from './handlers/lore'
+import { registerSpeechHandlers } from './handlers/speech'
 import { registerSheetHandlers } from './handlers/sheet'
 import { registerSessionHandlers, watchExternalSessionEdits } from './handlers/sessions'
 import { registerSettingsHandlers } from './handlers/settings'
@@ -62,6 +63,7 @@ if (!app.requestSingleInstanceLock()) {
     registerSessionHandlers()
     registerCharacterHandlers()
     registerLoreHandlers()
+    registerSpeechHandlers()
     registerSheetHandlers()
     registerImageHandlers()
     registerExtensionHandlers()

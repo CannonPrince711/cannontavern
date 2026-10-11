@@ -10,10 +10,13 @@ import {
   GitBranch,
   Pencil,
   RefreshCw,
-  Trash2
+  Trash2,
+  Volume2
 } from 'lucide-react'
 import type { Message } from '@shared/types'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
+import { speak } from '@/lib/speech'
+import { useApp } from '@/stores/app'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
@@ -127,6 +130,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   const { message: m, isLast, streamingText, streaming, busy } = props
   const [editing, setEditing] = useState(false)
   const rootRef = useRef<HTMLElement>(null)
+  const ttsOn = useApp((s) => s.settings?.tts.enabled ?? false)
   // Hidden machine lines (<state>, <stats>…) are stripped when the reply is saved; hide them while it streams too.
   const text = streamingText !== undefined ? streamingText.replace(/<(state|stats)>[\s\S]*?(?:<\/\1>|$)/gi, '').trimEnd() : m.text
   const copy = (): void => void navigator.clipboard.writeText(m.text)
@@ -226,6 +230,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
     void showMenu([
       { label: selected ? 'Copy selection' : 'Copy', run: () => void navigator.clipboard.writeText(selected || m.text) },
       !streaming && { label: 'Edit', run: () => setEditing(true) },
+      ttsOn && !!m.text.trim() && { label: 'Read aloud', run: () => speak(m.text).catch((err) => toast.error(err)) },
       separator,
       isAi && m.swipes.length > 1 && { label: 'Previous reply', accelerator: 'Alt+Left', enabled: m.swipeIndex > 0 && !busy, run: () => props.onSwipe(m.id, -1) },
       isAi && m.swipes.length > 1 && { label: 'Next reply', accelerator: 'Alt+Right', enabled: !busy, run: () => props.onSwipe(m.id, 1) },
@@ -279,6 +284,11 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
       <ActionButton label="Edit" onClick={() => setEditing(true)}>
         <Pencil />
       </ActionButton>
+      {ttsOn && !!m.text.trim() && (
+        <ActionButton label="Read aloud" onClick={() => speak(m.text).catch((err) => toast.error(err))}>
+          <Volume2 />
+        </ActionButton>
+      )}
       <ActionButton label="Copy" onClick={copy}>
         <Copy />
       </ActionButton>

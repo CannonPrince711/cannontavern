@@ -181,6 +181,8 @@ export interface InvokeMap {
   'lorebooks:save': Invoke<[book: Lorebook, force?: boolean], Lorebook>
   'lorebooks:create': Invoke<[name: string], Lorebook>
   'campaigns:setLorebooks': Invoke<[campaignPath: VaultPath, lorebookPaths: VaultPath[]], Campaign>
+  /** Reads text aloud with the Speech server; returns the audio file (mp3). */
+  'speech:synthesize': Invoke<[text: string], Uint8Array>
   'presets:get': Invoke<[path: VaultPath], { path: VaultPath; name: string; system_prompt: string; dm_mode: boolean }>
   'presets:create': Invoke<[name: string], VaultPath>
   'presets:save': Invoke<[path: VaultPath, systemPrompt: string], void>
@@ -370,6 +372,7 @@ const invokeChannels = {
   'lorebooks:save': 1,
   'lorebooks:create': 1,
   'campaigns:setLorebooks': 1,
+  'speech:synthesize': 1,
   'presets:get': 1,
   'presets:create': 1,
   'presets:save': 1,

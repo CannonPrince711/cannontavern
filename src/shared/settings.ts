@@ -273,6 +273,8 @@ export const PromptSettingsSchema = z.object({
   lorebookTokenBudget: z.number().int().min(0).default(1024),
   /** Update the rolling summary every N messages; 0 disables it. */
   summaryEvery: z.number().int().min(0).default(20),
+  /** Fold older messages into the summary once the prompt reaches this % of the context window; 0 disables it. */
+  autoCompressAt: z.number().int().min(0).max(100).default(80),
   /** System prompt for the AI when it plays the character (You are DM / AI only). Empty uses the built-in one. */
   playerPrompt: z.string().default(''),
   /** Compress a session into a recap when the player leaves it. */
@@ -344,6 +346,17 @@ export const SettingsSchema = z.object({
       /** Paint a portrait for each new character or NPC note that has none. */
       autoPortraits: z.boolean().default(false),
       sceneContextMessages: z.number().int().min(1).max(50).default(8)
+    })
+    .prefault({}),
+  /** Read-aloud: the OS voices, or an OpenAI-compatible /v1/audio/speech server. */
+  tts: z
+    .object({
+      enabled: z.boolean().default(false),
+      mode: z.enum(['system', 'server']).default('system'),
+      baseUrl: z.string().max(500).default(''),
+      model: z.string().max(200).default('tts-1'),
+      voice: z.string().max(200).default(''),
+      speed: z.number().min(0.25).max(4).default(1)
     })
     .prefault({}),
   prompt: PromptSettingsSchema.prefault({}),
@@ -486,6 +499,7 @@ export const SettingsPatchSchema = z
     imageTriggers: patchOf(unwrapObject(S.imageTriggers)).optional(),
     imageProfiles: patchOf(unwrapObject(S.imageProfiles)).optional(),
     prompt: patchOf(PromptSettingsSchema).optional(),
+    tts: patchOf(unwrapObject(S.tts)).optional(),
     general: patchOf(unwrapObject(S.general)).optional(),
     appearance: patchOf(AppearanceSchema).optional(),
     behavior: patchOf(unwrapObject(S.behavior)).optional(),
@@ -505,6 +519,7 @@ export type SettingsPatch = {
   imageTriggers?: Partial<Settings['imageTriggers']>
   imageProfiles?: Partial<Settings['imageProfiles']>
   prompt?: Partial<Settings['prompt']>
+  tts?: Partial<Settings['tts']>
   general?: Partial<Settings['general']>
   appearance?: Partial<Settings['appearance']>
   behavior?: Partial<Settings['behavior']>

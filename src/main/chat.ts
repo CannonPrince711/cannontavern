@@ -6,17 +6,17 @@
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
 import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
-import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
+import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import type { CharacterNote, LoreEntry, Message, PromptPreview, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCampaign, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
+import { readCampaign, readCampaignModelMap, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
 import { postMessage, readSession, updateFrontmatter, updateMessage } from './sessions'
 import { settingsStore } from './settings-store'
 import { redactRequest, resolveTextBackend, textAdapter } from './backends/text'
 import type { GenerateResult } from './backends/text/types'
-import { backendChain } from './backends/chain'
+import { backendChain, withModel } from './backends/chain'
 import { effectiveContext } from './backends/context'
 import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
@@ -29,6 +29,17 @@ import { extensionHost } from './extensions/host'
 import { getMainWindow } from './window'
 
 type JobKind = 'new' | 'swipe' | 'continue'
+
+/** Whether the Session summary block is sent; compressing only helps when it is. */
+const summaryInPrompt = (s: ReturnType<typeof settingsStore.get>): boolean =>
+  normalizeBlockOrder(s.prompt.blocks).some((b) => b.id === 'summary' && b.enabled)
+
+/** The chat backends for a session, with its campaign's chat model put in first when it names one. */
+async function chatChain(vault: ReturnType<typeof vaultService.require>, s: ReturnType<typeof settingsStore.get>, sessionPath: VaultPath): Promise<TextBackend[]> {
+  const session = await readSession(vault, sessionPath)
+  const models = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
+  return withModel(backendChain(s), models.chat)
+}
 
 interface Job {
   requestId: string
@@ -111,6 +122,11 @@ class ChatService {
     if (opts.upto) {
       const i = messages.findIndex((m) => m.id === opts.upto)
       if (i !== -1) messages = messages.slice(0, i)
+    }
+    // Auto-compress: the summary stands in for the messages it already covers.
+    if (summaryInPrompt(s) && s.prompt.autoCompressAt > 0 && session.frontmatter.summary && session.frontmatter.summary_upto) {
+      const covered = messages.findIndex((m) => m.id === session.frontmatter.summary_upto)
+      if (covered !== -1) messages = messages.slice(covered + 1)
     }
 
     const lorePaths = await resolveLorebookLinks(vault, campaign.lorebooks)
@@ -218,7 +234,7 @@ class ChatService {
 
   async inspect(sessionPath: VaultPath): Promise<PromptPreview> {
     const s = settingsStore.get()
-    const backend = backendChain(s)[0]
+    const backend = (await chatChain(vaultService.require(), s, sessionPath))[0]
     if (!backend) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
     const { prompt } = await this.context(sessionPath, { backend })
     const window = await effectiveContext(backend)
@@ -342,7 +358,7 @@ class ChatService {
     const win = getMainWindow()
     const vault = vaultService.require()
     const s = settingsStore.get()
-    const chain = backendChain(s)
+    const chain = await chatChain(vault, s, job.sessionPath)
     let streamed = ''
     let result: GenerateResult | null = null
     let used: TextBackend | null = null
@@ -418,7 +434,7 @@ class ChatService {
       // Only the DM may change the character's sheet.
       if (changes.length && session && job.speaker === 'dm') this.onStateChanges?.(job.sessionPath, job.messageId, changes)
       if (session) this.publish(session)
-      if (session && !aborted) void this.maybeSummarize(job.sessionPath)
+      if (session && !aborted) void this.maybeCompress(job.sessionPath).then((done) => (done ? undefined : this.maybeSummarize(job.sessionPath)))
       if (session && text && !aborted && job.kind !== 'continue') this.onReply?.(job.sessionPath, text)
 
       if (lastError && !aborted) {
@@ -441,6 +457,29 @@ class ChatService {
   private summarizing = new Set<string>()
 
   /**
+   * Auto-compress: once the next prompt would fill `autoCompressAt`% of the
+   * context window, or older messages are already being cut to fit, fold all
+   * but the newest few into the session summary. Returns true when it did.
+   */
+  async maybeCompress(sessionPath: VaultPath): Promise<boolean> {
+    const s = settingsStore.get()
+    if (!s.prompt.autoCompressAt || !summaryInPrompt(s) || this.summarizing.has(sessionPath)) return false
+    try {
+      const backend = (await chatChain(vaultService.require(), s, sessionPath))[0]
+      if (!backend) return false
+      const { prompt } = await this.context(sessionPath, { backend })
+      const window = await effectiveContext(backend)
+      const budget = Math.min(s.prompt.contextBudget || window, window)
+      if (!shouldCompress(prompt, budget, s.prompt.autoCompressAt)) return false
+      await this.maybeSummarize(sessionPath, true)
+      return true
+    } catch (err) {
+      console.warn('[chat] auto-compress check failed:', toErrorInfo(err).message)
+      return false
+    }
+  }
+
+  /**
    * Rolling memory: once `summaryEvery` messages have piled up since the last
    * summary, fold all but the newest few into the session's `summary`
    * frontmatter, using the "summaries" backend.
@@ -448,12 +487,14 @@ class ChatService {
   async maybeSummarize(sessionPath: VaultPath, force = false): Promise<void> {
     const s = settingsStore.get()
     if ((!s.prompt.summaryEvery && !force) || this.summarizing.has(sessionPath)) return
-    const backend = backendChain(s, 'summary')[0]
+    let backend = backendChain(s, 'summary')[0]
     if (!backend) return
     this.summarizing.add(sessionPath)
     try {
       const vault = vaultService.require()
       const session = await readSession(vault, sessionPath)
+      const campaignModels = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
+      backend = withModel([backend], campaignModels.summary)[0] ?? backend
       const visible = session.messages.filter((m) => !m.hidden && m.role !== 'image')
       const upto = session.frontmatter.summary_upto ? visible.findIndex((m) => m.id === session.frontmatter.summary_upto) : -1
       const pending = visible.slice(upto + 1)

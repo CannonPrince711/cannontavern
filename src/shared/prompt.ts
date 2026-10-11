@@ -100,6 +100,12 @@ export interface BuiltPrompt {
   droppedMessages: number
 }
 
+/** Auto-compress trigger: the prompt fills `percent`% of the budget, or older history is already being cut to fit. */
+export function shouldCompress(prompt: Pick<BuiltPrompt, 'totalTokens' | 'droppedMessages'>, budget: number, percent: number): boolean {
+  if (percent <= 0 || budget <= 0) return false
+  return prompt.droppedMessages > 0 || prompt.totalTokens >= (budget * percent) / 100
+}
+
 export function estimateTokens(text: string, tokenizer: 'chars4' | 'chars3.5' = 'chars4'): number {
   return Math.ceil(text.length / (tokenizer === 'chars3.5' ? 3.5 : 4))
 }

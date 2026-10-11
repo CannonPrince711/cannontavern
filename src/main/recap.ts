@@ -17,11 +17,12 @@ import {
 } from '@shared/recap'
 import type { TextBackend } from '@shared/settings'
 import type { Message, Session, VaultPath } from '@shared/types'
-import { backendChain } from './backends/chain'
+import { backendChain, withModel } from './backends/chain'
 import { effectiveContext } from './backends/context'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
+import { readCampaignModelMap } from './library'
 import { readSession, updateFrontmatter } from './sessions'
 import { settingsStore } from './settings-store'
 import { parseNote } from './vault/frontmatter'
@@ -67,7 +68,8 @@ class RecapService {
       return null
     }
     if (!force && session.frontmatter.recap && !isRecapStale(session.frontmatter.recap_upto, session.messages)) return session
-    const chain = backendChain(s, 'summary')
+    const campaignModels = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
+    const chain = withModel(backendChain(s, 'summary'), campaignModels.summary)
     if (!chain.length) {
       if (force) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
       return null
