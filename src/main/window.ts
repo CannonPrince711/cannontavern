@@ -8,6 +8,7 @@ import { readJson, writeFileAtomic } from './atomic'
 import { send } from './ipc'
 import { paths } from './paths'
 import { rendererIndexFile } from './security'
+import { installEditMenu } from './context-menu'
 
 interface SavedBounds {
   x?: number
@@ -130,6 +131,7 @@ export async function createMainWindow(appearance: Appearance): Promise<BrowserW
   })
   mainWindow = win
   win.setMenu(null)
+  installEditMenu(win)
   if (saved?.maximized) win.maximize()
   trackBounds(win)
 

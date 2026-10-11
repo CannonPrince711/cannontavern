@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tooltip'
 import { ListSkeleton } from '@/components/ui/skeleton'
+import { mouseShortcutsOn, separator, showMenu } from '@/lib/mouse'
 import { invoke } from '@/lib/ipc'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
@@ -150,6 +151,10 @@ function CampaignSwitcher(): React.JSX.Element {
   )
 }
 
+function openInObsidian(path: string): void {
+  void invoke('vault:openInObsidian', path).catch((err) => toast.error(err, 'Could not open Obsidian'))
+}
+
 export function LeftSidebar(): React.JSX.Element {
   const index = useVault((s) => s.index)
   const loaded = useVault((s) => s.loaded)
@@ -240,6 +245,24 @@ export function LeftSidebar(): React.JSX.Element {
                   onClick={() => selectCharacter(c.path)}
                   onDoubleClick={() => useUi.setState({ editingCharacter: c.path })}
                   onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && selectCharacter(c.path)}
+                  onAuxClick={(e) => e.button === 1 && mouseShortcutsOn() && openInObsidian(c.path)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    void showMenu([
+                      { label: 'Edit card…', run: () => useUi.setState({ editingCharacter: c.path }) },
+                      { label: 'Select', run: () => selectCharacter(c.path) },
+                      {
+                        label: 'New session with this character',
+                        run: () => {
+                          selectCharacter(c.path)
+                          selectSession(null)
+                          useUi.setState({ creatingCampaign: false })
+                        }
+                      },
+                      separator,
+                      { label: 'Open in Obsidian', run: () => openInObsidian(c.path) }
+                    ])
+                  }}
                   className={cn(
                     'group flex cursor-default items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent',
                     selectedCharacter === c.path && 'bg-accent'
@@ -299,6 +322,23 @@ export function LeftSidebar(): React.JSX.Element {
                             aria-selected={selectedSession === s.path}
                             onClick={() => selectSession(s.path)}
                             onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSession(s.path)}
+                            onAuxClick={(e) => e.button === 1 && mouseShortcutsOn() && openInObsidian(s.path)}
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              void showMenu([
+                                { label: 'Open', run: () => selectSession(s.path) },
+                                { label: 'Open in Obsidian', run: () => openInObsidian(s.path) },
+                                separator,
+                                {
+                                  label: 'Compress into a recap now',
+                                  run: () =>
+                                    void invoke('sessions:compress', s.path, true)
+                                      .then(() => toast.success(`Compressed “${s.title}”`))
+                                      .catch((err) => toast.error(err, 'Could not compress'))
+                                },
+                                { label: 'Copy title', run: () => void navigator.clipboard.writeText(s.title) }
+                              ])
+                            }}
                             className={cn(
                               'group flex cursor-default items-center gap-2 rounded-md py-1.5 pr-1 pl-6 text-sm transition-colors hover:bg-accent',
                               selectedSession === s.path && 'bg-accent text-foreground'

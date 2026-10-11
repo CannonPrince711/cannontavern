@@ -324,7 +324,11 @@ export const SettingsSchema = z.object({
     .object({
       launchOnStartup: z.boolean().default(false),
       minimizeToTray: z.boolean().default(false),
-      autoUpdateCheck: z.boolean().default(false)
+      autoUpdateCheck: z.boolean().default(false),
+      /** Double-click to edit, middle-click to open in Obsidian, Ctrl+wheel to zoom. */
+      mouseShortcuts: z.boolean().default(true),
+      /** What the mouse's back/forward buttons do. */
+      mouseSideButtons: z.enum(['replies', 'sessions', 'off']).default('replies')
     })
     .prefault({}),
   play: z

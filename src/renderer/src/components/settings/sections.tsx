@@ -106,6 +106,24 @@ export function GeneralSection(): React.JSX.Element {
           <Switch aria-label="Check for updates" checked={settings.behavior.autoUpdateCheck} onCheckedChange={(v) => void updateSettings({ behavior: { autoUpdateCheck: v } })} />
         </Field>
       </SettingsGroup>
+
+      <SettingsGroup title="Mouse" description="Right-click messages, sessions and characters for their actions; text boxes get Cut, Copy, Paste and spelling suggestions.">
+        <Field inline label="Mouse shortcuts" description="Double-click your own message to edit it · middle-click a session or character to open it in Obsidian · Ctrl+scroll to zoom (Ctrl+0 resets).">
+          <Switch aria-label="Mouse shortcuts" checked={settings.behavior.mouseShortcuts} onCheckedChange={(v) => void updateSettings({ behavior: { mouseShortcuts: v } })} />
+        </Field>
+        <Field inline label="Back / forward buttons" description="The side buttons on many mice.">
+          <NativeSelect
+            aria-label="Back and forward buttons"
+            value={settings.behavior.mouseSideButtons}
+            onChange={(e) => void updateSettings({ behavior: { mouseSideButtons: e.target.value as 'replies' | 'sessions' | 'off' } })}
+            className="w-56"
+          >
+            <option value="replies">Previous / next reply</option>
+            <option value="sessions">Back / forward through sessions</option>
+            <option value="off">Do nothing</option>
+          </NativeSelect>
+        </Field>
+      </SettingsGroup>
     </div>
   )
 }

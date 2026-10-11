@@ -71,6 +71,8 @@ export interface InvokeMap {
   // App and window
   'app:getInfo': Invoke<[], AppInfo>
   'app:openExternal': Invoke<[url: string], void>
+  /** Shows a native right-click menu; resolves to the chosen item's id (null if dismissed). */
+  'app:contextMenu': Invoke<[items: ContextMenuItem[]], string | null>
   'app:openFolder': Invoke<[which: 'userData' | 'extensions' | 'workflows'], void>
   'window:minimize': Invoke<[], void>
   'window:toggleMaximize': Invoke<[], void>
@@ -204,6 +206,16 @@ export interface InvokeMap {
   'extensions:uiState': Invoke<[id: string, sessionPath?: VaultPath], unknown>
 }
 
+/** One entry of a native menu the UI asks for (app:contextMenu). */
+export interface ContextMenuItem {
+  id: string
+  label: string
+  enabled?: boolean
+  /** Shown as a hint only (e.g. "Ctrl+R"). */
+  accelerator?: string
+  type?: 'separator'
+}
+
 export interface EventMap {
   'settings:changed': PublicSettings
   'window:state': WindowState
@@ -235,6 +247,7 @@ export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: ErrorInfo
 const invokeChannels = {
   'app:getInfo': 1,
   'app:openExternal': 1,
+  'app:contextMenu': 1,
   'app:openFolder': 1,
   'window:minimize': 1,
   'window:toggleMaximize': 1,

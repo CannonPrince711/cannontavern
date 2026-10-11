@@ -27,6 +27,7 @@ import { useChat } from '@/stores/chat'
 import { useImages } from '@/stores/images'
 import { useExtensions } from '@/stores/extensions'
 import { toast } from '@/stores/toasts'
+import { mouseShortcutsOn, selectionWithin, separator, showMenu } from '@/lib/mouse'
 import { Markdown } from './Markdown'
 
 export interface MessageActions {
@@ -125,8 +126,19 @@ function Editor({ initial, onSave, onCancel }: { initial: string; onSave: (t: st
 export const MessageItem = memo(function MessageItem(props: Props): React.JSX.Element {
   const { message: m, isLast, streamingText, streaming, busy } = props
   const [editing, setEditing] = useState(false)
+  const rootRef = useRef<HTMLElement>(null)
   const text = streamingText ?? m.text
   const copy = (): void => void navigator.clipboard.writeText(m.text)
+  // Right-click on simple rows (notes, rolls, images): copy or delete.
+  const simpleMenu = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    const selected = selectionWithin(e.currentTarget)
+    void showMenu([
+      { label: selected ? 'Copy selection' : 'Copy', run: () => void navigator.clipboard.writeText(selected || m.image?.prompt || m.text) },
+      separator,
+      { label: 'Delete', run: () => props.onDelete(m.id) }
+    ])
+  }
 
   if (m.role === 'system') {
     const canUndo = !!m.stateChanges?.length && !m.text.endsWith('(undone)')
@@ -140,7 +152,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
       }
     }
     return (
-      <div className="group relative mx-auto flex max-w-2xl items-center justify-center gap-2 px-6 py-1 text-center text-xs text-muted-foreground">
+      <div onContextMenu={simpleMenu} className="group relative mx-auto flex max-w-2xl items-center justify-center gap-2 px-6 py-1 text-center text-xs text-muted-foreground">
         {m.hidden && <EyeOff className="size-3 shrink-0" aria-label="Hidden from the model" />}
         <span className="italic">
           <Markdown text={text} />
@@ -162,7 +174,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   if (m.role === 'roll') {
     const fresh = m.createdAt ? Date.now() - Date.parse(m.createdAt) < 4000 : false
     return (
-      <div className="group relative mx-auto flex max-w-2xl items-center justify-center gap-2 py-1">
+      <div onContextMenu={simpleMenu} className="group relative mx-auto flex max-w-2xl items-center justify-center gap-2 py-1">
         <div className="rounded-full border bg-card px-3 py-1.5 shadow-sm">
           {m.roll ? (
             <RollChips roll={m.roll} name={m.name} animate={fresh} />
@@ -186,7 +198,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
     const file = m.image?.file
     const path = file && props.campaignPath ? joinVaultPath(props.campaignPath, 'Images', file) : null
     return (
-      <figure className="group relative mx-auto max-w-2xl">
+      <figure onContextMenu={simpleMenu} className="group relative mx-auto max-w-2xl">
         {path ? (
           <button type="button" className="block w-full" onClick={() => useImages.setState({ lightbox: { path, prompt: m.image?.prompt, caption: m.name } })} aria-label={`View ${m.name ?? 'image'}`}>
             <img src={vaultUrl(path)} alt={m.image?.prompt ?? m.name ?? ''} className="w-full rounded-xl border shadow-card transition-opacity hover:opacity-95" loading="lazy" />
@@ -206,6 +218,28 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
 
   const isDm = m.role === 'dm'
   const isAi = props.aiRoles.includes(m.role)
+  const onContextMenu = (e: React.MouseEvent): void => {
+    if (editing) return // the text box gets the normal edit menu
+    e.preventDefault()
+    const selected = selectionWithin(rootRef.current)
+    void showMenu([
+      { label: selected ? 'Copy selection' : 'Copy', run: () => void navigator.clipboard.writeText(selected || m.text) },
+      !streaming && { label: 'Edit', run: () => setEditing(true) },
+      separator,
+      isAi && m.swipes.length > 1 && { label: 'Previous reply', accelerator: 'Alt+Left', enabled: m.swipeIndex > 0 && !busy, run: () => props.onSwipe(m.id, -1) },
+      isAi && m.swipes.length > 1 && { label: 'Next reply', accelerator: 'Alt+Right', enabled: !busy, run: () => props.onSwipe(m.id, 1) },
+      isAi && isLast && { label: 'Regenerate', accelerator: 'Ctrl+R', enabled: !busy, run: props.onRegenerate },
+      isAi && isLast && { label: 'Continue', enabled: !busy, run: props.onContinue },
+      isDm && props.onImage && { label: 'Illustrate this', run: () => props.onImage?.(m) },
+      separator,
+      { label: 'Fork session from here', run: () => props.onFork(m.id) },
+      { label: 'Delete', run: () => props.onDelete(m.id) }
+    ])
+  }
+  // Double-click your own messages to edit them.
+  const onDoubleClick = (): void => {
+    if (!isAi && !editing && !streaming && mouseShortcutsOn()) setEditing(true)
+  }
   const actions = (
     <div
       className={cn(
@@ -275,10 +309,13 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   if (isDm) {
     return (
       <motion.article
+        ref={rootRef}
         initial={streaming ? { opacity: 0, y: 6 } : false}
         animate={{ opacity: 1, y: 0 }}
         className="group relative mx-auto flex w-full max-w-3xl gap-3"
         aria-label="Dungeon Master"
+        onContextMenu={onContextMenu}
+        onDoubleClick={onDoubleClick}
       >
         <div className="pt-1">
           <span className="grid size-9 place-items-center rounded-full border border-gold/40 bg-surface-2 text-gold">
@@ -299,10 +336,13 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   const showAvatar = !!props.characterAvatar && !!m.name && m.name === props.characterName
   return (
     <motion.article
+      ref={rootRef}
       initial={streaming ? { opacity: 0, y: 6 } : false}
       animate={{ opacity: 1, y: 0 }}
       className="group relative ml-auto flex max-w-[78%] flex-col items-end"
       aria-label={m.name ?? 'Player'}
+      onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
     >
       {m.name && (
         <span className="mb-1 mr-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
