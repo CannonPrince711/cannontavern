@@ -22,6 +22,8 @@ import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
 import { editionOf, rulesLine } from '@shared/editions'
 import { recapService } from './recap'
+import { campaignNpcs } from './npcs'
+import { mergeNpcLore, npcLoreEntry } from '@shared/npcs'
 import { vaultService } from './vault/service'
 import { extensionHost } from './extensions/host'
 import { getMainWindow } from './window'
@@ -106,10 +108,13 @@ class ChatService {
     const backend = opts.backend ?? backendChain(s)[0]
     const window = backend ? await effectiveContext(backend) : 8192
     const tokenizer = backend?.tokenizer ?? 'chars4'
-    const lore = selectLore(entries, messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
-
     const mode = playModeOf(session.frontmatter)
     const speaker = opts.speaker ?? nextSpeaker(mode, messages)
+    // NPC notes count as lore entries too; a player character's voice only learns what meeting them would show.
+    const npcs = await campaignNpcs(vault, vaultService.getIndex(), session.campaignPath).catch(() => [])
+    const npcEntries = npcs.map((n) => npcLoreEntry(n.card, n.body, { forPlayer: speaker === 'player' }))
+    const lore = selectLore(mergeNpcLore(entries, npcEntries), messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
+
     const characterName = character?.card.name || session.frontmatter.persona || s.general.playerName
     // Writing as the DM, the other side is the player character; writing as the character, it's the DM.
     const persona =

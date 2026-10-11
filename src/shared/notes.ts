@@ -182,6 +182,7 @@ export function normalizeCard(data: Record<string, unknown>, fallbackName: strin
     system_prompt: str(data.system_prompt),
     tags: strList(data.tags),
     ...(data.avatar ? { avatar: str(data.avatar) } : {}),
+    ...(strList(data.aliases).length ? { aliases: strList(data.aliases) } : {}),
     ...(data.creator_notes ? { creator_notes: str(data.creator_notes) } : {}),
     ...(Array.isArray(data.alternate_greetings) ? { alternate_greetings: strList(data.alternate_greetings) } : {})
   }
@@ -201,6 +202,7 @@ export function cardToFrontmatter(card: CharacterCard): Record<string, unknown> 
     system_prompt: card.system_prompt,
     avatar: card.avatar || undefined,
     tags: card.tags,
+    aliases: card.aliases?.length ? card.aliases : undefined,
     creator_notes: card.creator_notes || undefined,
     alternate_greetings: card.alternate_greetings?.length ? card.alternate_greetings : undefined,
     dnd: card.dnd

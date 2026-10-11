@@ -40,9 +40,9 @@ describe('campaign builder', () => {
 
   it('builds lore entries players may see, without secrets', () => {
     const lore = draftLore(parseDraft(JSON.stringify(SAMPLE)))
-    expect(lore.map((e) => e.title)).toEqual(['The Ashen Crown', 'Cinderhold', 'The Soot Guild', 'Queen Maelis Varn'])
+    // NPCs get their own notes, which reach the prompt by themselves.
+    expect(lore.map((e) => e.title)).toEqual(['The Ashen Crown', 'Cinderhold', 'The Soot Guild'])
     expect(lore[0]!.always_on).toBe(true)
-    expect(lore.find((e) => e.title === 'Queen Maelis Varn')!.keys).toEqual(['queen maelis varn', 'queen'])
     expect(JSON.stringify(lore)).not.toContain('sold it herself')
     expect(lore.find((e) => e.title === 'The Soot Guild')!.content).toContain('Goal: Control the mines')
   })

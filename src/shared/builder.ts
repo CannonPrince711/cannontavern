@@ -206,7 +206,7 @@ export function parseDraft(reply: string): CampaignDraft {
   }
 }
 
-/** Lorebook entries from a draft: what players may learn (no secrets). */
+/** Lorebook entries from a draft: the setting, places and factions (no secrets). */
 export function draftLore(d: CampaignDraft): LoreEntry[] {
   const words = (name: string): string[] => {
     const first = name.split(/\s+/)[0] ?? ''
@@ -216,10 +216,7 @@ export function draftLore(d: CampaignDraft): LoreEntry[] {
   if (d.setting.trim()) entries.push({ title: d.name.trim() || 'The setting', keys: [], content: d.setting.trim(), always_on: true, priority: 0, enabled: true })
   for (const l of d.locations) entries.push({ title: l.name.trim(), keys: [...new Set([...words(l.name), ...l.keys.map((k) => k.toLowerCase().trim()).filter(Boolean)])], content: l.description.trim(), always_on: false, priority: 5, enabled: true })
   for (const f of d.factions) entries.push({ title: f.name.trim(), keys: words(f.name), content: [f.description.trim(), f.goal.trim() ? `Goal: ${f.goal.trim()}` : ''].filter(Boolean).join('\n'), always_on: false, priority: 4, enabled: true })
-  for (const n of d.npcs) {
-    const content = [n.role.trim() && `${n.role.trim()}.`, n.description.trim(), n.personality.trim() && `Personality: ${n.personality.trim()}`].filter(Boolean).join(' ')
-    entries.push({ title: n.name.trim(), keys: words(n.name), content, always_on: false, priority: 6, enabled: true })
-  }
+  // NPCs get notes of their own (see buildCampaign), which reach the prompt the same way.
   // Headings must be unique within a lorebook.
   const seen = new Set<string>()
   return entries.filter((e) => e.title && !seen.has(e.title.toLowerCase()) && seen.add(e.title.toLowerCase()))

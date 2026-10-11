@@ -217,6 +217,8 @@ export interface CharacterCard {
   /** File name inside Characters/avatars/. */
   avatar?: string
   tags: string[]
+  /** Other names they go by (Obsidian's "aliases" property); for NPCs, more words that bring them to the AI's mind. */
+  aliases?: string[]
   creator_notes?: string
   alternate_greetings?: string[]
   dnd?: DndSheet

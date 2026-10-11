@@ -19,6 +19,7 @@ import { invoke, IpcError, on } from '@/lib/ipc'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
+import { FOLDERS } from '@shared/layout'
 
 function avatarPath(rootFolder: string, avatar?: string): string | undefined {
   if (!avatar) return undefined
@@ -55,11 +56,15 @@ export function CharacterEditor(): React.JSX.Element | null {
   const [note, setNote] = useState<CharacterNote | null>(null)
   const [draft, setDraft] = useState<CharacterNote | null>(null)
   const [tags, setTags] = useState('')
+  const [aliases, setAliases] = useState('')
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState(false)
   const [externalChange, setExternalChange] = useState(false)
 
-  const dirty = !!note && !!draft && (JSON.stringify(note) !== JSON.stringify(draft) || tags !== note.card.tags.join(', '))
+  const dirty =
+    !!note && !!draft && (JSON.stringify(note) !== JSON.stringify(draft) || tags !== note.card.tags.join(', ') || aliases !== (note.card.aliases ?? []).join(', '))
+  // NPC notes become lore for the AI; their aliases are extra trigger words.
+  const isNpc = !!path && path.toLowerCase().startsWith(`${rootFolder}/${FOLDERS.npcs}/`.toLowerCase())
 
   const load = async (p: string): Promise<void> => {
     try {
@@ -67,6 +72,7 @@ export function CharacterEditor(): React.JSX.Element | null {
       setNote(n)
       setDraft(n)
       setTags(n.card.tags.join(', '))
+      setAliases((n.card.aliases ?? []).join(', '))
       setExternalChange(false)
       setConflict(false)
     } catch (err) {
@@ -100,11 +106,13 @@ export function CharacterEditor(): React.JSX.Element | null {
     if (!draft) return
     setSaving(true)
     try {
-      const next = { ...draft, card: { ...draft.card, tags: tags.split(',').map((t) => t.trim()).filter(Boolean) } }
+      const list = (s: string): string[] => s.split(',').map((t) => t.trim()).filter(Boolean)
+      const next = { ...draft, card: { ...draft.card, tags: list(tags), aliases: list(aliases) } }
       const saved = await invoke('characters:save', next, force)
       setNote(saved)
       setDraft(saved)
       setTags(saved.card.tags.join(', '))
+      setAliases((saved.card.aliases ?? []).join(', '))
       setConflict(false)
       setExternalChange(false)
       toast.success(`Saved ${saved.card.name}`)
@@ -176,6 +184,14 @@ export function CharacterEditor(): React.JSX.Element | null {
                 <DialogDescription className="sr-only">Character card fields, saved to the character’s note in your vault.</DialogDescription>
                 <Input value={draft.card.name} onChange={(e) => card('name', e.target.value)} aria-label="Name" className="h-10 font-display text-lg font-semibold tracking-wide" />
                 <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, comma separated" aria-label="Tags" className="h-8 text-xs" />
+                {isNpc && (
+                  <Tip label="The AI is reminded who this is when their name or one of these comes up in the story.">
+                    <label className="flex items-center gap-2">
+                      <span className="shrink-0 text-xs text-muted-foreground">Also known as</span>
+                      <Input value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Nicknames or titles, comma separated" aria-label="Also known as" className="h-8 text-xs" />
+                    </label>
+                  </Tip>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <DropdownMenu>
