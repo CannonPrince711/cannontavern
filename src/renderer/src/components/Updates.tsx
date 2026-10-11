@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import { ArrowDownCircle, CheckCircle2, Download, Loader2, RefreshCw, RotateCw } from 'lucide-react'
+import { AlertTriangle, ArrowDownCircle, CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, RotateCw } from 'lucide-react'
 import type { UpdateStatus } from '@shared/types'
 import { Button } from '@/components/ui/button'
 import { Field, SettingsGroup, Switch } from '@/components/ui/controls'
@@ -23,11 +23,15 @@ export function useUpdatesSync(): void {
   }, [])
 }
 
-async function run(action: 'check' | 'download' | 'install'): Promise<void> {
+const RELEASES_URL = 'https://github.com/CannonPrince711/cannontavern/releases'
+
+/** "update" checks, and when a new version can install itself, downloads it straight away. */
+async function run(action: 'check' | 'update' | 'download' | 'install'): Promise<void> {
   try {
-    if (action === 'check') {
+    if (action === 'check' || action === 'update') {
       const s = await invoke('updates:check')
       if (s.state === 'none') toast.success('DND Tavern is up to date')
+      if (action === 'update' && s.state === 'available' && s.canInstall) await invoke('updates:download')
     } else if (action === 'download') await invoke('updates:download')
     else await invoke('updates:install')
   } catch (err) {
@@ -93,45 +97,99 @@ function describe(s: UpdateStatus): string {
   }
 }
 
-/** Settings → General → Updates. */
+/** The one button: whatever the next step is. */
+function UpdateButton({ status }: { status: UpdateStatus }): React.JSX.Element {
+  switch (status.state) {
+    case 'checking':
+      return (
+        <Button disabled>
+          <Loader2 className="animate-spin" /> Checking…
+        </Button>
+      )
+    case 'available':
+      return status.canInstall ? (
+        <Button onClick={() => void run('download')}>
+          <Download /> Update to {status.version}
+        </Button>
+      ) : (
+        <Button onClick={() => void run('download')}>
+          <ExternalLink /> Download {status.version}
+        </Button>
+      )
+    case 'downloading':
+      return (
+        <Button disabled>
+          <Loader2 className="animate-spin" /> Downloading {status.percent}%
+        </Button>
+      )
+    case 'ready':
+      return (
+        <Button onClick={() => void run('install')}>
+          <RotateCw /> Restart and update
+        </Button>
+      )
+    default:
+      return (
+        <Button onClick={() => void run('update')}>
+          <RefreshCw /> {status.state === 'error' ? 'Try again' : status.state === 'none' ? 'Check again' : 'Update'}
+        </Button>
+      )
+  }
+}
+
+/** Settings → Updates. */
 export function UpdatesSettings(): React.JSX.Element {
   const status = useUpdates((s) => s.status)
   const settings = useApp((s) => s.settings!)
   const version = useApp((s) => s.info?.version)
   const update = useApp((s) => s.updateSettings)
-  const busy = status.state === 'checking' || status.state === 'downloading'
+  const notes = status.state === 'available' ? status.notes?.trim() : ''
   return (
-    <SettingsGroup title="Updates" description={`You have DND Tavern ${version ?? ''}. Updates come from the project’s GitHub releases; nothing is installed without you.`}>
-      <div className="flex flex-wrap items-center gap-3 py-3">
-        <p className={cn('min-w-0 flex-1 text-sm', status.state === 'error' ? 'text-crimson' : 'text-muted-foreground')} role="status">
-          {status.state === 'none' && <CheckCircle2 className="mr-1.5 inline size-4 text-emerald" />}
-          {describe(status)}
-        </p>
-        {status.state === 'available' && (
-          <Button size="sm" onClick={() => void run('download')}>
-            <Download /> {status.canInstall ? 'Download' : 'Open download page'}
-          </Button>
+    <div className="space-y-6">
+      <div className="pane flex flex-wrap items-center gap-4 rounded-xl border p-5">
+        <ArrowDownCircle className={cn('size-9 shrink-0', status.state === 'available' || status.state === 'ready' ? 'text-gold' : 'text-muted-foreground')} />
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-lg font-semibold tracking-wide">DND Tavern {version ?? ''}</p>
+          <p className={cn('mt-0.5 text-sm', status.state === 'error' ? 'text-crimson' : 'text-muted-foreground')} role="status">
+            {status.state === 'none' && <CheckCircle2 className="mr-1.5 inline size-4 text-emerald" />}
+            {status.state === 'error' && <AlertTriangle className="mr-1.5 inline size-4" />}
+            {describe(status)}
+          </p>
+          {status.state === 'downloading' && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={status.percent} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-full rounded-full bg-gold transition-[width]" style={{ width: `${status.percent}%` }} />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <UpdateButton status={status} />
+          <Tip label="All releases on GitHub">
+            <Button variant="ghost" size="icon" aria-label="Open the releases page" onClick={() => void invoke('app:openExternal', RELEASES_URL).catch((e) => toast.error(e))}>
+              <ExternalLink />
+            </Button>
+          </Tip>
+        </div>
+        {notes && (
+          <div className="w-full border-t pt-3">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">What’s new</p>
+            <p className="selectable max-h-48 overflow-y-auto text-sm whitespace-pre-wrap">{notes}</p>
+          </div>
         )}
-        {status.state === 'ready' && (
-          <Button size="sm" onClick={() => void run('install')}>
-            <RotateCw /> Restart and install
-          </Button>
-        )}
-        <Button size="sm" variant="outline" onClick={() => void run('check')} disabled={busy}>
-          {status.state === 'checking' ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check now
-        </Button>
       </div>
-      <Field inline label="Check on startup" description="Asks GitHub once per launch whether a newer release exists.">
-        <Switch aria-label="Check for updates on startup" checked={settings.behavior.autoUpdateCheck} onCheckedChange={(v) => void update({ behavior: { autoUpdateCheck: v } })} />
-      </Field>
-      <Field inline label="Download automatically" description="Downloads new versions in the background, then asks you to restart. Installed copies only.">
-        <Switch aria-label="Download updates automatically" checked={settings.behavior.autoDownloadUpdates} onCheckedChange={(v) => void update({ behavior: { autoDownloadUpdates: v } })} />
-      </Field>
-    </SettingsGroup>
+
+      <SettingsGroup title="Automatic updates" description="Updates come from the project’s GitHub releases. Nothing installs without you.">
+        <Field inline label="Check on startup" description="Asks GitHub once per launch whether a newer release exists.">
+          <Switch aria-label="Check for updates on startup" checked={settings.behavior.autoUpdateCheck} onCheckedChange={(v) => void update({ behavior: { autoUpdateCheck: v } })} />
+        </Field>
+        <Field inline label="Download automatically" description="Downloads new versions in the background, then asks you to restart. Installed copies only.">
+          <Switch aria-label="Download updates automatically" checked={settings.behavior.autoDownloadUpdates} onCheckedChange={(v) => void update({ behavior: { autoDownloadUpdates: v } })} />
+        </Field>
+      </SettingsGroup>
+    </div>
   )
 }
 
 /** Opens Settings at the Updates section. */
 export function openUpdateSettings(): void {
-  useUi.getState().openSettings('general')
+  useUi.getState().openSettings('updates')
 }

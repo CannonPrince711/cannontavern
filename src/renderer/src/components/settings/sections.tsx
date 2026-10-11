@@ -5,7 +5,6 @@ import type { ThemeId } from '@shared/types'
 import { Button } from '@/components/ui/button'
 import { Callout, Field, NativeSelect, SettingsGroup, Slider, Switch } from '@/components/ui/controls'
 import { NumberInput } from './fields'
-import { UpdatesSettings } from '@/components/Updates'
 import { Input } from '@/components/ui/input'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -106,8 +105,6 @@ export function GeneralSection(): React.JSX.Element {
           <Switch aria-label="Minimise to tray" checked={settings.behavior.minimizeToTray} onCheckedChange={(v) => void updateSettings({ behavior: { minimizeToTray: v } })} />
         </Field>
       </SettingsGroup>
-
-      <UpdatesSettings />
 
       <SettingsGroup title="Turn timer" description="A countdown for your turn after each AI reply, and for each combatant during combat. Toggle it quickly with the clock button next to the message box; click a running timer to pause it.">
         <Field inline label="Turn timer">

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { BookOpenText, Cpu, ImageIcon, Palette, Puzzle, Settings2, Shield, X } from 'lucide-react'
+import { ArrowDownCircle, BookOpenText, Cpu, ImageIcon, Palette, Puzzle, Settings2, Shield, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useUi, type SettingsSection } from '@/stores/ui'
@@ -9,10 +9,12 @@ import { ExtensionsSection } from '@/components/extensions/ExtensionsUi'
 import { ImageBackendsSection } from './ImageBackendsSection'
 import { PromptSection } from './PromptSection'
 import { TextBackendsSection } from './TextBackendsSection'
+import { UpdatesSettings, useUpdates } from '@/components/Updates'
 import { useApp } from '@/stores/app'
 
 const NAV: { id: SettingsSection; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'general', label: 'General', icon: Settings2, description: 'Vault, player and behaviour' },
+  { id: 'updates', label: 'Updates', icon: ArrowDownCircle, description: 'Get the newest version of DND Tavern' },
   { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme, scale and motion' },
   { id: 'text', label: 'Text backends', icon: Cpu, description: 'LLMs for the DM, summaries and prompts' },
   { id: 'images', label: 'Image backends', icon: ImageIcon, description: 'ComfyUI, Automatic1111 and more' },
@@ -27,6 +29,7 @@ export function SettingsOverlay(): React.JSX.Element {
   const close = useUi((s) => s.closeSettings)
   const current = NAV.find((n) => n.id === section)!
   const userDataPath = useApp((s) => s.info?.userDataPath) ?? 'the app’s data folder'
+  const updateWaiting = useUpdates((s) => s.status.state === 'available' || s.status.state === 'ready')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -63,6 +66,7 @@ export function SettingsOverlay(): React.JSX.Element {
               >
                 <Icon className={cn('size-4', section === id && 'text-gold')} />
                 {label}
+                {id === 'updates' && updateWaiting && <span className="ml-auto size-2 rounded-full bg-gold" aria-label="Update available" />}
               </button>
             </li>
           ))}
@@ -84,6 +88,7 @@ export function SettingsOverlay(): React.JSX.Element {
             </Button>
           </header>
           {section === 'general' && <GeneralSection />}
+          {section === 'updates' && <UpdatesSettings />}
           {section === 'appearance' && <AppearanceSection />}
           {section === 'text' && <TextBackendsSection />}
           {section === 'images' && <ImageBackendsSection />}

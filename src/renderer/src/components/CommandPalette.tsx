@@ -104,6 +104,7 @@ function useItems(query: string): Item[] {
       { id: 'left', group: 'Actions', label: 'Toggle left sidebar', icon: MessageSquare, run: () => useLayout.getState().toggleLeft() },
       { id: 'right', group: 'Actions', label: 'Toggle right panel', icon: ScrollText, keywords: 'sheet combat lore images', run: () => useLayout.getState().toggleRight() },
       settingsItem('general', 'General', 'vault behaviour tray startup'),
+      settingsItem('updates', 'Updates', 'update upgrade new version release download install'),
       settingsItem('appearance', 'Appearance', 'theme font dark light'),
       settingsItem('text', 'Text backends', 'model llm openai anthropic ollama'),
       settingsItem('images', 'Image backends', 'comfyui a1111 workflow'),

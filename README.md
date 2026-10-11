@@ -307,7 +307,7 @@ The prompt is assembled from blocks you can reorder and switch off in **Settings
 
 ## Updates
 
-Settings → General → **Updates**: **Check now**, check on startup, and optionally download in the background. Installed copies (and Linux AppImages) update themselves from GitHub Releases: when a new version is ready, a pill in the title bar offers **Restart to update** (it also installs when you quit). Portable, `.deb` and development copies can't replace themselves, so they link to the release page instead. Nothing installs without you.
+Settings → **Updates**: one **Update** button checks GitHub, downloads the new version and offers a restart. You can also check on startup and download in the background (a gold dot on the Updates page means one is waiting). Installed copies (and Linux AppImages) update themselves from GitHub Releases: when a new version is ready, a pill in the title bar offers **Restart to update** (it also installs when you quit). Portable, `.deb` and development copies can't replace themselves, so they link to the release page instead. Nothing installs without you.
 
 ## Writing extensions
 
