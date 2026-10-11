@@ -452,7 +452,7 @@ npm ci
 npm run dist:linux
 ```
 
-This writes `dist/DND Tavern-<version>-x86_64.AppImage` and `dist/dnd-tavern_<version>_amd64.deb`. Building the `.deb` needs no extra packages; running the app needs the usual Electron libraries (`libgtk-3-0`, `libnss3`, `libasound2`), which desktop installs already have.
+This writes `dist/DND Tavern-<version>-x86_64.AppImage`, `dist/dnd-tavern_<version>_amd64.deb` and `dist/latest-linux.yml`. Building needs no extra packages (electron-builder downloads its own tools). Running the app needs the usual Electron libraries, which desktop installs already have; `sudo apt install ./dnd-tavern_<version>_amd64.deb` pulls in any that are missing (on a bare WSL install too).
 
 ### Publishing a release (for in-app updates)
 
@@ -482,6 +482,8 @@ Unsigned builds trigger SmartScreen warnings until they build up reputation. To 
 | ComfyUI test fails with a node error | The workflow references a model or custom node the server doesn't have. Open it in ComfyUI on that server first. |
 | Edits in Obsidian don't show up | They appear within a second or two. If a note was changed in both places at once, the app asks which version to keep. |
 | SmartScreen blocks the installer | **More info → Run anyway**, or sign your build. |
+| The AppImage closes at once on Ubuntu 24.04 or later (a sandbox error when started from a terminal) | Ubuntu restricts the sandbox Electron uses. Install the `.deb` instead, which adds an AppArmor profile for it, or start the AppImage with `--no-sandbox`. |
+| Linux: "No system keyring is running" | Log in to a GNOME or KDE session (they start a keyring), or type `env:NAME` in the key field and set that environment variable. |
 
 ## License
 

@@ -54,7 +54,8 @@ appImage:
   artifactName: ${productName}-${version}-${arch}.${ext}
 deb:
   artifactName: dnd-tavern_${version}_${arch}.${ext}
-  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
+  # electron-builder's defaults plus ALSA and GBM, which Electron loads at startup.
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0, libasound2, libgbm1]
 # In-app updates read latest.yml (latest-linux.yml for the AppImage) from
 # GitHub Releases. "npm run release" / "release:linux" (with GH_TOKEN set)
 # upload the builds, their blockmaps and those files.
