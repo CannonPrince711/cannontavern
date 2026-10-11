@@ -280,6 +280,30 @@ export const PromptSettingsSchema = z.object({
   autoState: z.boolean().default(false)
 })
 
+/** What an image is for; each can use its own backend, model and size. */
+export const IMAGE_PURPOSES = ['scene', 'portrait', 'map', 'other'] as const
+export type ImagePurpose = (typeof IMAGE_PURPOSES)[number]
+
+/** Generation options for one purpose. Empty / 0 / null means "the backend's own setting". */
+export const ImageProfileSchema = z.object({
+  /** null: the default image backend (the one the model switcher picks). */
+  backendId: z.string().nullable().default(null),
+  /** Checkpoint or model name; '' keeps the backend's. */
+  model: z.string().max(500).default(''),
+  /** ComfyUI workflow; null picks one tagged for this purpose. */
+  workflowId: z.string().nullable().default(null),
+  /** 0 = automatic: the backend's size, shaped for the purpose. */
+  width: z.number().int().min(0).max(4096).default(0),
+  height: z.number().int().min(0).max(4096).default(0),
+  /** 0 = the backend's steps. */
+  steps: z.number().int().min(0).max(200).default(0),
+  /** Added to the front of every prompt for this purpose, e.g. "parchment map, ink and watercolour". */
+  style: z.string().max(500).default(''),
+  /** Added to the backend's negative prompt. */
+  negative: z.string().max(1000).default('')
+})
+export type ImageProfile = z.infer<typeof ImageProfileSchema>
+
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
   setupComplete: z.boolean().default(false),
@@ -302,6 +326,14 @@ export const SettingsSchema = z.object({
     .prefault({}),
   imageBackends: z.array(ImageBackendSchema).default([]),
   defaultImageBackendId: z.string().nullable().default(null),
+  imageProfiles: z
+    .object({
+      scene: ImageProfileSchema.prefault({}),
+      portrait: ImageProfileSchema.prefault({}),
+      map: ImageProfileSchema.prefault({}),
+      other: ImageProfileSchema.prefault({})
+    })
+    .prefault({}),
   imageTriggers: z
     .object({
       everyNDmTurns: z.number().int().min(0).default(0),
@@ -449,6 +481,7 @@ export const SettingsPatchSchema = z
     roles: patchOf(unwrapObject(S.roles)).optional(),
     defaultImageBackendId: z.string().nullable().optional(),
     imageTriggers: patchOf(unwrapObject(S.imageTriggers)).optional(),
+    imageProfiles: patchOf(unwrapObject(S.imageProfiles)).optional(),
     prompt: patchOf(PromptSettingsSchema).optional(),
     general: patchOf(unwrapObject(S.general)).optional(),
     appearance: patchOf(AppearanceSchema).optional(),
@@ -467,6 +500,7 @@ export type SettingsPatch = {
   roles?: Partial<Settings['roles']>
   defaultImageBackendId?: string | null
   imageTriggers?: Partial<Settings['imageTriggers']>
+  imageProfiles?: Partial<Settings['imageProfiles']>
   prompt?: Partial<Settings['prompt']>
   general?: Partial<Settings['general']>
   appearance?: Partial<Settings['appearance']>

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { ComfyWorkflows } from './ComfyWorkflows'
+import { ImageProfilesGroup } from './ImageProfiles'
 import { Disclosure, HeadersEditor, NumberInput, TestResultPanel } from './fields'
 import { SecretField } from './SecretField'
 
@@ -331,6 +332,8 @@ export function ImageBackendsSection(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      <ImageProfilesGroup />
 
       <SettingsGroup title="Image triggers" description="When illustrations are made without you asking. Use /image, or the camera button on DM messages, any time.">
         <div className="grid grid-cols-2 gap-4 py-3">

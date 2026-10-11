@@ -4,10 +4,11 @@ import type { InvokeArgs } from '@shared/ipc'
 import { FOLDERS, IMAGES_FOLDER } from '@shared/layout'
 import { formatDate, joinVaultPath, sanitizeFileName } from '@shared/names'
 import { messageToTurn } from '@shared/prompt'
-import type { ImageBackend } from '@shared/settings'
+import type { ImageBackend, ImagePurpose } from '@shared/settings'
 import type { CharacterNote, Message, MessageImage, Session, VaultPath } from '@shared/types'
 import { buildImageRequest, imageAdapter, resolveImageBackend } from './backends/image'
 import type { ImageRequest } from './backends/image/types'
+import { applyImageProfile, backendFor, workflowFor } from './backends/image/profile'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { backendChain, chatService } from './chat'
 import { AppError, toErrorInfo } from './errors'
@@ -21,6 +22,8 @@ import { vaultService } from './vault/service'
 import { getMainWindow } from './window'
 
 type GenerateOpts = InvokeArgs<'images:generate'>[0]
+
+const purposeOf = (kind: GenerateOpts['kind']): ImagePurpose => (kind === 'prompt' ? 'other' : kind)
 
 const PROMPT_WRITER = `You write prompts for a text-to-image model. Describe one image as a single line of comma-separated visual details: subject, setting, lighting, mood, colours, composition, art style. Fantasy illustration. No story, no dialogue, no text in the image, no real artist names. At most 70 words. Reply with the prompt only.`
 
@@ -38,8 +41,7 @@ class ImageService {
   private jobs = new Map<string, AbortController>()
 
   generate(opts: GenerateOpts): { requestId: string } {
-    const s = settingsStore.get()
-    const backend = s.imageBackends.find((b) => b.id === (opts.backendId ?? s.defaultImageBackendId)) ?? s.imageBackends[0]
+    const backend = backendFor(settingsStore.get(), purposeOf(opts.kind), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
     const requestId = randomUUID()
     const controller = new AbortController()
@@ -107,12 +109,6 @@ class ImageService {
     )
   }
 
-  private pickWorkflow(backend: ImageBackend, purpose: 'portrait' | 'scene' | null, wanted?: string): string | undefined {
-    if (backend.type !== 'comfyui') return undefined
-    const wfs = backend.comfy.workflows
-    return (wfs.find((w) => w.id === wanted) ?? (purpose ? wfs.find((w) => w.purpose === purpose) : undefined) ?? wfs.find((w) => w.id === backend.comfy.defaultWorkflowId) ?? wfs[0])?.id
-  }
-
   private async run(requestId: string, backend: ImageBackend, opts: GenerateOpts, signal: AbortSignal): Promise<void> {
     const win = getMainWindow()
     const progress = (value: number, label?: string): void => {
@@ -129,8 +125,7 @@ class ImageService {
 
   /** Generates without the event plumbing, for extensions: resolves with the saved image. */
   async generateNow(opts: GenerateOpts): Promise<MessageImage> {
-    const s = settingsStore.get()
-    const backend = s.imageBackends.find((b) => b.id === (opts.backendId ?? s.defaultImageBackendId)) ?? s.imageBackends[0]
+    const backend = backendFor(settingsStore.get(), purposeOf(opts.kind), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'No image backend is configured.')
     return (await this.produce(backend, opts, undefined, () => {})).image
   }
@@ -149,13 +144,11 @@ class ImageService {
 
       let character: CharacterNote | null = null
       let prompt = opts.prompt?.trim() ?? ''
-      let purpose: 'portrait' | 'scene' | null = null
+      const purpose = purposeOf(opts.kind)
       if (opts.kind === 'scene') {
         if (!session) throw new AppError('NO_SESSION', 'Open a session to illustrate a scene.')
-        purpose = 'scene'
         prompt = await this.scenePrompt(session, opts.messageId, prompt || undefined)
       } else if (opts.kind === 'portrait') {
-        purpose = 'portrait'
         const charPath =
           opts.characterPath ?? (session?.frontmatter.characters[0] ? await resolveCharacterLink(vault, session.frontmatter.characters[0]) : null)
         if (!charPath) throw new AppError('NO_CHARACTER', 'Choose a character for the portrait.')
@@ -164,13 +157,12 @@ class ImageService {
       }
       if (!prompt) throw new AppError('NO_PROMPT', 'Describe what to draw, e.g. /image a misty harbour at dusk.')
 
-      // Scenes are landscape, portraits are portrait; the defaults decide the size.
-      const d = backend.defaults
-      const long = Math.max(d.width, d.height)
-      const short = Math.min(d.width, d.height)
-      const size = purpose === 'scene' ? { width: long, height: short } : purpose === 'portrait' ? { width: short, height: long } : {}
-      const workflowId = this.pickWorkflow(backend, purpose, opts.workflowId)
-      const over: Partial<ImageRequest> = { ...size, workflowId }
+      // This purpose's generation options: model, workflow, size, steps, style (Settings → Image backends).
+      const profile = settingsStore.get().imageProfiles[purpose]
+      const workflowId = workflowFor(backend, purpose, profile, opts.workflowId)
+      const applied = applyImageProfile(backend, purpose, profile, workflowId)
+      const over: Partial<ImageRequest> = { ...applied.over }
+      if (applied.style) prompt = `${applied.style}, ${prompt}`
 
       // img2img from the avatar, when the chosen ComfyUI workflow has a LoadImage mapping.
       const wf = backend.comfy.workflows.find((w) => w.id === workflowId)
@@ -181,8 +173,8 @@ class ImageService {
       }
 
       progress(0.02, 'Generating…')
-      const resolved = resolveImageBackend(backend)
-      const req = buildImageRequest(backend, prompt, over)
+      const resolved = resolveImageBackend(applied.backend)
+      const req = buildImageRequest(applied.backend, prompt, over)
       const result = await imageAdapter(backend.type).generate(resolved, req, { signal, onProgress: progress })
 
       // Where the file goes: the campaign's Images/ for sessions, avatars/ for portraits without a session.
@@ -227,7 +219,7 @@ class ImageService {
   /** Paints a top-down map of a campaign into its Images folder; returns the image path. */
   async generateMap(campaignPath: VaultPath, extra?: string): Promise<string> {
     const s = settingsStore.get()
-    const backend = s.imageBackends.find((b) => b.id === s.defaultImageBackendId) ?? s.imageBackends[0]
+    const backend = backendFor(s, 'map')
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
     const vault = vaultService.require()
     const { campaign } = await readCampaign(vault, campaignPath)
@@ -237,13 +229,10 @@ class ImageService {
       `A top-down fantasy map of ${campaign.name}, drawn as cartography: parchment, ink and watercolour, coastlines, roads and terrain, no text or labels.${campaign.setting ? ` Setting: ${campaign.setting}` : ''}${places ? ` It includes: ${places}.` : ''}${extra ? ` ${extra}` : ''}`,
       `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
     )
-    const workflowId =
-      backend.type === 'comfyui'
-        ? (backend.comfy.workflows.find((w) => w.purpose === 'map') ?? backend.comfy.workflows.find((w) => w.id === backend.comfy.defaultWorkflowId) ?? backend.comfy.workflows[0])?.id
-        : undefined
-    const long = Math.max(backend.defaults.width, backend.defaults.height)
-    const req = buildImageRequest(backend, prompt, { width: long, height: Math.round((long * 0.75) / 8) * 8, workflowId })
-    const result = await imageAdapter(backend.type).generate(resolveImageBackend(backend), req, { onProgress: () => {} })
+    const profile = s.imageProfiles.map
+    const applied = applyImageProfile(backend, 'map', profile, workflowFor(backend, 'map', profile))
+    const req = buildImageRequest(applied.backend, applied.style ? `${applied.style}, ${prompt}` : prompt, applied.over)
+    const result = await imageAdapter(backend.type).generate(resolveImageBackend(applied.backend), req, { onProgress: () => {} })
     const dir = joinVaultPath(campaignPath, IMAGES_FOLDER)
     await vault.mkdir(dir)
     const path = await vault.uniquePath(dir, `${sanitizeFileName(campaign.name)} map`, `.${result.ext}`)
