@@ -21,6 +21,7 @@ import { registerExtensionHandlers } from './handlers/extensions'
 import { vaultService } from './vault/service'
 import { syncTray, attachTrayBehaviour } from './tray'
 import { updater } from './updater'
+import { portraitService } from './portraits'
 import { setLaunchOnStartup } from './autostart'
 import { recapService } from './recap'
 import { applyAppearance, createMainWindow, getMainWindow } from './window'
@@ -97,6 +98,7 @@ if (!app.requestSingleInstanceLock()) {
     attachTrayBehaviour(win)
     syncTray()
     updater.checkOnStartup()
+    portraitService.start()
     // The session open when the app last closed has ended: compress it.
     setTimeout(() => void recapService.compressLastPlayed().catch((err) => console.warn('[recap] startup check failed:', err)), 15_000)
 

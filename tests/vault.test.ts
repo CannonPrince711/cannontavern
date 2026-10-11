@@ -115,6 +115,22 @@ describe('Vault own-write tracking', () => {
     // A second event for the same content (e.g. a touch) is still not external.
     expect(vault.isOwnChange(note, 'mine')).toBe(true)
   })
+
+  it('counts a file added elsewhere as new even if it was read before the event arrived', async () => {
+    await mkdir(join(dir, 'DND Tavern', 'Characters'), { recursive: true })
+    await writeFile(join(dir, 'DND Tavern', 'Characters', 'Aria.md'), 'from obsidian')
+    await vault.read(note)
+    expect(vault.isOwnChange(note, 'from obsidian')).toBe(true)
+    expect(vault.isOwnChange(note, 'from obsidian', { added: true })).toBe(false)
+  })
+
+  it('reports app writes and whether they created the file', async () => {
+    const seen: [string, boolean][] = []
+    const v = new Vault({ vaultPath: dir, rootFolder: 'DND Tavern', onWrite: (p, _c, created) => seen.push([p, created]) })
+    await v.write(note, 'one', { baseHash: null })
+    await v.write(note, 'two')
+    expect(seen).toEqual([[note, true], [note, false]])
+  })
 })
 
 describe('Vault helpers', () => {

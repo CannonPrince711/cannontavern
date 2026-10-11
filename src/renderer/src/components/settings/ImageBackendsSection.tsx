@@ -340,6 +340,13 @@ export function ImageBackendsSection(): React.JSX.Element {
         <Field inline label="Illustrate when the location changes" description="When the DM describes arriving somewhere new.">
           <Switch aria-label="Illustrate when the location changes" checked={t.onLocationChange} onCheckedChange={(v) => void updateSettings({ imageTriggers: { onLocationChange: v } })} />
         </Field>
+        <Field
+          inline
+          label="Paint portraits for new characters and NPCs"
+          description="New characters and NPCs without a portrait get one, painted in the background one at a time: from New character (once it has a description), the campaign builder, /npc, or notes you add in Obsidian. Existing characters are left alone."
+        >
+          <Switch aria-label="Paint portraits for new characters and NPCs" checked={t.autoPortraits} onCheckedChange={(v) => void updateSettings({ imageTriggers: { autoPortraits: v } })} />
+        </Field>
       </SettingsGroup>
     </div>
   )

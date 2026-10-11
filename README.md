@@ -260,7 +260,7 @@ Header values are stored encrypted, like API keys.
 
 ## Image backends and ComfyUI
 
-**Settings → Image backends**. Images are saved into the campaign's `Images/` folder and embedded in the session note as `![[…]]`. Generate them with `/image`, from a message's toolbar, as character portraits, or automatically every N DM turns or when the location changes (**Settings → Image backends → Triggers**).
+**Settings → Image backends**. Turn on **Paint portraits for new characters and NPCs** (under Image triggers) and every new character or NPC without a portrait gets one, painted in the background one at a time and set as their picture: from New character (once it has a description), the campaign builder, `/npc`, or notes you add in Obsidian. Existing characters are left alone. Images are saved into the campaign's `Images/` folder and embedded in the session note as `![[…]]`. Generate them with `/image`, from a message's toolbar, as character portraits, or automatically every N DM turns or when the location changes (**Settings → Image backends → Triggers**).
 
 ### ComfyUI
 

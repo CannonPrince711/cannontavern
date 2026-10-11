@@ -217,6 +217,8 @@ class ImageService {
         // A portrait made outside a session becomes the avatar.
         await vault.mutate(character.path, (cur) => (cur === null ? null : updateNote(cur, { avatar: file })))
         void vaultService.reindex(character.path)
+        // An open character editor picks the new portrait up.
+        send(win, 'vault:changed', { path: character.path, event: 'change' })
       }
       return { image, session: updated }
     }

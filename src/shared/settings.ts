@@ -306,6 +306,8 @@ export const SettingsSchema = z.object({
     .object({
       everyNDmTurns: z.number().int().min(0).default(0),
       onLocationChange: z.boolean().default(false),
+      /** Paint a portrait for each new character or NPC note that has none. */
+      autoPortraits: z.boolean().default(false),
       sceneContextMessages: z.number().int().min(1).max(50).default(8)
     })
     .prefault({}),

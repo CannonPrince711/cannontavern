@@ -92,10 +92,18 @@ export function CharacterEditor(): React.JSX.Element | null {
     if (!path) return
     return on('vault:changed', (e) => {
       if (e.path !== path || e.event === 'unlink') return
-      if (dirty) setExternalChange(true)
-      else void load(path)
+      if (!dirty) return void load(path)
+      // A new portrait (e.g. painted in the background) is the only change: keep editing on top of it.
+      void invoke('characters:get', path)
+        .then((fresh) => {
+          const same = (a: CharacterNote): string => JSON.stringify({ ...a.card, avatar: undefined, body: a.body })
+          if (!note || same(fresh) !== same(note)) return setExternalChange(true)
+          setNote(fresh)
+          setDraft((d) => (d ? { ...d, hash: fresh.hash, mtimeMs: fresh.mtimeMs, card: { ...d.card, avatar: fresh.card.avatar } } : d))
+        })
+        .catch(() => setExternalChange(true))
     })
-  }, [path, dirty]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [path, dirty, note]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!path) return null
 

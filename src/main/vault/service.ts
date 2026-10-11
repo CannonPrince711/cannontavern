@@ -18,6 +18,8 @@ export interface ExternalChange {
 interface ServiceEvents {
   index: [VaultIndex]
   change: [ExternalChange]
+  /** A text file the app itself wrote. */
+  write: [{ path: VaultPath; content: string; created: boolean }]
 }
 
 /**
@@ -45,7 +47,7 @@ class VaultService extends EventEmitter<ServiceEvents> {
     if (!check.writable) throw new AppError('VAULT_READONLY', `DND Tavern cannot write to “${vaultPath}”.`)
 
     await this.close()
-    const vault = new Vault({ vaultPath, rootFolder, trash: (abs) => this.trash(abs) })
+    const vault = new Vault({ vaultPath, rootFolder, trash: (abs) => this.trash(abs), onWrite: (path, content, created) => this.emit('write', { path, content, created }) })
     if (opts.create) {
       for (const folder of Object.values(FOLDERS)) await vault.mkdir(vault.rootPath(folder))
     } else if (!(await vault.exists(rootFolder))) {
@@ -123,7 +125,8 @@ class VaultService extends EventEmitter<ServiceEvents> {
     try {
       const isText = path.toLowerCase().endsWith('.md')
       const data = isText ? await fs.readFile(abs, 'utf8') : await fs.readFile(abs)
-      if (vault.isOwnChange(path, data)) return
+      // A new file counts unless we wrote it, even if something already read it before this event.
+      if (vault.isOwnChange(path, data, { added: event === 'add' })) return
       if (typeof data === 'string') vault.noteState(path, data, (await fs.stat(abs)).mtimeMs)
       const kind = isText ? ((await this.indexer?.indexFile(path)) ?? null) : null
       this.emit('change', { path, event, kind })

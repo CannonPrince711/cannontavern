@@ -64,10 +64,19 @@ export class Vault {
   private locks = new Map<string, Promise<unknown>>()
   private trash: (abs: string) => Promise<void>
 
-  constructor(opts: { vaultPath: string; rootFolder: string; trash?: (abs: string) => Promise<void> }) {
+  /** Told about every text file the app writes (the watcher ignores those); `created` when it didn't exist before. */
+  private readonly onWrite?: (path: VaultPath, content: string, created: boolean) => void
+
+  constructor(opts: {
+    vaultPath: string
+    rootFolder: string
+    trash?: (abs: string) => Promise<void>
+    onWrite?: (path: VaultPath, content: string, created: boolean) => void
+  }) {
     this.root = resolve(opts.vaultPath)
     this.rootFolder = joinVaultPath(opts.rootFolder)
     this.trash = opts.trash ?? ((abs) => fs.rm(abs, { force: true }))
+    this.onWrite = opts.onWrite
   }
 
   // ─── Paths ──────────────────────────────────────────────────────────────
@@ -213,10 +222,16 @@ export class Vault {
     if (!opts.force) await this.checkConflict(path, abs, content, opts.baseHash)
     const hash = hashContent(content)
     this.rememberOwnWrite(path, hash)
+    const existed = this.onWrite ? await fs.access(abs).then(() => true, () => false) : true
     await writeFileAtomic(abs, content)
     const stat = await fs.stat(abs)
     const state = { mtimeMs: stat.mtimeMs, size: stat.size, hash }
     this.states.set(key(path), state)
+    try {
+      this.onWrite?.(path, content, !existed)
+    } catch {
+      // a listener's problem, not the write's
+    }
     return state
   }
 
@@ -323,7 +338,7 @@ export class Vault {
    * the change was caused by our own write (or nothing actually changed), in
    * which case it should be ignored.
    */
-  isOwnChange(path: VaultPath, content: string | Uint8Array): boolean {
+  isOwnChange(path: VaultPath, content: string | Uint8Array, opts: { added?: boolean } = {}): boolean {
     const hash = hashContent(content)
     const k = key(path)
     const own = this.ownWrites.get(k)
@@ -331,7 +346,8 @@ export class Vault {
       this.ownWrites.set(k, own.slice(own.indexOf(hash) + 1))
       return true
     }
-    return this.states.get(k)?.hash === hash
+    // For a newly added file, a known state only means it was read first, not that it's ours.
+    return !opts.added && this.states.get(k)?.hash === hash
   }
 
   /** Records a file's state after an external change was processed. */
