@@ -337,7 +337,17 @@ export const SettingsSchema = z.object({
       defaultMode: z.enum(PLAY_MODES).default('ai-dm'),
       /** AI-only play: turns per press of Auto-play, and the pause between them. */
       autoplayTurns: z.number().int().min(1).max(100).default(10),
-      autoplayDelaySec: z.number().min(0).max(30).default(2)
+      autoplayDelaySec: z.number().min(0).max(30).default(2),
+      /** Optional countdown for your turn in chat and for each combatant in combat. */
+      turnTimer: z
+        .object({
+          enabled: z.boolean().default(false),
+          seconds: z.number().int().min(5).max(3600).default(90),
+          combatSeconds: z.number().int().min(5).max(3600).default(60),
+          /** remind: chime and a notice; pass: the turn moves on. */
+          onExpire: z.enum(['remind', 'pass']).default('remind')
+        })
+        .prefault({})
     })
     .prefault({}),
   security: z

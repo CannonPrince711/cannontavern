@@ -13,6 +13,8 @@ import { Tip } from '@/components/ui/tooltip'
 import { addPartyToCombat, combatActions, hurt, updateCombat } from '@/lib/combat'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
+import { useApp } from '@/stores/app'
+import { chime, TurnTimerRing, useCountdown } from '@/components/TurnTimer'
 import { toast } from '@/stores/toasts'
 
 const run = (p: Promise<unknown>): void => void p.catch((e) => toast.error(e))
@@ -92,6 +94,24 @@ function CombatantRow({ c, current }: { c: Combatant; current: boolean }): React
   )
 }
 
+/** Counts down each combatant's turn when the turn timer is on. */
+function CombatTurnTimer({ sessionPath, round, turn, name }: { sessionPath: string; round: number; turn: number; name: string }): React.JSX.Element | null {
+  const timer = useApp((s) => s.settings?.play.turnTimer)
+  const seconds = timer?.combatSeconds ?? 60
+  const key = timer?.enabled ? `${sessionPath}|${round}|${turn}` : null
+  const { remaining, paused, toggle } = useCountdown(key, seconds, () => {
+    chime()
+    if (timer?.onExpire === 'pass') {
+      void useChat
+        .getState()
+        .post({ role: 'system', text: `${name}’s turn timed out.`, swipes: [], swipeIndex: 0 })
+        .then(() => combatActions.next())
+    } else toast.warning(`${name}’s time is up`, 'Combat turn timer.')
+  })
+  if (!key) return null
+  return <TurnTimerRing remaining={remaining} total={seconds} paused={paused} onToggle={toggle} label="Combat turn timer" />
+}
+
 export function CombatPanel(): React.JSX.Element {
   const session = useChat((s) => s.session)
   const combat = session?.frontmatter.combat
@@ -118,7 +138,8 @@ export function CombatPanel(): React.JSX.Element {
             <div className="text-[11px] tracking-widest text-gold uppercase">Round {combat.round}</div>
             <div className="text-sm font-medium">{current ? `${current.name}’s turn` : '—'}</div>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            {current && <CombatTurnTimer sessionPath={session.path} round={combat.round} turn={combat.turn} name={current.name} />}
             <Tip label="Previous turn">
               <Button size="icon-sm" variant="ghost" aria-label="Previous turn" onClick={() => run(combatActions.prev())}>
                 <ChevronLeft />

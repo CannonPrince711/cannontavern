@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Dices, Pause, Play, SendHorizontal, Square, StepForward } from 'lucide-react'
-import { playModeOf, type PlayMode } from '@shared/play'
+import { Dices, Pause, Play, SendHorizontal, Square, StepForward, Timer } from 'lucide-react'
+import { aiSpeakers, playModeOf, type PlayMode } from '@shared/play'
+import { chime, TurnTimerRing, useCountdown } from '@/components/TurnTimer'
+import { toast } from '@/stores/toasts'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { DiceTray } from '@/components/dice/DiceTray'
@@ -52,10 +54,35 @@ function AutoplayBar(): React.JSX.Element {
   )
 }
 
+/** Counts down your turn after each AI reply (Settings > General > Turn timer). */
+function ChatTurnTimer(): React.JSX.Element | null {
+  const session = useChat((s) => s.session)
+  const streaming = useChat((s) => s.streaming)
+  const timer = useApp((s) => s.settings?.play.turnTimer)
+  const mode = playModeOf(session?.frontmatter)
+  const last = session ? [...session.messages].reverse().find((m) => !m.hidden && (m.role === 'dm' || m.role === 'player')) : undefined
+  const yourTurn = !!timer?.enabled && !!session && !streaming && mode !== 'ai-only' && !!last && (aiSpeakers(mode) as string[]).includes(last.role)
+  const key = yourTurn && session && last ? `${session.path}|${last.id}|${last.swipeIndex}` : null
+  const seconds = timer?.seconds ?? 90
+  const { remaining, paused, toggle } = useCountdown(key, seconds, () => {
+    chime()
+    if (timer?.onExpire === 'pass') {
+      const who = mode === 'user-dm' ? 'The DM' : session?.frontmatter.persona || 'The player'
+      void useChat
+        .getState()
+        .post({ role: 'system', text: `Time ran out: ${who} hesitates.`, swipes: [], swipeIndex: 0 })
+        .then(() => useChat.getState().send(''))
+    } else toast.warning('Time’s up!', 'Your turn timer ran out.')
+  })
+  if (!key) return null
+  return <TurnTimerRing remaining={remaining} total={seconds} paused={paused} onToggle={toggle} label="Turn timer" />
+}
+
 export function Composer(): React.JSX.Element {
   const session = useChat((s) => s.session)
   const streaming = useChat((s) => s.streaming)
   const mode = playModeOf(session?.frontmatter)
+  const turnTimerOn = useApp((s) => s.settings?.play.turnTimer.enabled ?? false)
   const stop = useChat((s) => s.stop)
   const trayOpen = useDiceFx((s) => s.trayOpen)
   const [text, setText] = useState('')
@@ -177,6 +204,18 @@ export function Composer(): React.JSX.Element {
             <Dices />
           </Button>
         </Tip>
+        <Tip label={turnTimerOn ? 'Turn timer on (click to turn off)' : 'Turn timer'}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle turn timer"
+            aria-pressed={turnTimerOn}
+            className={cn(turnTimerOn && 'text-gold')}
+            onClick={() => void useApp.getState().updateSettings({ play: { turnTimer: { ...useApp.getState().settings!.play.turnTimer, enabled: !turnTimerOn } } })}
+          >
+            <Timer />
+          </Button>
+        </Tip>
         <textarea
           ref={ref}
           rows={1}
@@ -187,6 +226,7 @@ export function Composer(): React.JSX.Element {
           aria-label="Message"
           className="max-h-[200px] min-h-9 flex-1 resize-none bg-transparent py-2 font-chat text-[length:var(--chat-font-size)] leading-snug placeholder:text-muted-foreground focus-visible:outline-none"
         />
+        <ChatTurnTimer />
         {streaming ? (
           <Tip label="Stop (Esc)">
             <Button size="icon" variant="secondary" aria-label="Stop generating" onClick={() => void stop()}>

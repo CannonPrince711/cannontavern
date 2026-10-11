@@ -4,6 +4,7 @@ import { THEMES } from '@shared/themes'
 import type { ThemeId } from '@shared/types'
 import { Button } from '@/components/ui/button'
 import { Callout, Field, NativeSelect, SettingsGroup, Slider, Switch } from '@/components/ui/controls'
+import { NumberInput } from './fields'
 import { Input } from '@/components/ui/input'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -104,6 +105,27 @@ export function GeneralSection(): React.JSX.Element {
         </Field>
         <Field inline label="Check for updates" description="Off by default. When on, asks GitHub once per launch whether a newer release exists and shows a download link. Nothing installs automatically.">
           <Switch aria-label="Check for updates" checked={settings.behavior.autoUpdateCheck} onCheckedChange={(v) => void updateSettings({ behavior: { autoUpdateCheck: v } })} />
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Turn timer" description="A countdown for your turn after each AI reply, and for each combatant during combat. Toggle it quickly with the clock button next to the message box; click a running timer to pause it.">
+        <Field inline label="Turn timer">
+          <Switch aria-label="Turn timer" checked={settings.play.turnTimer.enabled} onCheckedChange={(v) => void updateSettings({ play: { turnTimer: { ...settings.play.turnTimer, enabled: v } } })} />
+        </Field>
+        <div className="grid grid-cols-2 gap-4 py-3">
+          <NumberInput label="Your turn" value={settings.play.turnTimer.seconds} min={5} max={3600} step={15} suffix="s" onChange={(v) => void updateSettings({ play: { turnTimer: { ...settings.play.turnTimer, seconds: v } } })} />
+          <NumberInput label="Each combat turn" value={settings.play.turnTimer.combatSeconds} min={5} max={3600} step={15} suffix="s" onChange={(v) => void updateSettings({ play: { turnTimer: { ...settings.play.turnTimer, combatSeconds: v } } })} />
+        </div>
+        <Field inline label="When time runs out">
+          <NativeSelect
+            aria-label="When time runs out"
+            value={settings.play.turnTimer.onExpire}
+            onChange={(e) => void updateSettings({ play: { turnTimer: { ...settings.play.turnTimer, onExpire: e.target.value as 'remind' | 'pass' } } })}
+            className="w-56"
+          >
+            <option value="remind">Chime and remind me</option>
+            <option value="pass">Pass the turn (the story moves on)</option>
+          </NativeSelect>
         </Field>
       </SettingsGroup>
 
