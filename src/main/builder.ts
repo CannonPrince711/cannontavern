@@ -3,7 +3,19 @@
  * reviewed draft into the vault as ordinary notes (campaign, party, lorebook,
  * NPCs and an optional first session). Existing notes are never overwritten.
  */
-import { BUILDER_SYSTEM, builderPrompt, draftCampaignBody, draftLore, draftSection, parseDraft, type CampaignConcept, type CampaignDraft } from '@shared/builder'
+import {
+  BUILDER_SYSTEM,
+  builderPrompt,
+  draftCampaignBody,
+  draftLore,
+  draftSection,
+  missingSections,
+  parseDraft,
+  parseSections,
+  restPrompt,
+  type CampaignConcept,
+  type CampaignDraft
+} from '@shared/builder'
 import { FOLDERS, CAMPAIGN_FILE } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { serializeLorebookBody } from '@shared/notes'
@@ -70,10 +82,11 @@ async function draft(concept: CampaignConcept, signal: AbortSignal): Promise<Cam
       const streaming = backend.generation.stream
       let text = ''
       let sent = 0
+      let attempt: 'full' | 'compact' | 'rest' = compact ? 'compact' : 'full'
       const progress = (force = false): void => {
         if (!force && Date.now() - sent < 250) return
         sent = Date.now()
-        send(getMainWindow(), 'campaigns:draftProgress', { chars: text.length, tokens: Math.round(text.length / 3.5), maxTokens, section: draftSection(text), attempt: compact ? 'compact' : 'full', streaming })
+        send(getMainWindow(), 'campaigns:draftProgress', { chars: text.length, tokens: Math.round(text.length / 3.5), maxTokens, section: draftSection(text), attempt, streaming })
       }
       progress(true)
       try {
@@ -88,6 +101,26 @@ async function draft(concept: CampaignConcept, signal: AbortSignal): Promise<Cam
         lastReply = result.text
         const draft = parseDraft(result.text)
         if (!draft.name.trim()) draft.name = concept.name.trim() || 'Untitled Campaign'
+        // Servers cap a reply's length (KoboldCpp at 2048 tokens by default), so long concepts can
+        // stop before the lists. Ask for whatever's missing in a second, smaller request.
+        const missing = missingSections(draft)
+        if (missing.length) {
+          attempt = 'rest'
+          text = ''
+          progress(true)
+          try {
+            const rest = await textAdapter(backend.type).generate(
+              { ...resolved, net },
+              { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: restPrompt(concept, draft, missing) }], maxTokens },
+              { stream: streaming, signal, onToken: (delta) => ((text += delta), progress()) }
+            )
+            const more = parseSections(rest.text)
+            for (const k of missing) (draft[k] as unknown[]) = more[k]
+          } catch (err) {
+            if (signal.aborted) throw err
+            // Keep what the first reply had; the lists can be filled in by hand.
+          }
+        }
         return draft
       } catch (err) {
         if (err instanceof AppError) {

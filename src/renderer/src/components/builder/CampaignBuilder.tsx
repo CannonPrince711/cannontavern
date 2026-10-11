@@ -439,7 +439,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
   )
 }
 
-type DraftProgressEvent = { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean }
+type DraftProgressEvent = { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact' | 'rest'; streaming: boolean }
 
 /** The draft as it streams in: what it's writing, how much, how fast, and a way out. */
 function DraftProgress({ onCancel }: { onCancel: () => void }): React.JSX.Element {
@@ -467,6 +467,8 @@ function DraftProgress({ onCancel }: { onCancel: () => void }): React.JSX.Elemen
       <p className="max-w-md text-sm text-muted-foreground">
         {p?.attempt === 'compact'
           ? 'The first reply couldn’t be read, so it’s trying again with a smaller campaign.'
+          : p?.attempt === 'rest'
+            ? 'The server stopped the first reply before the lists, so it’s now adding the places, people and story.'
           : writing
             ? 'Inventing places, people, factions and secrets.'
             : p && !p.streaming

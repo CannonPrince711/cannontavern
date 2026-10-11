@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, draftSection, emptyDraft, escapeStrayQuotes, parseDraft, PREMISE_MAX } from '../src/shared/builder'
+import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, draftSection, emptyDraft, escapeStrayQuotes, missingSections, parseDraft, parseSections, PREMISE_MAX, restPrompt } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -175,5 +175,29 @@ describe('campaign builder: progress while streaming', () => {
     expect(draftSection('{"name": "X", "locations": [{"name": "Midgar", "description": "The ca')).toBe('places')
     expect(draftSection('{"name": "X", "locations": [], "npcs": [{"name": "Alpha", "role": "Knight"')).toBe('NPCs')
     expect(draftSection('{"name": "Say \\"npcs\\": nothing", "hook": "A')).toBe('the hook')
+  })
+})
+
+describe('campaign builder: a reply cut off before the lists', () => {
+  const cut = '{"name": "The Devil\'s Peerage", "pitch": "Students by day, Devils by night.", "setting": "A modern city.", "hook": "A Stray kills a client.", "opening": "Rain on the clubroom win'
+  it('keeps the overview and lists what never arrived', () => {
+    const d = parseDraft(cut)
+    expect(d.name).toBe("The Devil's Peerage")
+    expect(missingSections(d)).toEqual(['locations', 'npcs', 'factions', 'outline', 'quests', 'secrets'])
+  })
+  it('asks for only the missing sections, with the overview and concept as context', () => {
+    const d = parseDraft(cut)
+    const p = restPrompt(CampaignConceptSchema.parse({ premise: 'High School DxD with Evil Pieces', length: 'long', edition: '3.5e', levels: '1–20' }), d, ['locations', 'npcs'])
+    expect(p).toContain("Name: The Devil's Peerage")
+    expect(p).toContain('Original concept (for names and lore): High School DxD')
+    expect(p).toContain('"locations": [')
+    expect(p).toContain('"npcs": [')
+    expect(p).not.toContain('"factions"')
+    expect(p).toContain('D&D 3.5 edition; character levels 1–20')
+  })
+  it('reads a reply that holds only lists', () => {
+    const more = parseSections('{"locations": [{"name": "Kuoh Academy", "description": "The school."}], "npcs": [{"name": "Rias", "role": "King"}]}')
+    expect(more.locations[0]!.name).toBe('Kuoh Academy')
+    expect(more.npcs[0]!.role).toBe('King')
   })
 })

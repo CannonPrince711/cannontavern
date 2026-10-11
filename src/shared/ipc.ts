@@ -266,7 +266,7 @@ export interface EventMap {
   'updates:changed': UpdateStatus
   'table:changed': TableStatus
   /** The campaign builder's draft as it streams in. */
-  'campaigns:draftProgress': { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean }
+  'campaigns:draftProgress': { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact' | 'rest'; streaming: boolean }
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session

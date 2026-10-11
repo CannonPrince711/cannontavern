@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiSpeakers, findChecks, lastAiMessage, nextSpeaker, playModeOf, userRole } from '../src/shared/play'
+import { aiSpeakers, findChecks, lastAiMessage, nextSpeaker, playModeOf, userRole, nextPartyTurn } from '../src/shared/play'
 import { buildPrompt, DEFAULT_PLAYER_PROMPT, messageToTurn, normalizeBlockOrder, type PromptInput } from '../src/shared/prompt'
 import type { Campaign, Message } from '../src/shared/types'
 
@@ -94,5 +94,20 @@ describe('prompts by speaker', () => {
 
   it('labels director notes', () => {
     expect(messageToTurn(msg('1', 'system', 'Introduce a storm.', { name: 'Director' }), 'DM')).toEqual({ role: 'user', content: '[Director: Introduce a storm.]' })
+  })
+})
+
+describe('AI-only party turns', () => {
+  const msg = (role: Message['role'], name?: string): Message => ({ id: Math.random().toString(36), role, ...(name ? { name } : {}), text: 'x', swipes: ['x'], swipeIndex: 0, createdAt: '' })
+  const party = ['Issei', 'Kiba', 'Akeno']
+  it('goes through the party in order, then the DM', () => {
+    expect(nextPartyTurn([msg('dm')], party)).toEqual({ speaker: 'player', index: 0 })
+    expect(nextPartyTurn([msg('dm'), msg('player', 'Issei')], party)).toEqual({ speaker: 'player', index: 1 })
+    expect(nextPartyTurn([msg('dm'), msg('player', 'Issei'), msg('player', 'Kiba')], party)).toEqual({ speaker: 'player', index: 2 })
+    expect(nextPartyTurn([msg('dm'), msg('player', 'Issei'), msg('player', 'Kiba'), msg('player', 'Akeno')], party)).toEqual({ speaker: 'dm' })
+  })
+  it('ignores director notes and dice, and starts over after the DM', () => {
+    expect(nextPartyTurn([msg('dm'), msg('player', 'Issei'), msg('system', 'Director'), msg('roll', 'Kiba')], party)).toEqual({ speaker: 'player', index: 1 })
+    expect(nextPartyTurn([msg('player', 'Issei'), msg('player', 'Kiba'), msg('player', 'Akeno'), msg('dm')], party)).toEqual({ speaker: 'player', index: 0 })
   })
 })

@@ -88,7 +88,46 @@ export function builderPrompt(c: CampaignConcept, opts: { compact?: boolean } = 
     c.mode === 'user-dm' ? 'A human DM will run it, so make the outline and secrets practical to improvise from.' : 'An AI DM will run it, so make the secrets and outline explicit.',
     c.avoid.trim() ? `Keep out of the story: ${c.avoid.trim()}` : ''
   ].filter(Boolean)
-  return `Design a campaign from this concept.\n\n${lines.join('\n')}\n\nReply with a single JSON object shaped exactly like this:\n${SHAPE}`
+  return `Design a campaign from this concept.\n\n${lines.join('\n')}\n\nKeep the text fields short (two or three sentences each; the opening scene one paragraph) so there's room for every list.\n\nReply with a single JSON object shaped exactly like this:\n${SHAPE}`
+}
+
+/** The draft's list sections, in the order a reply writes them. */
+export const DRAFT_LISTS = ['locations', 'npcs', 'factions', 'outline', 'quests', 'secrets'] as const
+export type DraftList = (typeof DRAFT_LISTS)[number]
+
+/** Lists a reply never got to (usually because the server cut it off). */
+export function missingSections(d: CampaignDraft): DraftList[] {
+  return DRAFT_LISTS.filter((k) => d[k].length === 0)
+}
+
+const LIST_SHAPES: Record<DraftList, string> = {
+  locations: '"locations": [{ "name": "", "description": "", "keys": ["trigger words"] }]',
+  npcs: '"npcs": [{ "name": "", "role": "", "description": "", "personality": "", "want": "", "secret": "" }]',
+  factions: '"factions": [{ "name": "", "goal": "", "description": "" }]',
+  outline: '"outline": [{ "title": "Act or chapter", "summary": "" }]',
+  quests: '"quests": ["starting quest"]',
+  secrets: '"secrets": ["DM-only truths"]'
+}
+
+/** A second request for the sections a first reply didn't reach, with what it did write as context. */
+export function restPrompt(c: CampaignConcept, d: CampaignDraft, missing: DraftList[]): string {
+  const size =
+    c.length === 'one-shot' ? '3 locations, 3 NPCs, 1–2 factions, a 3-beat outline' : c.length === 'short' ? '4–5 locations, 4–5 NPCs, 2–3 factions, a 3–4 act outline' : '6 locations, 6 NPCs, 3 factions, a 5–6 act outline'
+  const known = [
+    `Name: ${d.name}`,
+    d.pitch && `Pitch: ${d.pitch}`,
+    d.setting && `Setting: ${d.setting}`,
+    d.tone && `Tone: ${d.tone}`,
+    d.hook && `Hook: ${d.hook}`,
+    c.premise.trim() && `Original concept (for names and lore): ${c.premise.trim().slice(0, 2500)}`,
+    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition' : 'D&D 5th edition'}; character levels ${c.levels || '1–5'}`
+  ].filter(Boolean)
+  return `Here is the start of a campaign:\n\n${known.join('\n')}\n\nNow write the rest of it: ${missing.join(', ')}. Aim for ${size}. Keep each description to one or two sentences.\n\nReply with a single JSON object with only these keys, shaped like this:\n{\n  ${missing.map((k) => LIST_SHAPES[k]).join(',\n  ')}\n}`
+}
+
+/** Reads a reply that holds only some of a draft's sections. */
+export function parseSections(reply: string): CampaignDraft {
+  return CampaignDraftSchema.parse(coerceDraft(extractJson(reply)))
 }
 
 /**

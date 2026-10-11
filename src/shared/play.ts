@@ -63,3 +63,19 @@ export const CHECK_RE = /\[CHECK\s+([a-z ]+?)\s+DC\s*(\d+)\]/gi
 export function findChecks(text: string): { target: string; dc: number }[] {
   return [...text.matchAll(new RegExp(CHECK_RE.source, 'gi'))].map((m) => ({ target: m[1]!.trim(), dc: Number(m[2]) }))
 }
+
+/**
+ * AI only with a party: each character acts once (in party order), then the
+ * DM answers. Looks at what happened since the DM last spoke.
+ */
+export function nextPartyTurn(messages: Message[], party: string[]): { speaker: Speaker; index?: number } {
+  const acted = new Set<string>()
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.hidden) continue
+    if (m.role === 'dm') break
+    if (m.role === 'player' && m.name) acted.add(m.name)
+  }
+  const next = party.findIndex((name) => !acted.has(name))
+  return next === -1 ? { speaker: 'dm' } : { speaker: 'player', index: next }
+}

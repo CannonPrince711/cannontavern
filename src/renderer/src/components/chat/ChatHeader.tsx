@@ -94,7 +94,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </label>
       )}
 
-      {mode === 'ai-dm' && <CompanionsMenu />}
+      {mode !== 'user-dm' && <CompanionsMenu mode={mode} />}
 
       <TextModelSwitcher className="w-32 @min-[760px]:w-48" />
       <ImageModelSwitcher compact className="w-28 @min-[760px]:w-40" />
@@ -126,7 +126,7 @@ function linkKey(link: string): string {
 }
 
 /** AI companions: characters or NPCs the AI plays as party members, each taking a turn after yours. */
-function CompanionsMenu(): React.JSX.Element {
+function CompanionsMenu({ mode }: { mode: PlayMode }): React.JSX.Element {
   const session = useChat((s) => s.session)!
   const index = useVault((s) => s.index)
   const links = session.frontmatter.companions ?? []
@@ -161,7 +161,9 @@ function CompanionsMenu(): React.JSX.Element {
       </Tip>
       <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          The AI plays these as party members. After your message, each one acts, then the DM answers. 2–3 works best.
+          {mode === 'ai-only'
+            ? 'More party members for the AI to play. Each character takes a turn, then the DM answers. 2–3 in total works best.'
+            : 'The AI plays these as party members. After your message, each one acts, then the DM answers. 2–3 works best.'}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {candidates.length === 0 && <DropdownMenuItem disabled>Create a character or NPC first</DropdownMenuItem>}

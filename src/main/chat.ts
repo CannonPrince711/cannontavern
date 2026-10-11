@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
-import { aiSpeakers, lastAiMessage, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
+import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
 import { buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import type { CharacterNote, Message, PromptPreview, Session, VaultPath } from '@shared/types'
@@ -94,10 +94,11 @@ class ChatService {
     // Every character in the session (several when players share a table); the first is "the" character.
     const partyPaths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
     const partyNotes = (await Promise.all(partyPaths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((c): c is CharacterNote => !!c)
-    // AI companions: party members the AI plays beside the player's character (AI is DM mode).
-    const companionNotes = playModeOf(session.frontmatter) === 'ai-dm' ? await this.companions(session) : []
+    // AI companions: party members the AI plays beside the session's character (AI is DM, or AI only).
+    const companionNotes = playModeOf(session.frontmatter) !== 'user-dm' ? await this.companions(session) : []
+    const members = [...partyNotes, ...companionNotes]
     const asPath = opts.as ? ((await resolveCharacterLink(vault, opts.as).catch(() => null)) ?? opts.as) : null
-    const self = asPath ? (companionNotes.find((c) => c.path === asPath) ?? null) : null
+    const self = asPath ? (members.find((c) => c.path === asPath) ?? null) : null
     const players = partyNotes
     const character = self ?? partyNotes[0] ?? null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
@@ -130,7 +131,9 @@ class ChatService {
     const persona =
       speaker === 'player' ? 'DM' : table.length > 1 ? table.map((c) => c.card.name).join(', ') : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
     const speakerName = speaker === 'player' ? characterName : 'DM'
-    const others = self ? [...new Set([playerName, ...players.map((c) => c.card.name), ...companionNotes.filter((c) => c !== self).map((c) => c.card.name)])] : []
+    const others = self
+      ? [...new Set([...(mode === 'ai-dm' ? [playerName] : []), ...members.filter((c) => c !== self).map((c) => c.card.name)])].filter((n) => n !== self.card.name)
+      : []
     const prompt = buildPrompt({
       userName: persona,
       speaker,
@@ -213,7 +216,24 @@ class ChatService {
       session = await postMessage(vault, sessionPath, message)
       this.publish(session)
     }
+    if (!speaker && !as && mode === 'ai-only' && session.frontmatter.companions?.length) {
+      // AI-only party: the character, each companion, then the DM.
+      const party = await this.partyOrder(session)
+      if (party.length > 1) {
+        const turn = nextPartyTurn(session.messages, party.map((c) => c.card.name))
+        return this.start('new', sessionPath, newMessageId(), turn.speaker, turn.index !== undefined ? party[turn.index]!.path : undefined)
+      }
+    }
     return this.start('new', sessionPath, newMessageId(), speaker ?? nextSpeaker(mode, session.messages), as)
+  }
+
+  /** The session's characters, then its companions. */
+  private async partyOrder(session: Session): Promise<CharacterNote[]> {
+    const vault = vaultService.require()
+    const paths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
+    const players = (await Promise.all(paths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((n): n is CharacterNote => !!n)
+    const companions = await this.companions(session)
+    return [...players, ...companions.filter((c) => !players.some((p) => p.path === c.path))]
   }
 
   /** The session's AI companions, read from their notes (missing ones skipped). */
