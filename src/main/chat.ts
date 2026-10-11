@@ -255,14 +255,26 @@ class ChatService {
     if (settingsStore.get().textBackends.length === 0) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
     const job: Job = { requestId: randomUUID(), kind, sessionPath, messageId, speaker, ...(as ? { as } : {}), controller: new AbortController() }
     this.jobs.set(job.requestId, job)
-    void this.run(job).finally(() => {
+    const finished = this.run(job).finally(() => {
       this.jobs.delete(job.requestId)
+      // Kept a little longer so a waiter that looks it up late still finds it.
+      setTimeout(() => this.finished.delete(job.requestId), 60_000)
       if (this.jobs.size === 0) getMainWindow()?.setProgressBar(-1)
     })
+    this.finished.set(job.requestId, finished)
     return { requestId: job.requestId }
   }
 
-  private async run(job: Job): Promise<void> {
+  /** Whether each running reply ended well (not stopped, no error). */
+  private finished = new Map<string, Promise<boolean>>()
+
+  /** Starts an AI reply and waits for it; false when it failed or was stopped. */
+  async replyAndWait(sessionPath: VaultPath, speaker?: Speaker, as?: string): Promise<boolean> {
+    const { requestId } = await this.send(sessionPath, '', undefined, speaker, as)
+    return (await this.finished.get(requestId)) ?? false
+  }
+
+  private async run(job: Job): Promise<boolean> {
     const win = getMainWindow()
     const vault = vaultService.require()
     const s = settingsStore.get()
@@ -353,10 +365,12 @@ class ChatService {
         })
       } else {
         send(win, 'chat:done', { requestId: job.requestId, session: session ?? (await readSession(vault, job.sessionPath)) })
+        return !aborted
       }
     } catch (err) {
       send(win, 'chat:error', { requestId: job.requestId, error: toErrorInfo(err) })
     }
+    return false
   }
 
   private summarizing = new Set<string>()

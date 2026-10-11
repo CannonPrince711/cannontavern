@@ -426,12 +426,28 @@ class TableHost {
       }
       if (!everyoneActed(session.messages, [...this.players.values()], (path) => names.get(path))) return
     }
-    if (chatService.isBusy(this.sessionPath)) {
+    if (this.responding || chatService.isBusy(this.sessionPath)) {
       this.pendingRespond = true
       return
     }
-    await chatService.send(this.sessionPath, '')
+    this.responding = true
+    try {
+      // AI companions act first, one after another, then the DM answers everyone.
+      for (const as of session.frontmatter.companions ?? []) {
+        if (!(await chatService.replyAndWait(this.sessionPath, 'player', as))) return
+      }
+      await chatService.replyAndWait(this.sessionPath, 'dm')
+    } finally {
+      this.responding = false
+    }
+    if (this.pendingRespond) {
+      this.pendingRespond = false
+      void this.maybeRespond().catch(() => {})
+    }
   }
+
+  /** True while a party turn (companions, then the DM) is under way. */
+  private responding = false
 
   // ── State for players ─────────────────────────────────────────────────────
 
@@ -540,7 +556,8 @@ class TableHost {
           this.busy = false
           this.broadcast({ type: 'stream-end' })
           this.scheduleBroadcast()
-          if (this.pendingRespond) {
+          // A party turn picks up anything that arrived meanwhile when it ends.
+          if (this.pendingRespond && !this.responding) {
             this.pendingRespond = false
             void this.maybeRespond().catch(() => {})
           }
