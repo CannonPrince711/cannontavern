@@ -11,6 +11,7 @@ import type { PlayMode } from '@shared/play'
 import { SOURCEBOOKS, type Edition } from '@shared/editions'
 import type { VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
+import { effectiveContext } from './backends/context'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError } from './errors'
 import { createCampaign, readCharacter, saveParty } from './library'
@@ -28,12 +29,13 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
   let lastError: unknown = null
   let lastReply = ''
   for (const backend of chain) {
+    const window = await effectiveContext(backend)
     // A full campaign first; if the reply can't be read, a smaller one (easier for small models).
     for (const compact of [false, true]) {
       const prompt = builderPrompt(concept, { compact })
       // Leave the reply room inside the model's context window.
       const promptTokens = Math.ceil((BUILDER_SYSTEM.length + prompt.length) / 3.5)
-      const room = (backend.generation.contextSize || 8192) - promptTokens - 64
+      const room = window - promptTokens - 64
       const maxTokens = Math.max(800, Math.min(6000, room))
       try {
         const result = await textAdapter(backend.type).generate(resolveTextBackend(backend), { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens }, { stream: false })

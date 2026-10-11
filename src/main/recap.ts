@@ -18,6 +18,7 @@ import {
 import type { TextBackend } from '@shared/settings'
 import type { Message, Session, VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
+import { effectiveContext } from './backends/context'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
@@ -83,7 +84,7 @@ class RecapService {
       .filter((l): l is string => !!l)
 
     // Keep each request well inside the smallest context in the chain.
-    const context = Math.min(...chain.map((b) => b.generation.contextSize || 8192), 32_000)
+    const context = Math.min(...(await Promise.all(chain.map((b) => effectiveContext(b)))), 32_000)
     const chunks = chunkLines(lines, Math.max(4000, context * 3 - 6000))
     if (chunks.length === 0) chunks.push('')
     for (let i = 0; i < chunks.length; i++) {

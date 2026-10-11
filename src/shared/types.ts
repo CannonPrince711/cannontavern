@@ -555,6 +555,10 @@ export interface TestResult {
   ok: boolean
   ms: number
   sample?: string
+  /** The context window the server reports having loaded. */
+  serverContext?: number
+  /** Worth knowing even though the test passed. */
+  notice?: string
   imageDataUrl?: string
   error?: ErrorInfo
 }

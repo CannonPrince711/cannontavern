@@ -198,6 +198,8 @@ Add as many as you like in **Settings → Text backends**. One is the default. O
 | text-generation-webui | Native API |
 | Custom | Any HTTP API: a JSON body template with `{{prompt}}`, `{{messages}}`, `{{system}}` and so on, plus a JSONPath to the reply (and optionally to each streamed chunk) |
 
+**Context size** is how much text DND Tavern plans to send. Self-hosted servers fix their own window when they start (KoboldCpp's `--contextsize` defaults to 4096), so the app asks KoboldCpp, llama.cpp and vLLM what they actually loaded and never plans for more. **Test** shows that number, warns when your setting is bigger, and can set it for you. To get a bigger window, restart the server with a larger setting (for KoboldCpp, `--contextsize 8192` or more; models trained on 4k, like Llama 2, get less coherent well past 8k). Ollama loads whatever Context size you set.
+
 Every backend has a **Network** section for custom headers, an HTTP/HTTPS/SOCKS5 proxy, a timeout, retries, and an option to accept self-signed certificates. Plain `http://` to a non-local address shows a warning, because your prompts and key travel unencrypted.
 
 ### Example: OpenRouter
@@ -434,6 +436,7 @@ Unsigned builds trigger SmartScreen warnings until they build up reputation. To 
 | "Connection refused" | The server isn't running, or isn't listening on that address. For Ollama on another PC, set `OLLAMA_HOST=0.0.0.0`. |
 | 401 / 403 | Wrong or missing API key or proxy headers. Use **Test** in the backend editor; error details can be copied from the toast. |
 | The reply is cut off | Raise **Max reply tokens**, or type `/continue`. |
+| Stuck at 4096 tokens of context | That's the server's window, not the app's. Restart KoboldCpp with `--contextsize 8192` (llama.cpp: `--ctx-size`), then press **Test** and match the Context size. |
 | The model forgets earlier events | Check the rolling summary and session recaps are on (**Settings → Prompt**), and look at the prompt inspector to see what is being sent. |
 | ComfyUI test fails with a node error | The workflow references a model or custom node the server doesn't have. Open it in ComfyUI on that server first. |
 | Edits in Obsidian don't show up | They appear within a second or two. If a note was changed in both places at once, the app asks which version to keep. |

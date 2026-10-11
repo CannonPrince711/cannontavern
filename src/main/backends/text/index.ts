@@ -11,6 +11,7 @@ import { ollamaAdapter } from './ollama'
 import { openAiAdapter } from './openai'
 import { textgenAdapter } from './textgen'
 import type { PreparedRequest, ResolvedTextBackend, TextAdapter } from './types'
+import { detectServerContext, type ServerContext } from '../context'
 
 const ADAPTERS: Record<TextBackendType, TextAdapter> = {
   openai: openAiAdapter,
@@ -56,11 +57,31 @@ export async function testTextBackend(b: ResolvedTextBackend): Promise<TestResul
     const sample = result.text.trim()
       ? result.text.trim().slice(0, 200)
       : `(connected, but no text came back${result.stopReason ? `; stop reason: ${result.stopReason}` : ''})`
-    const parts = [result.model && `model ${result.model}`, result.firstTokenMs !== undefined && `first token ${result.firstTokenMs} ms`]
-    return { ok: true, ms, sample: parts.some(Boolean) ? `${sample}\n${parts.filter(Boolean).join(' · ')}` : sample }
+    const server = await detectServerContext(b, { fresh: true }).catch(() => null)
+    const parts = [
+      result.model && `model ${result.model}`,
+      result.firstTokenMs !== undefined && `first token ${result.firstTokenMs} ms`,
+      server && `${server.server} context ${server.tokens.toLocaleString('en-US')} tokens`
+    ]
+    return {
+      ok: true,
+      ms,
+      sample: parts.some(Boolean) ? `${sample}\n${parts.filter(Boolean).join(' · ')}` : sample,
+      ...(server ? { serverContext: server.tokens } : {}),
+      ...(server && server.tokens < b.generation.contextSize ? { notice: contextNotice(server, b.generation.contextSize) } : {})
+    }
   } catch (err) {
     return { ok: false, ms: Date.now() - started, error: toErrorInfo(err) }
   }
+}
+
+function contextNotice(server: ServerContext, setting: number): string {
+  const n = (v: number): string => v.toLocaleString('en-US')
+  if (!server.hard) {
+    return `This model was trained on ${n(server.tokens)} tokens of context. Ollama will load the ${n(setting)} you set, but replies may get worse past ${n(server.tokens)}.`
+  }
+  const flag = { KoboldCpp: '--contextsize', 'llama.cpp': '--ctx-size', vLLM: '--max-model-len', Ollama: '' }[server.server]
+  return `The server loaded a context window of ${n(server.tokens)} tokens, less than this backend’s Context size (${n(setting)}), so DND Tavern will fit prompts into ${n(server.tokens)}. To get more, restart ${server.server} with a bigger ${flag} (e.g. ${flag} ${Math.min(server.tokens * 2, setting)}), then set Context size to match.`
 }
 
 /** The request as the prompt inspector shows it: every secret masked. */

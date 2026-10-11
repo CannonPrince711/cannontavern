@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { CheckCircle2, ChevronRight, Copy, Loader2, Lock, LockOpen, Plus, RefreshCw, Trash2, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Copy, Loader2, Lock, LockOpen, Plus, RefreshCw, Trash2, XCircle } from 'lucide-react'
 import type { SecretInput } from '@shared/settings'
 import type { TestResult } from '@shared/types'
 import { Button } from '@/components/ui/button'
@@ -223,7 +223,7 @@ export function ModelField({
   )
 }
 
-export function TestResultPanel({ result }: { result: TestResult }): React.JSX.Element {
+export function TestResultPanel({ result, action }: { result: TestResult; action?: React.ReactNode }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copy = async (): Promise<void> => {
     const e = result.error
@@ -250,6 +250,16 @@ export function TestResultPanel({ result }: { result: TestResult }): React.JSX.E
         )}
       </div>
       {result.ok && result.sample && <p className="selectable mt-1.5 font-serif text-[15px] whitespace-pre-wrap text-parchment">{result.sample}</p>}
+      {result.ok && result.notice && (
+        <p className="selectable mt-2 flex gap-1.5 text-xs leading-relaxed text-gold">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            {/* Keep command-line flags like "--contextsize 8192" on one line. */}
+            {result.notice.split(/(--[a-z-]+(?: \d+)?)/).map((part, i) => (i % 2 ? <code key={i} className="font-mono whitespace-nowrap">{part}</code> : part))}
+          </span>
+        </p>
+      )}
+      {action && <div className="mt-2">{action}</div>}
       {result.imageDataUrl && <img src={result.imageDataUrl} alt="Test image" className="mt-2 max-h-48 rounded-md" />}
       {!result.ok && result.error && <p className="selectable mt-1.5 text-xs leading-relaxed">{result.error.message}</p>}
     </div>

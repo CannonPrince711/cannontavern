@@ -17,6 +17,7 @@ import { settingsStore } from './settings-store'
 import { redactRequest, resolveTextBackend, textAdapter } from './backends/text'
 import type { GenerateResult } from './backends/text/types'
 import { backendChain } from './backends/chain'
+import { effectiveContext } from './backends/context'
 import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
 import { editionOf, rulesLine } from '@shared/editions'
@@ -103,6 +104,7 @@ class ChatService {
     const lorePaths = await resolveLorebookLinks(vault, campaign.lorebooks)
     const entries = (await Promise.all(lorePaths.map((p) => readLorebook(vault, p).catch(() => null)))).flatMap((b) => b?.entries ?? [])
     const backend = opts.backend ?? backendChain(s)[0]
+    const window = backend ? await effectiveContext(backend) : 8192
     const tokenizer = backend?.tokenizer ?? 'chars4'
     const lore = selectLore(entries, messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
 
@@ -131,7 +133,7 @@ class ChatService {
       rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
       messages,
       order: normalizeBlockOrder(s.prompt.blocks),
-      budget: s.prompt.contextBudget || backend?.generation.contextSize || 8192,
+      budget: Math.min(s.prompt.contextBudget || window, window),
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,
       autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd
@@ -155,6 +157,7 @@ class ChatService {
     const backend = backendChain(s)[0]
     if (!backend) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
     const { prompt } = await this.context(sessionPath, { backend })
+    const window = await effectiveContext(backend)
     const resolved = resolveTextBackend(backend)
     const req = redactRequest(textAdapter(backend.type).prepare(resolved, { system: prompt.system, messages: prompt.messages }, backend.generation.stream))
     return {
@@ -165,7 +168,7 @@ class ChatService {
       body: req.body,
       blocks: prompt.blocks,
       totalTokens: prompt.totalTokens,
-      budget: s.prompt.contextBudget || backend.generation.contextSize
+      budget: Math.min(s.prompt.contextBudget || window, window)
     }
   }
 

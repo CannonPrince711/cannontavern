@@ -294,7 +294,18 @@ export function TextBackendEditor({ initial, isNew, onSaved, onDeleted, onDiscar
           </div>
         </Disclosure>
 
-        {test && <TestResultPanel result={test} />}
+        {test && (
+          <TestResultPanel
+            result={test}
+            action={
+              test.ok && test.serverContext && test.serverContext !== draft.generation.contextSize ? (
+                <Button size="sm" variant="outline" onClick={() => gen('contextSize', test.serverContext!)}>
+                  Set Context size to {test.serverContext.toLocaleString('en-US')}
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
       </div>
 
       <div className="flex items-center gap-2 border-t bg-card/60 px-6 py-3">
