@@ -254,7 +254,13 @@ class ImageService {
       `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
     )
     const profile = s.imageProfiles.map
-    const workflowId = workflowFor(backend, 'map', profile)
+    let workflowId = workflowFor(backend, 'map', profile)
+    if (sketch && backend.type === 'comfyui') {
+      // A sketch needs a workflow that takes an image: the chosen one if it does, else a Maps one that does, else any.
+      const wfs = backend.comfy.workflows
+      const takesImage = (id?: string | null): boolean => !!wfs.find((w) => w.id === id)?.mapping.sourceImage
+      if (!takesImage(workflowId)) workflowId = (wfs.find((w) => w.purpose === 'map' && w.mapping.sourceImage) ?? wfs.find((w) => w.mapping.sourceImage))?.id ?? workflowId
+    }
     const applied = applyImageProfile(backend, 'map', profile, workflowId)
     const over: Partial<ImageRequest> = { ...applied.over }
     if (sketch) {
