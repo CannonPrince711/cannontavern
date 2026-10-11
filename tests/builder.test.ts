@@ -27,13 +27,15 @@ describe('campaign builder', () => {
   })
 
   it('fills missing fields with defaults', () => {
-    const d = parseDraft('{"name": "Bare"}')
-    expect(d).toEqual({ ...emptyDraft('Bare') })
+    const d = parseDraft('{"name": "Bare", "pitch": "Just a pitch."}')
+    expect(d).toEqual({ ...emptyDraft('Bare'), pitch: 'Just a pitch.' })
+    // A name alone isn't a campaign.
+    expect(() => parseDraft('{"name": "Bare"}')).toThrow(/no campaign/)
   })
 
   it('reports replies without usable JSON', () => {
     expect(() => parseDraft('I cannot do that.')).toThrow(/no JSON/)
-    expect(() => parseDraft('{ broken json')).toThrow(/no JSON|invalid JSON/)
+    expect(() => parseDraft('{ broken json')).toThrow(/no campaign|couldn’t be read/)
   })
 
   it('builds lore entries players may see, without secrets', () => {
@@ -61,5 +63,60 @@ describe('campaign builder', () => {
     expect(p).toContain('A human DM will run it')
     expect(p).toContain('Keep out of the story: spiders')
     expect(p).toContain('Name: invent a fitting one')
+  })
+})
+
+describe('campaign builder: messy model output', () => {
+  it('repairs trailing commas, comments, single quotes and line breaks in strings', () => {
+    const reply = `Sure! Here's your campaign:
+{
+  // a comment
+  'name': 'The Salt Throne',
+  "setting": "A drowned kingdom
+where tides rule.",
+  "locations": [{"name": "Brinegate", "description": "A harbour.",},],
+}
+Hope you like it!`
+    const d = parseDraft(reply)
+    expect(d.name).toBe('The Salt Throne')
+    expect(d.setting).toContain('tides rule')
+    expect(d.locations[0]!.name).toBe('Brinegate')
+  })
+
+  it('salvages a reply that was cut off mid-way', () => {
+    const d = parseDraft('{"name": "Cut Short", "pitch": "A story.", "npcs": [{"name": "Ola", "role": "Smith"}, {"name": "Bex", "ro')
+    expect(d.name).toBe('Cut Short')
+    expect(d.npcs[0]).toMatchObject({ name: 'Ola', role: 'Smith' })
+  })
+
+  it('accepts other key names, string lists and wrapped objects', () => {
+    const d = parseDraft(JSON.stringify({
+      campaign: {
+        Title: 'Ember Road',
+        'House Rules': 'Flanking gives advantage.',
+        Opening_Scene: 'Smoke on the horizon.',
+        Places: ['Ashford – a mining town', 'The Kiln: an old fortress'],
+        Characters: { 'Mara Voss': { occupation: 'Mayor', motivation: 'Keep the mines open' } },
+        Acts: [{ name: 'Act 1', description: 'Arrival' }],
+        Objectives: 'Find the missing miners\nReach the Kiln'
+      }
+    }))
+    expect(d.name).toBe('Ember Road')
+    expect(d.houseRules).toBe('Flanking gives advantage.')
+    expect(d.opening).toBe('Smoke on the horizon.')
+    expect(d.locations.map((l) => [l.name, l.description])).toEqual([['Ashford', 'a mining town'], ['The Kiln', 'an old fortress']])
+    expect(d.npcs[0]).toMatchObject({ name: 'Mara Voss', role: 'Mayor', want: 'Keep the mines open' })
+    expect(d.outline[0]).toMatchObject({ title: 'Act 1', summary: 'Arrival' })
+    expect(d.quests).toEqual(['Find the missing miners', 'Reach the Kiln'])
+  })
+
+  it('trims instead of rejecting over-long output', () => {
+    const d = parseDraft(JSON.stringify({ name: 'Big', locations: Array.from({ length: 30 }, (_, i) => ({ name: `Place ${i}` })), opening: 'x'.repeat(10_000) }))
+    expect(d.locations).toHaveLength(12)
+    expect(d.opening.length).toBe(6000)
+  })
+
+  it('asks a compact prompt for retries', () => {
+    expect(builderPrompt(CampaignConceptSchema.parse({ length: 'long' }), { compact: true })).toContain('3 locations, 3 NPCs')
   })
 })

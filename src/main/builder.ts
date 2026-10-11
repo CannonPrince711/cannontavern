@@ -26,18 +26,33 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
   const chain = backendChain(s, 'chat')
   if (!chain.length) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first, or fill in the campaign by hand.')
   let lastError: unknown = null
+  let lastReply = ''
   for (const backend of chain) {
-    try {
-      const result = await textAdapter(backend.type).generate(
-        resolveTextBackend(backend),
-        { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: builderPrompt(concept) }], maxTokens: Math.max(4000, Math.min(backend.generation.maxTokens * 4, 8000)) },
-        { stream: false }
-      )
-      const draft = parseDraft(result.text)
-      if (!draft.name.trim()) draft.name = concept.name.trim() || 'Untitled Campaign'
-      return draft
-    } catch (err) {
-      lastError = err instanceof Error && !(err instanceof AppError) ? new AppError('BAD_DRAFT', err.message) : err
+    // A full campaign first; if the reply can't be read, a smaller one (easier for small models).
+    for (const compact of [false, true]) {
+      const prompt = builderPrompt(concept, { compact })
+      // Leave the reply room inside the model's context window.
+      const promptTokens = Math.ceil((BUILDER_SYSTEM.length + prompt.length) / 3.5)
+      const room = (backend.generation.contextSize || 8192) - promptTokens - 64
+      const maxTokens = Math.max(800, Math.min(6000, room))
+      try {
+        const result = await textAdapter(backend.type).generate(resolveTextBackend(backend), { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens }, { stream: false })
+        lastReply = result.text
+        const draft = parseDraft(result.text)
+        if (!draft.name.trim()) draft.name = concept.name.trim() || 'Untitled Campaign'
+        return draft
+      } catch (err) {
+        if (err instanceof AppError) {
+          // Connection or backend errors: no point in a smaller request on this backend.
+          lastError = err
+          break
+        }
+        lastError = new AppError(
+          'BAD_DRAFT',
+          `${err instanceof Error ? err.message : String(err)} Try again, pick a larger model in the model switcher, or fill the campaign in by hand.`,
+          lastReply ? `The model replied:\n${lastReply.slice(0, 1500)}` : undefined
+        )
+      }
     }
   }
   throw lastError

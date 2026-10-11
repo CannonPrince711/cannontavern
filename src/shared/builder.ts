@@ -2,6 +2,7 @@
  * Campaign builder: a concept → (AI or hand-written) draft → vault notes.
  * The draft is plain data the user reviews and edits before anything is written.
  */
+import { jsonrepair } from 'jsonrepair'
 import { z } from 'zod'
 import type { LoreEntry } from './types'
 import { PLAY_MODES } from './play'
@@ -25,8 +26,9 @@ export const CampaignConceptSchema = z.object({
 })
 export type CampaignConcept = z.infer<typeof CampaignConceptSchema>
 
-const str = (max = 4000) => z.preprocess((v) => (v == null ? '' : typeof v === 'string' ? v : String(v)), z.string().max(max))
-const list = <T extends z.ZodTypeAny>(item: T, max = 12) => z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(item).max(max))
+// Over-long text and lists are trimmed rather than rejected: models don't count.
+const str = (max = 4000) => z.preprocess((v) => (v == null ? '' : typeof v === 'string' ? v : String(v)).slice(0, max), z.string())
+const list = <T extends z.ZodTypeAny>(item: T, max = 12) => z.preprocess((v) => (Array.isArray(v) ? v.slice(0, max) : []), z.array(item))
 
 export const CampaignDraftSchema = z.object({
   name: str(120),
@@ -67,8 +69,10 @@ const SHAPE = `{
   "secrets": ["DM-only truths"]
 }`
 
-export function builderPrompt(c: CampaignConcept): string {
-  const size = c.length === 'one-shot' ? 'a one-shot (one session): 3 locations, 3 NPCs, 1–2 factions, a 3-beat outline' : c.length === 'short' ? 'a short arc (3–6 sessions): 4–5 locations, 4–5 NPCs, 2–3 factions, a 3–4 act outline' : 'a long campaign: 6 locations, 6 NPCs, 3 factions, a 5–6 act outline'
+export function builderPrompt(c: CampaignConcept, opts: { compact?: boolean } = {}): string {
+  const size = opts.compact
+    ? 'a small campaign: 3 locations, 3 NPCs, 2 factions, a 3-beat outline. Keep every text field to one or two sentences'
+    : c.length === 'one-shot' ? 'a one-shot (one session): 3 locations, 3 NPCs, 1–2 factions, a 3-beat outline' : c.length === 'short' ? 'a short arc (3–6 sessions): 4–5 locations, 4–5 NPCs, 2–3 factions, a 3–4 act outline' : 'a long campaign: 6 locations, 6 NPCs, 3 factions, a 5–6 act outline'
   const lines = [
     c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
     `Premise: ${c.premise.trim() || 'surprise me'}`,
@@ -84,18 +88,112 @@ export function builderPrompt(c: CampaignConcept): string {
   return `Design a campaign from this concept.\n\n${lines.join('\n')}\n\nReply with a single JSON object shaped exactly like this:\n${SHAPE}`
 }
 
-/** Reads a draft out of a model reply (tolerates code fences and prose around the JSON). */
-export function parseDraft(reply: string): CampaignDraft {
-  const start = reply.indexOf('{')
-  const end = reply.lastIndexOf('}')
-  if (start === -1 || end <= start) throw new Error('The model did not return a campaign (no JSON found).')
-  let data: unknown
-  try {
-    data = JSON.parse(reply.slice(start, end + 1))
-  } catch {
-    throw new Error('The model returned invalid JSON. Try again, or use a stronger model.')
+/**
+ * Pulls a JSON object out of a model reply: code fences, prose around it, and
+ * the usual small-model mistakes (trailing commas, comments, single or curly
+ * quotes, line breaks inside strings, or a reply cut off mid-way).
+ */
+export function extractJson(reply: string): unknown {
+  const text = reply.replace(/```(?:json|JSON)?/g, '')
+  const start = text.indexOf('{')
+  if (start === -1) throw new Error('The model didn’t return a campaign (there was no JSON in its reply).')
+  const end = text.lastIndexOf('}')
+  // The whole object, or (for a reply that was cut off) everything after the first brace.
+  const candidates = [...new Set([end > start ? text.slice(start, end + 1) : '', text.slice(start)].filter(Boolean))]
+  for (const c of candidates) {
+    try {
+      return JSON.parse(c)
+    } catch {
+      // try the next candidate
+    }
   }
-  const draft = CampaignDraftSchema.parse(data)
+  for (const c of candidates) {
+    try {
+      return JSON.parse(jsonrepair(c))
+    } catch {
+      // try the next candidate
+    }
+  }
+  throw new Error('The model’s reply couldn’t be read as a campaign, even after repairs.')
+}
+
+const norm = (k: string): string => k.toLowerCase().replace(/[^a-z]/g, '')
+
+/** Finds a field under any of several names ("house_rules", "House Rules", "houseRules"…). */
+function pick(o: Record<string, unknown>, ...names: string[]): unknown {
+  const wanted = names.map(norm)
+  for (const [k, v] of Object.entries(o)) if (wanted.includes(norm(k))) return v
+  return undefined
+}
+
+function asText(v: unknown): string {
+  if (v == null) return ''
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(v.every((x) => typeof x === 'string') ? '\n' : ' ')
+  if (typeof v === 'object') return Object.values(v as Record<string, unknown>).map(asText).filter(Boolean).join(' ')
+  return String(v)
+}
+
+function asList(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v
+  if (v && typeof v === 'object') {
+    // {"Cinderhold": "the capital", …} → [{name, description}, …]
+    return Object.entries(v as Record<string, unknown>).map(([name, value]) => (value && typeof value === 'object' && !Array.isArray(value) ? { name, ...(value as object) } : { name, description: asText(value) }))
+  }
+  if (typeof v === 'string' && v.trim()) return v.split(/\n+/).map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '')).filter(Boolean)
+  return []
+}
+
+/** "Cinderhold – the capital" → name and description. */
+function splitNamed(s: string): { name: string; description: string } {
+  const m = /^\s*\**([^:–—-]{1,80}?)\**\s*[:–—-]\s+(.*)$/s.exec(s)
+  return m ? { name: m[1]!.trim(), description: m[2]!.trim() } : { name: s.trim().slice(0, 80), description: s.trim().length > 80 ? s.trim() : '' }
+}
+
+function item(v: unknown, fields: Record<string, string[]>): Record<string, unknown> {
+  if (typeof v === 'string') {
+    const { name, description } = splitNamed(v)
+    return { name, title: name, description, summary: description }
+  }
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  return Object.fromEntries(Object.entries(fields).map(([key, names]) => [key, pick(o, key, ...names)]))
+}
+
+/** Maps whatever shape a model used onto the draft's fields, before validation. */
+export function coerceDraft(raw: unknown): Record<string, unknown> {
+  const o = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>
+  // Some models wrap everything: {"campaign": {…}}.
+  const inner = pick(o, 'campaign', 'draft', 'data')
+  const src = inner && typeof inner === 'object' && !Array.isArray(inner) && Object.keys(o).length <= 2 ? (inner as Record<string, unknown>) : o
+  const texts = (v: unknown): string[] => asList(v).map(asText).filter((s) => s.trim())
+  return {
+    name: asText(pick(src, 'name', 'title', 'campaignName', 'campaignTitle')),
+    pitch: asText(pick(src, 'pitch', 'summary', 'premise', 'overview', 'description')),
+    setting: asText(pick(src, 'setting', 'world', 'region')),
+    tone: asText(pick(src, 'tone', 'themes', 'mood')),
+    houseRules: asText(pick(src, 'houseRules', 'rules')),
+    hook: asText(pick(src, 'hook', 'adventureHook', 'incitingIncident')),
+    opening: asText(pick(src, 'opening', 'openingScene', 'intro', 'introduction', 'readAloud')),
+    locations: asList(pick(src, 'locations', 'places', 'areas')).map((v) => {
+      const l = item(v, { name: ['title'], description: ['summary', 'details'], keys: ['keywords', 'triggers', 'tags'] })
+      return { ...l, keys: texts(l.keys) }
+    }),
+    npcs: asList(pick(src, 'npcs', 'characters', 'nonPlayerCharacters', 'people')).map((v) =>
+      item(v, { name: [], role: ['occupation', 'title', 'job'], description: ['appearance', 'summary'], personality: ['traits', 'demeanor'], want: ['wants', 'goal', 'goals', 'motivation', 'desire'], secret: ['secrets', 'hidden'] })
+    ),
+    factions: asList(pick(src, 'factions', 'organizations', 'groups')).map((v) => item(v, { name: [], goal: ['goals', 'aim', 'agenda', 'motivation'], description: ['summary'] })),
+    outline: asList(pick(src, 'outline', 'acts', 'chapters', 'plot', 'beats', 'arc')).map((v) => item(v, { title: ['name', 'act', 'chapter'], summary: ['description', 'details', 'events'] })),
+    quests: texts(pick(src, 'quests', 'startingQuests', 'objectives')),
+    secrets: texts(pick(src, 'secrets', 'dmSecrets', 'twists'))
+  }
+}
+
+/** Reads a draft out of a model reply, repairing what it can. */
+export function parseDraft(reply: string): CampaignDraft {
+  const draft = CampaignDraftSchema.parse(coerceDraft(extractJson(reply)))
+  // Repairs can turn gibberish into an empty object; that's not a campaign.
+  const substance = [draft.pitch, draft.setting, draft.hook, draft.opening].some((t) => t.trim()) || draft.locations.length + draft.npcs.length + draft.outline.length > 0
+  if (!substance) throw new Error('The model’s reply had no campaign in it.')
   // Drop half-empty list items.
   return {
     ...draft,
