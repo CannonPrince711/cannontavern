@@ -5,16 +5,15 @@
  */
 import {
   BUILDER_SYSTEM,
-  builderPrompt,
+  DRAFT_PIECES,
   draftCampaignBody,
   draftLore,
-  draftSection,
-  missingSections,
-  parseDraft,
-  parseSections,
-  restPrompt,
+  emptyDraft,
+  mergePiece,
+  piecePrompt,
   type CampaignConcept,
-  type CampaignDraft
+  type CampaignDraft,
+  type DraftPiece
 } from '@shared/builder'
 import { FOLDERS, CAMPAIGN_FILE } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
@@ -55,86 +54,109 @@ export async function draftCampaign(concept: CampaignConcept): Promise<CampaignD
 }
 
 async function draft(concept: CampaignConcept, signal: AbortSignal): Promise<CampaignDraft> {
-  const s = settingsStore.get()
-  const chain = backendChain(s, 'chat')
+  let d = emptyDraft(concept.name.trim())
+  const failed: string[] = []
+  for (const [i, piece] of DRAFT_PIECES.entries()) {
+    try {
+      d = await writePiece(concept, d, piece.id, signal, { step: i + 1, steps: DRAFT_PIECES.length })
+    } catch (err) {
+      // Without an overview there's nothing to build on; a missing list can be redrafted or written by hand.
+      if (signal.aborted || piece.id === 'overview') throw err
+      failed.push(piece.label)
+    }
+  }
+  if (!d.name.trim()) d.name = concept.name.trim() || 'Untitled Campaign'
+  if (failed.length) {
+    send(getMainWindow(), 'toast', {
+      level: 'warning',
+      title: `Couldn’t write ${failed.join(', ')}`,
+      detail: 'Press Redraft on that section in the review, or fill it in by hand.'
+    })
+  }
+  return d
+}
+
+/** Redoes one piece of a draft from the review step, keeping the rest. */
+export async function redraftPiece(concept: CampaignConcept, current: CampaignDraft, piece: DraftPiece): Promise<CampaignDraft> {
+  drafting?.abort()
+  const controller = new AbortController()
+  drafting = controller
+  try {
+    return await writePiece(concept, current, piece, controller.signal, { step: 1, steps: 1 })
+  } finally {
+    if (drafting === controller) drafting = null
+  }
+}
+
+/**
+ * Writes one piece of the campaign with the first backend that answers. A reply
+ * that can't be read gets one more try; connection errors move on to the next
+ * backend in the chain.
+ */
+async function writePiece(concept: CampaignConcept, d: CampaignDraft, piece: DraftPiece, signal: AbortSignal, at: { step: number; steps: number }): Promise<CampaignDraft> {
+  const chain = backendChain(settingsStore.get(), 'chat')
   if (!chain.length) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first, or fill in the campaign by hand.')
+  const label = DRAFT_PIECES.find((p) => p.id === piece)!.label
+  const prompt = piecePrompt(concept, d, piece)
   let lastError: unknown = null
   let lastReply = ''
   for (const backend of chain) {
     const window = await effectiveContext(backend)
-    // A full campaign first; if the reply can't be read, a smaller one (easier for small models).
-    for (const compact of [false, true]) {
-      const prompt = builderPrompt(concept, { compact })
-      // Leave the reply room inside the model's context window.
-      const promptTokens = Math.ceil((BUILDER_SYSTEM.length + prompt.length) / 3.5)
-      const room = window - promptTokens - 64
-      if (room < 800) {
-        // The request alone would fill the model's window: say so rather than send something that gets cut.
-        lastError = new AppError(
-          'PROMPT_TOO_LONG',
-          `The premise is too long for this model: the request is about ${promptTokens.toLocaleString('en-US')} tokens, and its context window is ${window.toLocaleString('en-US')}. Shorten the premise, or raise the server's context size.`
-        )
-        if (compact) break
-        continue
-      }
-      const maxTokens = Math.max(800, Math.min(6000, room))
-      // Stream the reply (when the backend streams) so the builder can show how far along it is.
-      const streaming = backend.generation.stream
+    // Leave the reply room inside the model's context window.
+    const promptTokens = Math.ceil((BUILDER_SYSTEM.length + prompt.length) / 3.5)
+    const room = window - promptTokens - 64
+    if (room < 600) {
+      throw new AppError(
+        'PROMPT_TOO_LONG',
+        `The premise is too long for this model: the request is about ${promptTokens.toLocaleString('en-US')} tokens, and its context window is ${window.toLocaleString('en-US')}. Shorten the premise, or raise the server's context size.`
+      )
+    }
+    // Each piece is small: well under a server's reply cap (KoboldCpp stops at 2048).
+    const maxTokens = Math.min(2000, room)
+    const streaming = backend.generation.stream
+    // Streaming resets the timeout with every token; a reply that only arrives at the end gets 10 minutes.
+    const resolved = resolveTextBackend(backend)
+    const net = streaming ? resolved.net : { ...resolved.net, timeoutMs: Math.max(resolved.net.timeoutMs, 600_000) }
+    for (const retry of [false, true]) {
       let text = ''
       let sent = 0
-      let attempt: 'full' | 'compact' | 'rest' = compact ? 'compact' : 'full'
       const progress = (force = false): void => {
         if (!force && Date.now() - sent < 250) return
         sent = Date.now()
-        send(getMainWindow(), 'campaigns:draftProgress', { chars: text.length, tokens: Math.round(text.length / 3.5), maxTokens, section: draftSection(text), attempt, streaming })
+        send(getMainWindow(), 'campaigns:draftProgress', {
+          chars: text.length,
+          tokens: Math.round(text.length / 3.5),
+          maxTokens,
+          section: label,
+          attempt: retry ? 'compact' : 'full',
+          streaming,
+          step: at.step,
+          steps: at.steps
+        })
       }
       progress(true)
       try {
-        // Streaming resets the timeout with every token; a reply that only arrives at the end gets 10 minutes.
-        const resolved = resolveTextBackend(backend)
-        const net = streaming ? resolved.net : { ...resolved.net, timeoutMs: Math.max(resolved.net.timeoutMs, 600_000) }
         const result = await textAdapter(backend.type).generate(
           { ...resolved, net },
-          { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: prompt }], maxTokens },
+          { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: retry ? `${prompt}\n\nReply with the JSON object only, nothing else.` : prompt }], maxTokens },
           { stream: streaming, signal, onToken: (delta) => ((text += delta), progress()) }
         )
         lastReply = result.text
-        const draft = parseDraft(result.text)
-        if (!draft.name.trim()) draft.name = concept.name.trim() || 'Untitled Campaign'
-        // Servers cap a reply's length (KoboldCpp at 2048 tokens by default), so long concepts can
-        // stop before the lists. Ask for whatever's missing in a second, smaller request.
-        const missing = missingSections(draft)
-        if (missing.length) {
-          attempt = 'rest'
-          text = ''
-          progress(true)
-          try {
-            const rest = await textAdapter(backend.type).generate(
-              { ...resolved, net },
-              { system: BUILDER_SYSTEM, messages: [{ role: 'user', content: restPrompt(concept, draft, missing) }], maxTokens },
-              { stream: streaming, signal, onToken: (delta) => ((text += delta), progress()) }
-            )
-            const more = parseSections(rest.text)
-            for (const k of missing) (draft[k] as unknown[]) = more[k]
-          } catch (err) {
-            if (signal.aborted) throw err
-            // Keep what the first reply had; the lists can be filled in by hand.
-          }
-        }
-        return draft
+        return mergePiece(d, piece, result.text)
       } catch (err) {
         if (err instanceof AppError) {
-          // Connection or backend errors: no point in a smaller request on this backend.
+          // Connection or backend errors: try the next backend.
           lastError = err
           break
         }
         lastError = new AppError(
           'BAD_DRAFT',
-          `${err instanceof Error ? err.message : String(err)} Try again, pick a larger model in the model switcher, or fill the campaign in by hand.`,
+          `${err instanceof Error ? err.message : String(err)} Try again, pick a larger model in the model switcher, or fill it in by hand.`,
           lastReply ? `The model replied:\n${lastReply.slice(0, 1500)}` : undefined
         )
       }
     }
+    if ((lastError as { code?: string })?.code === 'ABORTED') break
   }
   throw lastError
 }

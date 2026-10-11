@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { builderPrompt, CampaignConceptSchema, draftCampaignBody, draftLore, draftSection, emptyDraft, escapeStrayQuotes, missingSections, parseDraft, parseSections, PREMISE_MAX, restPrompt } from '../src/shared/builder'
+import { CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -58,7 +58,7 @@ describe('campaign builder', () => {
   })
 
   it('describes the concept to the model', () => {
-    const p = builderPrompt(CampaignConceptSchema.parse({ premise: 'Pirates vs. a kraken cult', tones: ['Swashbuckling'], length: 'one-shot', players: 3, mode: 'user-dm', avoid: 'spiders' }))
+    const p = piecePrompt(CampaignConceptSchema.parse({ premise: 'Pirates vs. a kraken cult', tones: ['Swashbuckling'], length: 'one-shot', players: 3, mode: 'user-dm', avoid: 'spiders' }), emptyDraft(), 'overview')
     expect(p).toContain('Premise: Pirates vs. a kraken cult')
     expect(p).toContain('Tone: Swashbuckling')
     expect(p).toContain('one-shot')
@@ -119,9 +119,6 @@ Hope you like it!`
     expect(d.opening.length).toBe(6000)
   })
 
-  it('asks a compact prompt for retries', () => {
-    expect(builderPrompt(CampaignConceptSchema.parse({ length: 'long' }), { compact: true })).toContain('3 locations, 3 NPCs')
-  })
 })
 
 describe('campaign builder: long premises', () => {
@@ -168,33 +165,41 @@ describe('campaign builder: quotes inside text', () => {
   })
 })
 
-describe('campaign builder: progress while streaming', () => {
-  it('names the part of the campaign being written, ignoring nested keys', () => {
-    expect(draftSection('')).toBeNull()
-    expect(draftSection('{"name": "Shadow Gar')).toBe('the premise')
-    expect(draftSection('{"name": "X", "locations": [{"name": "Midgar", "description": "The ca')).toBe('places')
-    expect(draftSection('{"name": "X", "locations": [], "npcs": [{"name": "Alpha", "role": "Knight"')).toBe('NPCs')
-    expect(draftSection('{"name": "Say \\"npcs\\": nothing", "hook": "A')).toBe('the hook')
-  })
-})
 
-describe('campaign builder: a reply cut off before the lists', () => {
-  const cut = '{"name": "The Devil\'s Peerage", "pitch": "Students by day, Devils by night.", "setting": "A modern city.", "hook": "A Stray kills a client.", "opening": "Rain on the clubroom win'
-  it('keeps the overview and lists what never arrived', () => {
-    const d = parseDraft(cut)
-    expect(d.name).toBe("The Devil's Peerage")
-    expect(missingSections(d)).toEqual(['locations', 'npcs', 'factions', 'outline', 'quests', 'secrets'])
+describe('campaign builder: drafting in pieces', () => {
+  const concept = CampaignConceptSchema.parse({ premise: 'High School DxD with Evil Pieces', length: 'long', edition: '3.5e', levels: '1–20', players: 3 })
+  const overview = mergePiece(emptyDraft(), 'overview', '{"name": "The Devil\'s Peerage", "pitch": "Students by day.", "setting": "Kuoh.", "hook": "A Stray attacks."}')
+
+  it('starts every piece with the same concept, so a local server can reuse it', () => {
+    const pieces = (['overview', 'locations', 'npcs', 'factions', 'story'] as const).map((p) => piecePrompt(concept, overview, p))
+    const head = pieces[0]!.slice(0, pieces[0]!.indexOf('\n\n'))
+    expect(head).toContain('Premise: High School DxD')
+    for (const p of pieces) expect(p.startsWith(head)).toBe(true)
   })
-  it('asks for only the missing sections, with the overview and concept as context', () => {
-    const d = parseDraft(cut)
-    const p = restPrompt(CampaignConceptSchema.parse({ premise: 'High School DxD with Evil Pieces', length: 'long', edition: '3.5e', levels: '1–20' }), d, ['locations', 'npcs'])
+
+  it('tells later pieces what exists so names stay consistent', () => {
+    const withPlaces = mergePiece(overview, 'locations', '{"locations": [{"name": "Kuoh Academy", "description": "The school."}]}')
+    const p = piecePrompt(concept, withPlaces, 'npcs')
     expect(p).toContain("Name: The Devil's Peerage")
-    expect(p).toContain('Original concept (for names and lore): High School DxD')
-    expect(p).toContain('"locations": [')
+    expect(p).toContain('Places: Kuoh Academy')
+    expect(p).toContain('Write 6 memorable NPCs')
     expect(p).toContain('"npcs": [')
-    expect(p).not.toContain('"factions"')
-    expect(p).toContain('D&D 3.5 edition; character levels 1–20')
+    expect(p).not.toContain('"locations": [')
+    // Redrafting places leaves the current places out of the context.
+    expect(piecePrompt(concept, withPlaces, 'locations')).not.toContain('Places: Kuoh Academy')
   })
+
+  it('only changes the piece it was asked for', () => {
+    const d = mergePiece(overview, 'npcs', '{"name": "Something else", "npcs": [{"name": "Rias", "role": "King"}]}')
+    expect(d.name).toBe("The Devil's Peerage")
+    expect(d.npcs[0]).toMatchObject({ name: 'Rias', role: 'King' })
+  })
+
+  it('says so when a piece came back empty', () => {
+    expect(() => mergePiece(overview, 'factions', '{"locations": []}')).toThrow(/factions/)
+    expect(() => mergePiece(emptyDraft(), 'overview', '{"tone": ""}')).toThrow(/overview/)
+  })
+
   it('reads a reply that holds only lists', () => {
     const more = parseSections('{"locations": [{"name": "Kuoh Academy", "description": "The school."}], "npcs": [{"name": "Rias", "role": "King"}]}')
     expect(more.locations[0]!.name).toBe('Kuoh Academy')

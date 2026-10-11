@@ -56,74 +56,6 @@ export function emptyDraft(name = ''): CampaignDraft {
 
 export const BUILDER_SYSTEM = `You are an expert Dungeons & Dragons campaign designer. You turn a concept into a ready-to-run campaign: vivid but concise, with clear hooks, memorable NPCs who each want something, factions with conflicting goals, and secrets the DM can reveal over time. If the concept is based on an existing story or setting, use its names and lore; otherwise avoid well-known published settings and characters and invent your own names. Reply with JSON only. Inside text values, write quotations and dialogue with single quotes ('like this'), never double quotes.`
 
-const SHAPE = `{
-  "name": "campaign name",
-  "pitch": "one-paragraph summary for the players",
-  "setting": "2–4 sentences about the region and its feel",
-  "tone": "one sentence on tone and themes",
-  "houseRules": "optional house rules, or empty",
-  "hook": "why the party gets involved",
-  "opening": "the opening scene, read aloud to the players in second person, ending with a question to act on",
-  "locations": [{ "name": "", "description": "", "keys": ["trigger words"] }],
-  "npcs": [{ "name": "", "role": "", "description": "", "personality": "", "want": "", "secret": "" }],
-  "factions": [{ "name": "", "goal": "", "description": "" }],
-  "outline": [{ "title": "Act or chapter", "summary": "" }],
-  "quests": ["starting quest"],
-  "secrets": ["DM-only truths"]
-}`
-
-export function builderPrompt(c: CampaignConcept, opts: { compact?: boolean } = {}): string {
-  const size = opts.compact
-    ? 'a small campaign: 3 locations, 3 NPCs, 2 factions, a 3-beat outline. Keep every text field to one or two sentences'
-    : c.length === 'one-shot' ? 'a one-shot (one session): 3 locations, 3 NPCs, 1–2 factions, a 3-beat outline' : c.length === 'short' ? 'a short arc (3–6 sessions): 4–5 locations, 4–5 NPCs, 2–3 factions, a 3–4 act outline' : 'a long campaign: 6 locations, 6 NPCs, 3 factions, a 5–6 act outline'
-  const lines = [
-    c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
-    `Premise: ${c.premise.trim() || 'surprise me'}`,
-    c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
-    c.setting.trim() ? `Setting: ${c.setting.trim()}` : '',
-    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
-    `Character levels: ${c.levels || '1–5'}`,
-    `Players: ${c.players} ${c.players === 1 ? 'player character' : 'player characters'}`,
-    `Size: ${size}`,
-    c.mode === 'user-dm' ? 'A human DM will run it, so make the outline and secrets practical to improvise from.' : 'An AI DM will run it, so make the secrets and outline explicit.',
-    c.avoid.trim() ? `Keep out of the story: ${c.avoid.trim()}` : ''
-  ].filter(Boolean)
-  return `Design a campaign from this concept.\n\n${lines.join('\n')}\n\nKeep the text fields short (two or three sentences each; the opening scene one paragraph) so there's room for every list.\n\nReply with a single JSON object shaped exactly like this:\n${SHAPE}`
-}
-
-/** The draft's list sections, in the order a reply writes them. */
-export const DRAFT_LISTS = ['locations', 'npcs', 'factions', 'outline', 'quests', 'secrets'] as const
-export type DraftList = (typeof DRAFT_LISTS)[number]
-
-/** Lists a reply never got to (usually because the server cut it off). */
-export function missingSections(d: CampaignDraft): DraftList[] {
-  return DRAFT_LISTS.filter((k) => d[k].length === 0)
-}
-
-const LIST_SHAPES: Record<DraftList, string> = {
-  locations: '"locations": [{ "name": "", "description": "", "keys": ["trigger words"] }]',
-  npcs: '"npcs": [{ "name": "", "role": "", "description": "", "personality": "", "want": "", "secret": "" }]',
-  factions: '"factions": [{ "name": "", "goal": "", "description": "" }]',
-  outline: '"outline": [{ "title": "Act or chapter", "summary": "" }]',
-  quests: '"quests": ["starting quest"]',
-  secrets: '"secrets": ["DM-only truths"]'
-}
-
-/** A second request for the sections a first reply didn't reach, with what it did write as context. */
-export function restPrompt(c: CampaignConcept, d: CampaignDraft, missing: DraftList[]): string {
-  const size =
-    c.length === 'one-shot' ? '3 locations, 3 NPCs, 1–2 factions, a 3-beat outline' : c.length === 'short' ? '4–5 locations, 4–5 NPCs, 2–3 factions, a 3–4 act outline' : '6 locations, 6 NPCs, 3 factions, a 5–6 act outline'
-  const known = [
-    `Name: ${d.name}`,
-    d.pitch && `Pitch: ${d.pitch}`,
-    d.setting && `Setting: ${d.setting}`,
-    d.tone && `Tone: ${d.tone}`,
-    d.hook && `Hook: ${d.hook}`,
-    c.premise.trim() && `Original concept (for names and lore): ${c.premise.trim().slice(0, 2500)}`,
-    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition' : 'D&D 5th edition'}; character levels ${c.levels || '1–5'}`
-  ].filter(Boolean)
-  return `Here is the start of a campaign:\n\n${known.join('\n')}\n\nNow write the rest of it: ${missing.join(', ')}. Aim for ${size}. Keep each description to one or two sentences.\n\nReply with a single JSON object with only these keys, shaped like this:\n{\n  ${missing.map((k) => LIST_SHAPES[k]).join(',\n  ')}\n}`
-}
 
 /** Reads a reply that holds only some of a draft's sections. */
 export function parseSections(reply: string): CampaignDraft {
@@ -322,46 +254,98 @@ export function draftCampaignBody(d: CampaignDraft): string {
   return `\n${parts.join('\n\n')}\n`
 }
 
-const SECTION_LABELS: Record<string, string> = {
-  name: 'the premise',
-  pitch: 'the premise',
-  setting: 'the setting',
-  tone: 'the tone',
-  houseRules: 'house rules',
-  hook: 'the hook',
-  opening: 'the opening scene',
-  locations: 'places',
-  npcs: 'NPCs',
-  factions: 'factions',
-  outline: 'the story outline',
-  quests: 'quests',
-  secrets: 'secrets'
+
+// ─── Drafting in pieces ─────────────────────────────────────────────────────
+
+/**
+ * A campaign is drafted in five small requests instead of one big one: easier
+ * for small models, never past a server's reply cap, and each can be redone on
+ * its own from the review step.
+ */
+export const DRAFT_PIECES = [
+  { id: 'overview', label: 'the overview', keys: ['name', 'pitch', 'setting', 'tone', 'houseRules', 'hook', 'opening'] },
+  { id: 'locations', label: 'places', keys: ['locations'] },
+  { id: 'npcs', label: 'NPCs', keys: ['npcs'] },
+  { id: 'factions', label: 'factions', keys: ['factions'] },
+  { id: 'story', label: 'the story', keys: ['outline', 'quests', 'secrets'] }
+] as const
+export type DraftPiece = (typeof DRAFT_PIECES)[number]['id']
+
+const PIECE_SHAPES: Record<DraftPiece, string> = {
+  overview: `{
+  "name": "campaign name",
+  "pitch": "two or three sentences for the players",
+  "setting": "two to four sentences about the world and its feel",
+  "tone": "one sentence on tone and themes",
+  "houseRules": "house rules from the concept, or empty",
+  "hook": "why the party gets involved",
+  "opening": "the opening scene, read aloud to the players in second person, one paragraph, ending with a question to act on"
+}`,
+  locations: `{ "locations": [{ "name": "", "description": "one or two sentences", "keys": ["trigger words"] }] }`,
+  npcs: `{ "npcs": [{ "name": "", "role": "", "description": "", "personality": "", "want": "", "secret": "" }] }`,
+  factions: `{ "factions": [{ "name": "", "goal": "", "description": "" }] }`,
+  story: `{ "outline": [{ "title": "Act or chapter", "summary": "" }], "quests": ["starting quest"], "secrets": ["DM-only truths"] }`
 }
 
-/** The part of the campaign a reply that's still arriving is on ("NPCs"), from its last top-level key. */
-export function draftSection(partial: string): string | null {
-  let depth = 0
-  let inString = false
-  let escaped = false
-  let start = -1
-  let last: string | null = null
-  for (let i = 0; i < partial.length; i++) {
-    const c = partial[i]!
-    if (inString) {
-      if (escaped) escaped = false
-      else if (c === '\\') escaped = true
-      else if (c === '"') {
-        inString = false
-        // A key at the top level of the object: "name": …
-        if (depth === 1 && start >= 0 && /^\s*:/.test(partial.slice(i + 1, i + 8))) last = partial.slice(start, i)
-      }
-      continue
-    }
-    if (c === '"') {
-      inString = true
-      start = i + 1
-    } else if (c === '{' || c === '[') depth++
-    else if (c === '}' || c === ']') depth--
+function pieceCounts(c: CampaignConcept): Record<'locations' | 'npcs' | 'factions' | 'acts', string> {
+  if (c.length === 'one-shot') return { locations: '3', npcs: '3', factions: '1–2', acts: '3 beats' }
+  if (c.length === 'short') return { locations: '4–5', npcs: '4–5', factions: '2–3', acts: '3–4 acts' }
+  return { locations: '6', npcs: '6', factions: '3', acts: '5–6 acts' }
+}
+
+/** What's been written so far, briefly, so later pieces keep the same names (the piece being redrafted is left out). */
+function draftSoFar(d: CampaignDraft, piece: DraftPiece): string {
+  const lines: string[] = []
+  if (piece !== 'overview') {
+    if (d.name) lines.push(`Name: ${d.name}`)
+    if (d.pitch) lines.push(`Pitch: ${d.pitch}`)
+    if (d.setting) lines.push(`Setting: ${d.setting}`)
+    if (d.hook) lines.push(`Hook: ${d.hook}`)
   }
-  return last ? (SECTION_LABELS[last] ?? null) : null
+  if (piece !== 'locations' && d.locations.length) lines.push(`Places: ${d.locations.map((l) => l.name).join(', ')}`)
+  if (piece !== 'npcs' && d.npcs.length) lines.push(`NPCs: ${d.npcs.map((n) => (n.role ? `${n.name} (${n.role})` : n.name)).join(', ')}`)
+  if (piece !== 'factions' && d.factions.length) lines.push(`Factions: ${d.factions.map((f) => f.name).join(', ')}`)
+  if (piece !== 'story' && d.outline.length) lines.push(`Outline: ${d.outline.map((o) => o.title).join('; ')}`)
+  return lines.join('\n')
+}
+
+/**
+ * The request for one piece. The concept comes first and is the same for every
+ * piece, so local servers can reuse it instead of re-reading it each time.
+ */
+export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPiece): string {
+  const n = pieceCounts(c)
+  const lines = [
+    c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
+    `Premise: ${c.premise.trim() || 'surprise me'}`,
+    c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
+    c.setting.trim() ? `Setting: ${c.setting.trim()}` : '',
+    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
+    `Character levels: ${c.levels || '1–5'}`,
+    `Players: ${c.players} ${c.players === 1 ? 'player character' : 'player characters'}`,
+    `Length: ${c.length === 'one-shot' ? 'a one-shot (one session)' : c.length === 'short' ? 'a short arc (3–6 sessions)' : 'a long campaign'}`,
+    c.mode === 'user-dm' ? 'A human DM will run it, so keep things practical to improvise from.' : 'An AI DM will run it, so make secrets and plans explicit.',
+    c.avoid.trim() ? `Keep out of the story: ${c.avoid.trim()}` : ''
+  ].filter(Boolean)
+  const ask: Record<DraftPiece, string> = {
+    overview: 'Write the campaign overview.',
+    locations: `Write ${n.locations} key locations.`,
+    npcs: `Write ${n.npcs} memorable NPCs, each wanting something, with a secret the DM can reveal.`,
+    factions: `Write ${n.factions} factions with conflicting goals.`,
+    story: `Write the story: an outline of ${n.acts}, 2–4 starting quests and 3–5 DM-only secrets.`
+  }
+  const sofar = draftSoFar(d, piece)
+  return `Campaign concept:\n${lines.join('\n')}${sofar ? `\n\nThe campaign so far:\n${sofar}` : ''}\n\n${ask[piece]} Keep each text short. Reply with a single JSON object shaped exactly like this:\n${PIECE_SHAPES[piece]}`
+}
+
+/** Reads a piece's reply and puts it into the draft (only that piece's fields change). */
+export function mergePiece(d: CampaignDraft, piece: DraftPiece, reply: string): CampaignDraft {
+  const got = parseSections(reply)
+  const keys = DRAFT_PIECES.find((p) => p.id === piece)!.keys as readonly (keyof CampaignDraft)[]
+  if (piece === 'overview' ? !got.name.trim() && !got.pitch.trim() && !got.setting.trim() : keys.every((k) => (got[k] as unknown[]).length === 0)) {
+    throw new Error(`The model didn’t write ${DRAFT_PIECES.find((p) => p.id === piece)!.label}.`)
+  }
+  const next = { ...d }
+  for (const k of keys) (next as Record<string, unknown>)[k] = got[k]
+  return next
 }

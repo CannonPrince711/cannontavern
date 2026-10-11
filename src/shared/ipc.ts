@@ -148,6 +148,8 @@ export interface InvokeMap {
   /** Campaign builder: an AI draft from a concept, then the reviewed draft written to the vault. */
   'campaigns:draft': Invoke<[concept: CampaignConcept], CampaignDraft>
   'campaigns:cancelDraft': Invoke<[], void>
+  /** Redoes one section of a draft (overview, places, NPCs, factions or the story), keeping the rest. */
+  'campaigns:redraftPiece': Invoke<[concept: CampaignConcept, draft: CampaignDraft, piece: 'overview' | 'locations' | 'npcs' | 'factions' | 'story'], CampaignDraft>
   'campaigns:build': Invoke<
     [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
@@ -266,7 +268,7 @@ export interface EventMap {
   'updates:changed': UpdateStatus
   'table:changed': TableStatus
   /** The campaign builder's draft as it streams in. */
-  'campaigns:draftProgress': { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact' | 'rest'; streaming: boolean }
+  'campaigns:draftProgress': { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean; step?: number; steps?: number }
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session
@@ -360,6 +362,7 @@ const invokeChannels = {
   'maps:generate': 1,
   'campaigns:draft': 1,
   'campaigns:cancelDraft': 1,
+  'campaigns:redraftPiece': 1,
   'campaigns:build': 1,
   'campaigns:create': 1,
   'campaigns:saveParty': 1,

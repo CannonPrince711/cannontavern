@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
-import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, PREMISE_MAX, type CampaignConcept, type CampaignDraft } from '@shared/builder'
+import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, PREMISE_MAX, type CampaignConcept, type CampaignDraft, type DraftPiece } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
 import { EDITION_INFO, EDITIONS } from '@shared/editions'
 import { Button } from '@/components/ui/button'
@@ -35,13 +35,14 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   )
 }
 
-function Section({ title, children, onAdd, addLabel }: { title: string; children: React.ReactNode; onAdd?: () => void; addLabel?: string }): React.JSX.Element {
+function Section({ title, children, onAdd, addLabel, extra }: { title: string; children: React.ReactNode; onAdd?: () => void; addLabel?: string; extra?: React.ReactNode }): React.JSX.Element {
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <h3 className="font-display text-sm font-semibold tracking-wide">{title}</h3>
+        {extra && <span className="ml-auto">{extra}</span>}
         {onAdd && (
-          <Button variant="ghost" size="sm" className="ml-auto h-7" onClick={onAdd}>
+          <Button variant="ghost" size="sm" className={cn('h-7', !extra && 'ml-auto')} onClick={onAdd}>
             <Plus /> {addLabel ?? 'Add'}
           </Button>
         )}
@@ -191,8 +192,37 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
   )
 }
 
-function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; setDraft: (d: CampaignDraft) => void; mode: PlayMode; setMode: (m: PlayMode) => void }): React.JSX.Element {
+function ReviewStep({
+  draft,
+  setDraft,
+  mode,
+  setMode,
+  concept
+}: {
+  draft: CampaignDraft
+  setDraft: (d: CampaignDraft) => void
+  mode: PlayMode
+  setMode: (m: PlayMode) => void
+  concept: CampaignConcept
+}): React.JSX.Element {
   const set = <K extends keyof CampaignDraft>(k: K, v: CampaignDraft[K]): void => setDraft({ ...draft, [k]: v })
+  // Redo one section with the AI, keeping everything else (and your edits) as context.
+  const [redrafting, setRedrafting] = useState<DraftPiece | null>(null)
+  const redraft = async (piece: DraftPiece): Promise<void> => {
+    setRedrafting(piece)
+    try {
+      setDraft(await invoke('campaigns:redraftPiece', { ...concept, setting: concept.setting.trim() }, draft, piece))
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'ABORTED') toast.error(err, 'Could not redraft that section')
+    } finally {
+      setRedrafting(null)
+    }
+  }
+  const redraftButton = (piece: DraftPiece, label: string): React.JSX.Element => (
+    <Button variant="ghost" size="sm" className="h-7" onClick={() => void redraft(piece)} disabled={redrafting !== null} title={`Write ${label} again with the AI`}>
+      {redrafting === piece ? <Loader2 className="animate-spin" /> : <RefreshCw />} {redrafting === piece ? 'Writing…' : 'Redraft'}
+    </Button>
+  )
   const locations = listOps(draft, setDraft, 'locations')
   const npcs = listOps(draft, setDraft, 'npcs')
   const factions = listOps(draft, setDraft, 'factions')
@@ -213,6 +243,7 @@ function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; 
         <TabsTrigger value="story">Story</TabsTrigger>
       </TabsList>
       <TabsContent value="overview" className="space-y-4">
+        <div className="flex justify-end">{redraftButton('overview', 'the overview')}</div>
         <div className="grid grid-cols-[1fr_auto] items-end gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="cb-dname">Name</Label>
@@ -239,7 +270,7 @@ function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; 
         {field('opening', 'Opening scene (read aloud)', 6)}
       </TabsContent>
       <TabsContent value="world" className="space-y-6">
-        <Section title="Locations" onAdd={() => locations.add({ name: '', description: '', keys: [] })} addLabel="Location">
+        <Section title="Locations" onAdd={() => locations.add({ name: '', description: '', keys: [] })} addLabel="Location" extra={redraftButton('locations', 'the places')}>
           {draft.locations.map((l, i) => (
             <Card key={i} label={l.name || 'location'} onRemove={() => locations.remove(i)}>
               <div className="grid grid-cols-[1fr_1fr] gap-2">
@@ -250,7 +281,7 @@ function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; 
             </Card>
           ))}
         </Section>
-        <Section title="NPCs" onAdd={() => npcs.add({ name: '', role: '', description: '', personality: '', want: '', secret: '' })} addLabel="NPC">
+        <Section title="NPCs" onAdd={() => npcs.add({ name: '', role: '', description: '', personality: '', want: '', secret: '' })} addLabel="NPC" extra={redraftButton('npcs', 'the NPCs')}>
           {draft.npcs.map((n, i) => (
             <Card key={i} label={n.name || 'NPC'} onRemove={() => npcs.remove(i)}>
               <div className="grid grid-cols-2 gap-2">
@@ -266,7 +297,7 @@ function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; 
             </Card>
           ))}
         </Section>
-        <Section title="Factions" onAdd={() => factions.add({ name: '', goal: '', description: '' })} addLabel="Faction">
+        <Section title="Factions" onAdd={() => factions.add({ name: '', goal: '', description: '' })} addLabel="Faction" extra={redraftButton('factions', 'the factions')}>
           {draft.factions.map((f, i) => (
             <Card key={i} label={f.name || 'faction'} onRemove={() => factions.remove(i)}>
               <div className="grid grid-cols-2 gap-2">
@@ -279,7 +310,7 @@ function ReviewStep({ draft, setDraft, mode, setMode }: { draft: CampaignDraft; 
         </Section>
       </TabsContent>
       <TabsContent value="story" className="space-y-6">
-        <Section title="Outline" onAdd={() => outline.add({ title: '', summary: '' })} addLabel="Act">
+        <Section title="Outline" onAdd={() => outline.add({ title: '', summary: '' })} addLabel="Act" extra={redraftButton('story', 'the outline, quests and secrets')}>
           {draft.outline.map((o, i) => (
             <Card key={i} label={o.title || 'act'} onRemove={() => outline.remove(i)}>
               <Input value={o.title} onChange={(e) => outline.set(i, { title: e.target.value })} placeholder={`Act ${i + 1}`} aria-label="Act title" />
@@ -403,7 +434,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
             />
           )}
           {stage === 'drafting' && <DraftProgress key={run} onCancel={() => void invoke('campaigns:cancelDraft').catch(() => {})} />}
-          {stage === 'review' && <ReviewStep draft={draft} setDraft={setDraft} mode={mode} setMode={setMode} />}
+          {stage === 'review' && <ReviewStep draft={draft} setDraft={setDraft} mode={mode} setMode={setMode} concept={concept} />}
         </div>
         {stage === 'review' && (
           <DialogFooter className="flex-wrap items-center">
@@ -439,7 +470,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
   )
 }
 
-type DraftProgressEvent = { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact' | 'rest'; streaming: boolean }
+type DraftProgressEvent = { chars: number; tokens: number; maxTokens: number; section: string | null; attempt: 'full' | 'compact'; streaming: boolean; step?: number; steps?: number }
 
 /** The draft as it streams in: what it's writing, how much, how fast, and a way out. */
 function DraftProgress({ onCancel }: { onCancel: () => void }): React.JSX.Element {
@@ -463,27 +494,30 @@ function DraftProgress({ onCancel }: { onCancel: () => void }): React.JSX.Elemen
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center" role="status">
       <Loader2 className="size-8 animate-spin text-gold" />
-      <p className="font-display text-lg tracking-wide">{writing && p.section ? `Writing ${p.section}…` : 'Designing your campaign'}</p>
+      {p?.steps && p.steps > 1 && (
+        <div className="flex gap-1.5" aria-label={`Step ${p.step} of ${p.steps}`}>
+          {Array.from({ length: p.steps }, (_, i) => (
+            <span key={i} className={cn('h-1.5 w-8 rounded-full', i + 1 < (p.step ?? 0) ? 'bg-gold' : i + 1 === p.step ? 'bg-gold/60' : 'bg-muted')} />
+          ))}
+        </div>
+      )}
+      <p className="font-display text-lg tracking-wide">
+        {p?.steps && p.steps > 1 ? `Step ${p.step} of ${p.steps}: ` : ''}
+        {p?.section ? `Writing ${p.section}…` : 'Designing your campaign'}
+      </p>
       <p className="max-w-md text-sm text-muted-foreground">
         {p?.attempt === 'compact'
-          ? 'The first reply couldn’t be read, so it’s trying again with a smaller campaign.'
-          : p?.attempt === 'rest'
-            ? 'The server stopped the first reply before the lists, so it’s now adding the places, people and story.'
+          ? 'That reply couldn’t be read, so it’s asking once more.'
           : writing
-            ? 'Inventing places, people, factions and secrets.'
+            ? 'A piece at a time: the overview, places, NPCs, factions, then the story.'
             : p && !p.streaming
               ? 'Waiting for the whole reply (this backend doesn’t stream, so there’s no progress to show). Turn on Stream tokens in the backend’s settings to watch it write.'
               : 'Sending the concept. The model reads it first; long premises take a little while.'}
       </p>
       {writing && (
-        <div className="w-full max-w-sm space-y-1.5">
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-gold transition-[width] duration-300" style={{ width: `${Math.min(100, (p.tokens / p.maxTokens) * 100)}%` }} />
-          </div>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            ≈ {p.tokens.toLocaleString('en-US')} tokens{speed ? ` · ${speed.toFixed(1)} tokens/s` : ''} · up to {p.maxTokens.toLocaleString('en-US')}
-          </p>
-        </div>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          ≈ {p.tokens.toLocaleString('en-US')} tokens{speed ? ` · ${speed.toFixed(1)} tokens/s` : ''}
+        </p>
       )}
       <p className="text-xs tabular-nums text-muted-foreground">{clock}</p>
       <Button variant="outline" size="sm" onClick={onCancel}>
