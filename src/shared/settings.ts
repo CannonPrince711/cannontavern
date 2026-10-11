@@ -10,6 +10,7 @@
  */
 import { z } from 'zod'
 import { PROMPT_BLOCK_IDS } from './types'
+import { PLAY_MODES } from './play'
 
 // ─── Secrets ─────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,8 @@ export const PromptSettingsSchema = z.object({
   lorebookTokenBudget: z.number().int().min(0).default(1024),
   /** Update the rolling summary every N messages; 0 disables it. */
   summaryEvery: z.number().int().min(0).default(20),
+  /** System prompt for the AI when it plays the character (You are DM / AI only). Empty uses the built-in one. */
+  playerPrompt: z.string().default(''),
   /** Compress a session into a recap when the player leaves it. */
   autoRecap: z.boolean().default(true),
   /** How many earlier sessions' recaps a session's prompt includes. */
@@ -316,6 +319,15 @@ export const SettingsSchema = z.object({
       launchOnStartup: z.boolean().default(false),
       minimizeToTray: z.boolean().default(false),
       autoUpdateCheck: z.boolean().default(false)
+    })
+    .prefault({}),
+  play: z
+    .object({
+      /** Mode for new sessions in campaigns that don't set one (the last one used). */
+      defaultMode: z.enum(PLAY_MODES).default('ai-dm'),
+      /** AI-only play: turns per press of Auto-play, and the pause between them. */
+      autoplayTurns: z.number().int().min(1).max(100).default(10),
+      autoplayDelaySec: z.number().min(0).max(30).default(2)
     })
     .prefault({}),
   security: z
@@ -409,6 +421,7 @@ export const SettingsPatchSchema = z
     general: patchOf(unwrapObject(S.general)).optional(),
     appearance: patchOf(AppearanceSchema).optional(),
     behavior: patchOf(unwrapObject(S.behavior)).optional(),
+    play: patchOf(unwrapObject(S.play)).optional(),
     security: patchOf(unwrapObject(S.security)).optional()
   })
   .strict()
@@ -426,6 +439,7 @@ export type SettingsPatch = {
   general?: Partial<Settings['general']>
   appearance?: Partial<Settings['appearance']>
   behavior?: Partial<Settings['behavior']>
+  play?: Partial<Settings['play']>
   security?: Partial<Settings['security']>
 }
 

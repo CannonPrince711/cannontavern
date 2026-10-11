@@ -21,6 +21,7 @@ import type {
 import type { Campaign } from './types'
 import { PROMPT_BLOCK_IDS } from './types'
 import { renderRecaps, type SessionRecap } from './recap'
+import type { Speaker } from './play'
 
 export const DEFAULT_DM_PROMPT = `You are the Dungeon Master of a Dungeons & Dragons 5th edition adventure played with {{user}}.
 
@@ -29,6 +30,15 @@ Narrate in the second person and present tense ("You push open the door…"). De
 Never act, speak or decide for {{user}}'s character. Never roll dice for the player. When an action's outcome is uncertain, ask for a check in exactly this format and then stop: [CHECK <ability or skill> DC <number>], for example [CHECK dex DC 14] or [CHECK perception DC 12]. Dice results from the player appear in the conversation in square brackets; narrate the outcome they imply.
 
 Track hit points, conditions and inventory consistently with the character sheet you are given. Keep replies to one to four paragraphs unless a scene calls for more.`
+
+/** Used when the AI plays the character (You are DM / AI only). */
+export const DEFAULT_PLAYER_PROMPT = `You are playing {{char}}, a player character in a Dungeons & Dragons 5th edition adventure. The Dungeon Master describes the world, voices every other character and decides what happens.
+
+Write only {{char}}'s part: what they say, do, notice and feel, in the same person and tense the DM uses for them. Stay true to the character card and sheet. Be an engaged player: ask questions, make plans, talk to people, take reasonable risks, and pursue the character's goals.
+
+Never narrate the results of {{char}}'s actions, never describe what other characters say or do, and never invent facts about the world: that is the DM's job. Never roll dice or claim a result. When {{char}} tries something uncertain, say what they attempt and stop so the DM can call for a check. Dice results appear in square brackets.
+
+Keep replies to one or two short paragraphs.`
 
 export const AUTO_STATE_INSTRUCTION = `After your narration, if the player character's state changed, add one hidden line in this exact format: <state>{"hp":-4,"add_item":"rope"}</state>. Allowed keys: hp, temp_hp, gold, xp (numbers are changes, e.g. -4), add_item, remove_item, add_condition, remove_condition (strings). Omit the line if nothing changed.`
 
@@ -48,6 +58,10 @@ export interface PromptInput {
   sheet: DndSheet | null
   combat: CombatState | null
   summary: string | null
+  /** The role the AI writes this time (default "dm"). */
+  speaker?: Speaker
+  /** Custom player prompt for speaker "player"; empty uses DEFAULT_PLAYER_PROMPT. */
+  playerPrompt?: string | null
   /** Recaps of earlier sessions in the campaign, oldest first. */
   recaps?: SessionRecap[]
   messages: Message[]
@@ -98,14 +112,15 @@ export function renderCharacter(c: CharacterCard): string {
   return parts.join('\n\n')
 }
 
-export function renderCampaign(c: Campaign | null, p: Party | null): string {
+/** `forPlayer` leaves out the campaign note's body, which usually holds DM-only secrets. */
+export function renderCampaign(c: Campaign | null, p: Party | null, forPlayer = false): string {
   const parts: string[] = []
   if (c) {
     parts.push(`Campaign: ${c.name}`)
     if (c.setting.trim()) parts.push(`Setting: ${c.setting.trim()}`)
     if (c.tone.trim()) parts.push(`Tone: ${c.tone.trim()}`)
     if (c.house_rules.trim()) parts.push(`House rules: ${c.house_rules.trim()}`)
-    if (c.body.trim()) parts.push(c.body.trim())
+    if (c.body.trim() && !forPlayer) parts.push(c.body.trim())
   }
   if (p) {
     const items = p.inventory.map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(', ')
@@ -201,18 +216,23 @@ export function selectLore(
 
 // ─── History ────────────────────────────────────────────────────────────────
 
-/** One stored message → one chat turn (or null when it shouldn't be sent). */
-export function messageToTurn(m: Message, userName: string): ChatTurn | null {
+/**
+ * One stored message → one chat turn (or null when it shouldn't be sent).
+ * Messages in the role the AI is writing (`speaker`) become assistant turns.
+ */
+export function messageToTurn(m: Message, userName: string, speaker: Speaker = 'dm'): ChatTurn | null {
   if (m.hidden) return null
   switch (m.role) {
     case 'player':
+      if (speaker === 'player') return m.text.trim() ? { role: 'assistant', content: m.text } : null
       return { role: 'user', content: m.name && m.name !== userName ? `${m.name}: ${m.text}` : m.text }
     case 'dm':
+      if (speaker === 'player') return { role: 'user', content: m.text }
       return m.text.trim() ? { role: 'assistant', content: m.text } : null
     case 'roll':
       return { role: 'user', content: `[Dice: ${m.name ? `${m.name} — ` : ''}${stripMarkdown(m.text)}]` }
     case 'system':
-      return { role: 'user', content: `[${stripMarkdown(m.text)}]` }
+      return { role: 'user', content: `[${m.name ? `${m.name}: ` : ''}${stripMarkdown(m.text)}]` }
     case 'image':
       return m.image?.prompt ? { role: 'user', content: `[An illustration was shown: ${m.image.prompt}]` } : null
   }
@@ -243,6 +263,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
   const vars = { user: input.userName, char: input.character?.name ?? input.userName }
   const est = (t: string): number => estimateTokens(t, input.tokenizer)
   const blocks: PromptBlock[] = []
+  const speaker = input.speaker ?? 'dm'
   const add = (id: PromptBlockId | string, label: string, content: string): void => {
     const text = applyMacros(content, vars).trim()
     if (text) blocks.push({ id, label, role: 'system', content: text, tokens: est(text) })
@@ -252,6 +273,10 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
     if (!enabled) continue
     switch (id as PromptBlockId) {
       case 'preset': {
+        if (speaker === 'player') {
+          add('preset', 'Player prompt', input.playerPrompt?.trim() || DEFAULT_PLAYER_PROMPT)
+          break
+        }
         const base = input.preset?.system_prompt.trim() || DEFAULT_DM_PROMPT
         add('preset', input.preset?.name ?? 'DM preset', input.autoState ? `${base}\n\n${AUTO_STATE_INSTRUCTION}` : base)
         break
@@ -260,7 +285,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         if (input.character) add('character', 'Character card', renderCharacter(input.character))
         break
       case 'campaign':
-        add('campaign', 'Campaign & party', renderCampaign(input.campaign, input.party))
+        add('campaign', 'Campaign & party', renderCampaign(input.campaign, input.party, speaker === 'player'))
         break
       case 'lorebook':
         if (input.lore.length) add('lorebook', `Lorebook (${input.lore.length})`, renderLore(input.lore))
@@ -294,7 +319,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
   const historyEnabled = blocks.some((b) => b.id === 'history')
 
   const turns = input.messages
-    .map((m) => messageToTurn(m, input.userName))
+    .map((m) => messageToTurn(m, input.userName, speaker))
     .filter((t): t is ChatTurn => t !== null)
     .map((t) => ({ ...t, content: applyMacros(t.content, vars) }))
 

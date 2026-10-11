@@ -3,6 +3,7 @@
  * Obsidian) into the app's types, plus defaults for new notes. Unknown keys
  * are ignored here and preserved by the writer.
  */
+import { isPlayMode } from './play'
 import type {
   AbilityKey,
   Campaign,
@@ -194,6 +195,7 @@ export function normalizeCampaign(path: string, name: string, data: Record<strin
     tone: str(data.tone),
     house_rules: str(data.house_rules),
     lorebooks: strList(data.lorebooks),
+    mode: isPlayMode(data.mode) ? data.mode : undefined,
     body
   }
 }

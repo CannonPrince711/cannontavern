@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Circle, Cpu, FolderOpen } from 'lucide-react'
 import type { Message } from '@shared/types'
+import { lastAiMessage, playModeOf } from '@shared/play'
 import { ChatHeader } from '@/components/chat/ChatHeader'
 import { Composer } from '@/components/chat/Composer'
 import { ChatSkeleton } from '@/components/ui/skeleton'
@@ -121,7 +122,7 @@ export function ChatPane(): React.JSX.Element {
   }, [index, characterLink])
 
   // Keyboard: Ctrl+R regenerate, Esc stop, Alt+←/→ switch swipes.
-  const lastDm = session ? [...session.messages].reverse().find((m) => m.role === 'dm') : undefined
+  const lastDm = session ? lastAiMessage(playModeOf(session.frontmatter), session.messages) : undefined
   const onKey = useCallback(
     (e: KeyboardEvent) => {
       const chat = useChat.getState()

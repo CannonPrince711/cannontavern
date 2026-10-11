@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Dices, SendHorizontal, Square } from 'lucide-react'
+import { Dices, Pause, Play, SendHorizontal, Square, StepForward } from 'lucide-react'
+import { playModeOf, type PlayMode } from '@shared/play'
 import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { DiceTray } from '@/components/dice/DiceTray'
@@ -9,14 +10,52 @@ import '@/lib/image-commands'
 import { useDiceFx } from '@/stores/dice'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
+import { useApp } from '@/stores/app'
+import { nextTurn, submitMessage, useAutoplay } from '@/lib/play'
 import { useUi } from '@/stores/ui'
 
 const DRAFT_KEY = (path: string): string => `dnd-tavern:draft:${path}`
 
+const PLACEHOLDER: Record<PlayMode, string> = {
+  'ai-dm': 'What do you do?  (/ for commands)',
+  'user-dm': 'Narrate, voice NPCs, or ask for a check: [CHECK perception DC 13]  (/ for commands)',
+  'ai-only': 'Steer the story with a director’s note, or press Enter for the next turn'
+}
+
+const EMPTY_SEND: Record<PlayMode, string> = {
+  'ai-dm': 'Let the DM continue (Enter)',
+  'user-dm': 'Let the character act (Enter)',
+  'ai-only': 'Next turn (Enter)'
+}
+
+/** AI-only play: next turn and auto-play controls. */
+function AutoplayBar(): React.JSX.Element {
+  const left = useAutoplay((s) => s.left)
+  const streaming = useChat((s) => s.streaming)
+  const turns = useApp((s) => s.settings?.play.autoplayTurns ?? 10)
+  return (
+    <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-muted-foreground">
+      {left > 0 ? (
+        <Button size="sm" variant="secondary" onClick={() => useAutoplay.getState().stop()}>
+          <Pause /> Pause auto-play
+        </Button>
+      ) : (
+        <Button size="sm" variant="secondary" onClick={() => useAutoplay.getState().start()} disabled={!!streaming}>
+          <Play /> Auto-play {turns} turns
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={() => void nextTurn()} disabled={!!streaming || left > 0}>
+        <StepForward /> Next turn
+      </Button>
+      <span className="ml-auto">{left > 0 ? `${left} turn${left === 1 ? '' : 's'} left` : 'The AI plays both sides. Type to steer.'}</span>
+    </div>
+  )
+}
+
 export function Composer(): React.JSX.Element {
   const session = useChat((s) => s.session)
   const streaming = useChat((s) => s.streaming)
-  const send = useChat((s) => s.send)
+  const mode = playModeOf(session?.frontmatter)
   const stop = useChat((s) => s.stop)
   const trayOpen = useDiceFx((s) => s.trayOpen)
   const [text, setText] = useState('')
@@ -72,8 +111,8 @@ export function Composer(): React.JSX.Element {
       return
     }
     setText('')
-    // Empty Enter asks the DM to go on (like SillyTavern).
-    await send(value)
+    // Empty Enter asks the AI to go on (like SillyTavern).
+    await submitMessage(value)
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -98,6 +137,7 @@ export function Composer(): React.JSX.Element {
   return (
     <div className="relative border-t p-3">
       <DiceTray />
+      {mode === 'ai-only' && <AutoplayBar />}
       {suggestions.length > 0 && !text.includes(' ') && (
         <ul
           role="listbox"
@@ -143,7 +183,7 @@ export function Composer(): React.JSX.Element {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={streaming ? 'The DM is writing…' : 'What do you do?  (/ for commands)'}
+          placeholder={streaming ? `${streaming.speakerName && streaming.speaker === 'player' ? streaming.speakerName : 'The DM'} is writing…` : PLACEHOLDER[mode]}
           aria-label="Message"
           className="max-h-[200px] min-h-9 flex-1 resize-none bg-transparent py-2 font-chat text-[length:var(--chat-font-size)] leading-snug placeholder:text-muted-foreground focus-visible:outline-none"
         />
@@ -154,7 +194,7 @@ export function Composer(): React.JSX.Element {
             </Button>
           </Tip>
         ) : (
-          <Tip label={text.trim() ? 'Send (Enter)' : 'Let the DM continue (Enter)'}>
+          <Tip label={text.trim() ? 'Send (Enter)' : EMPTY_SEND[mode]}>
             <Button size="icon" aria-label="Send message" onClick={() => void submit()} disabled={!session}>
               <SendHorizontal />
             </Button>

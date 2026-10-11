@@ -4,6 +4,7 @@
  * Frontmatter-backed types use the exact snake_case keys written to the vault so a
  * note can be read and written back without renaming anything.
  */
+import type { PlayMode } from './play'
 
 export type Id = string
 /** Path relative to the vault root, always with forward slashes. */
@@ -113,6 +114,8 @@ export interface SessionFrontmatter {
   campaign: string
   characters: string[]
   persona?: string
+  /** Who plays which side (see shared/play.ts); missing means ai-dm. */
+  mode?: PlayMode
   created: string
   updated: string
   /** Rolling memory summary. */
@@ -247,6 +250,8 @@ export interface Campaign {
   house_rules: string
   /** Wikilinks to lorebook notes. */
   lorebooks: string[]
+  /** Default play mode for new sessions. */
+  mode?: PlayMode
   body: string
 }
 

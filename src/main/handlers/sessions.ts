@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { newMessageId } from '@shared/callouts'
 import { toWikilink } from '@shared/names'
 import { normalizeCard } from '@shared/notes'
+import { PLAY_MODES } from '@shared/play'
 import type { CharacterNote, CombatState, Message } from '@shared/types'
 import { chatService } from '../chat'
 import { AppError } from '../errors'
@@ -53,10 +54,11 @@ export function registerSessionHandlers(): void {
 
   handle(
     'sessions:create',
-    async (_e, { campaignPath, characterPath, title }) => {
+    async (_e, { campaignPath, characterPath, title, mode }) => {
       const vault = vaultService.require()
       const s = settingsStore.get()
       const character = characterPath ? await readCharacter(vault, characterPath) : null
+      const playMode = mode ?? (await readCampaign(vault, campaignPath).catch(() => null))?.campaign.mode ?? s.play.defaultMode
       const session = await createSession(vault, {
         campaignPath,
         characterPath,
@@ -64,13 +66,14 @@ export function registerSessionHandlers(): void {
         title,
         persona: character?.card.name,
         dateFormat: s.general.sessionDateFormat,
-        firstMessage: character?.card.first_mes
+        firstMessage: character?.card.first_mes,
+        mode: playMode
       })
       extensionHost.notify('onSessionStart', null, session.path)
       recapService.onSessionCreated(session)
       return publish(session)
     },
-    z.tuple([z.object({ campaignPath: path, characterPath: path.optional(), title: z.string().max(200).optional() })])
+    z.tuple([z.object({ campaignPath: path, characterPath: path.optional(), title: z.string().max(200).optional(), mode: z.enum(PLAY_MODES).optional() })])
   )
 
   handle('sessions:fork', async (_e, p, id) => publish(await forkSession(vaultService.require(), p, id)), z.tuple([path, z.string()]))
@@ -132,6 +135,7 @@ export function registerSessionHandlers(): void {
       if (patch.title !== undefined) fm.title = patch.title.trim() || undefined
       if (patch.persona !== undefined) fm.persona = patch.persona.trim() || undefined
       if (patch.summary !== undefined) fm.summary = patch.summary.trim() || undefined
+      if (patch.mode !== undefined) fm.mode = patch.mode === 'ai-dm' ? undefined : patch.mode
       if (patch.characterPath !== undefined) {
         if (patch.characterPath) {
           const c = await readCharacter(vault, patch.characterPath)
@@ -142,12 +146,16 @@ export function registerSessionHandlers(): void {
     },
     z.tuple([
       path,
-      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional() })
+      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional(), mode: z.enum(PLAY_MODES).optional() })
     ])
   )
 
   // ── Chat ──────────────────────────────────────────────────────────────────
-  handle('chat:send', (_e, { sessionPath, text, persona }) => chatService.send(sessionPath, text, persona), z.tuple([z.object({ sessionPath: path, text: z.string().max(200_000), persona: z.string().max(200).optional() })]))
+  handle(
+    'chat:send',
+    (_e, { sessionPath, text, persona, speaker }) => chatService.send(sessionPath, text, persona, speaker),
+    z.tuple([z.object({ sessionPath: path, text: z.string().max(200_000), persona: z.string().max(200).optional(), speaker: z.enum(['dm', 'player']).optional() })])
+  )
   handle('chat:regenerate', (_e, { sessionPath }) => chatService.regenerate(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:continue', (_e, { sessionPath }) => chatService.continue(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:stop', (_e, requestId) => chatService.stop(requestId), z.tuple([z.string()]))

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, ExternalLink, FilePlus2, Loader2, RotateCcw, Save } from 'lucide-react'
-import { DEFAULT_DM_PROMPT } from '@shared/prompt'
+import { DEFAULT_DM_PROMPT, DEFAULT_PLAYER_PROMPT } from '@shared/prompt'
 import { normalizeBlockOrder } from '@shared/prompt'
 import { askText } from '@/components/AskDialog'
 import { Button } from '@/components/ui/button'
@@ -112,6 +112,33 @@ function PresetEditor(): React.JSX.Element {
   )
 }
 
+/** The AI's instructions when it plays the character (You are DM / AI only), plus auto-play pacing. */
+function PlaySettings(): React.JSX.Element {
+  const settings = useApp((s) => s.settings!)
+  const updateSettings = useApp((s) => s.updateSettings)
+  const [text, setText] = useState(settings.prompt.playerPrompt || DEFAULT_PLAYER_PROMPT)
+  const saved = settings.prompt.playerPrompt || DEFAULT_PLAYER_PROMPT
+  return (
+    <SettingsGroup title="When the AI plays the character" description="Used in “You are the DM” and “AI only” sessions. Change a session’s mode from the chat header, or set “mode: user-dm” or “mode: ai-only” in a Campaign.md to make it the default there.">
+      <Field label="Player prompt" htmlFor="p-player">
+        <Textarea id="p-player" rows={8} value={text} onChange={(e) => setText(e.target.value)} className="font-mono text-[12.5px] leading-relaxed" />
+      </Field>
+      <div className="flex justify-end gap-2 py-2">
+        <Button variant="ghost" onClick={() => setText(DEFAULT_PLAYER_PROMPT)}>
+          <RotateCcw /> Use built-in text
+        </Button>
+        <Button onClick={() => void updateSettings({ prompt: { playerPrompt: text.trim() === DEFAULT_PLAYER_PROMPT ? '' : text } })} disabled={text === saved}>
+          <Save /> Save
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-4 py-3">
+        <NumberInput label="AI only: turns per Auto-play" value={settings.play.autoplayTurns} min={1} max={100} onChange={(v) => void updateSettings({ play: { autoplayTurns: v } })} />
+        <NumberInput label="AI only: pause between turns" value={settings.play.autoplayDelaySec} min={0} max={30} step={0.5} onChange={(v) => void updateSettings({ play: { autoplayDelaySec: v } })} suffix="s" />
+      </div>
+    </SettingsGroup>
+  )
+}
+
 export function PromptSection(): React.JSX.Element {
   const prompt = useApp((s) => s.settings!.prompt)
   const updateSettings = useApp((s) => s.updateSettings)
@@ -130,6 +157,7 @@ export function PromptSection(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <PresetEditor />
+      <PlaySettings />
 
       <SettingsGroup title="Prompt blocks" description="Assembled in this order. Everything above “Chat history” becomes the system prompt; switch blocks off to leave them out.">
         <ol className="space-y-1 py-2">

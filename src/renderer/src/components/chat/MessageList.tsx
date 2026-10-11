@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import type { Message } from '@shared/types'
 import { Logo } from '@/components/Logo'
+import { aiSpeakers, playModeOf } from '@shared/play'
+import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
 import { MessageItem, type MessageActions } from './MessageItem'
 import { PreviouslyCard } from './PreviouslyCard'
@@ -18,9 +20,15 @@ function isSceneStart(messages: Message[], i: number): boolean {
   return true // first DM message of the session
 }
 
-function Thinking({ backendName }: { backendName: string }): React.JSX.Element {
+function Thinking({ backendName, asPlayer }: { backendName: string; asPlayer?: string }): React.JSX.Element {
   return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mx-auto flex max-w-3xl gap-3" role="status" aria-label="The DM is writing">
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn('mx-auto flex w-full max-w-3xl gap-3', asPlayer && 'flex-row-reverse')}
+      role="status"
+      aria-label={asPlayer ? `${asPlayer} is writing` : 'The DM is writing'}
+    >
       <span className="grid size-9 place-items-center rounded-full border border-gold/40 bg-surface-2 text-gold">
         <Logo className="size-5 animate-pulse" />
       </span>
@@ -30,7 +38,7 @@ function Thinking({ backendName }: { backendName: string }): React.JSX.Element {
             <span key={i} className="size-1.5 animate-bounce rounded-full bg-gold" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </span>
-        {backendName ? `${backendName} is thinking…` : 'Thinking…'}
+        {asPlayer ? `${asPlayer} is thinking…` : backendName ? `${backendName} is thinking…` : 'Thinking…'}
       </div>
     </motion.div>
   )
@@ -51,6 +59,8 @@ export function MessageList({
   const pinned = useRef(true)
 
   const messages = session.messages
+  const aiRoles = aiSpeakers(playModeOf(session.frontmatter))
+  const streamRole = streaming?.speaker ?? 'dm'
   const streamTarget = streaming?.messageId ? messages.find((m) => m.id === streaming.messageId) : undefined
   const showNew = streaming && (streaming.kind === 'new' || !streaming.messageId) && !streamTarget
 
@@ -116,6 +126,7 @@ export function MessageList({
               characterName={characterName}
               characterAvatar={characterAvatar}
               campaignPath={session.campaignPath}
+              aiRoles={aiRoles}
               {...actions}
             />
           )
@@ -123,7 +134,7 @@ export function MessageList({
         {showNew &&
           (streaming.text ? (
             <MessageItem
-              message={{ id: '__streaming', role: 'dm', text: '', swipes: [''], swipeIndex: 0, createdAt: '' }}
+              message={{ id: '__streaming', role: streamRole, name: streamRole === 'player' ? streaming.speakerName : undefined, text: '', swipes: [''], swipeIndex: 0, createdAt: '' }}
               isLast
               streamingText={streaming.text}
               streaming
@@ -132,10 +143,11 @@ export function MessageList({
               characterName={characterName}
               characterAvatar={characterAvatar}
               campaignPath={session.campaignPath}
+              aiRoles={aiRoles}
               {...actions}
             />
           ) : (
-            <Thinking backendName={streaming.backendName} />
+            <Thinking backendName={streaming.backendName} asPlayer={streaming.speaker === 'player' ? streaming.speakerName || characterName : undefined} />
           ))}
       </div>
     </div>

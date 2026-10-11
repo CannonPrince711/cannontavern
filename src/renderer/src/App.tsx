@@ -15,6 +15,7 @@ import { PromptInspector } from '@/components/chat/PromptInspector'
 import { SettingsOverlay } from '@/components/settings/SettingsOverlay'
 import { Toaster } from '@/components/Toaster'
 import { Wizard } from '@/components/wizard/Wizard'
+import { initAutoplay } from '@/lib/play'
 import { useApp } from '@/stores/app'
 import { useChat } from '@/stores/chat'
 import { useImages } from '@/stores/images'
@@ -50,6 +51,7 @@ export function App(): React.JSX.Element {
     const offToasts = subscribeMainToasts()
     const offChat = useChat.getState().init()
     const offImages = useImages.getState().init()
+    const offAutoplay = initAutoplay()
     void useExtensions.getState().load()
     Promise.all([init(), initVault()])
       .then((offs) => {
@@ -63,6 +65,7 @@ export function App(): React.JSX.Element {
       offToasts()
       offChat()
       offImages()
+      offAutoplay()
       cleanup?.()
     }
   }, [init, initVault])

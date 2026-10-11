@@ -52,6 +52,8 @@ interface Props extends MessageActions {
   characterName?: string
   characterAvatar?: string
   campaignPath?: string
+  /** Story roles the AI writes in this session's mode (swipe/regenerate controls). */
+  aiRoles: readonly string[]
 }
 
 function ActionButton({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: React.ReactNode; disabled?: boolean }): React.JSX.Element {
@@ -203,6 +205,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   }
 
   const isDm = m.role === 'dm'
+  const isAi = props.aiRoles.includes(m.role)
   const actions = (
     <div
       className={cn(
@@ -210,7 +213,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
         busy && 'pointer-events-none'
       )}
     >
-      {isDm && m.swipes.length > 1 && (
+      {isAi && m.swipes.length > 1 && (
         <span className="flex items-center">
           <ActionButton label="Previous reply (Alt+←)" onClick={() => props.onSwipe(m.id, -1)} disabled={m.swipeIndex === 0}>
             <ChevronLeft />
@@ -223,7 +226,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
           </ActionButton>
         </span>
       )}
-      {isDm && isLast && (
+      {isAi && isLast && (
         <>
           <ActionButton label="Regenerate (Ctrl+R)" onClick={props.onRegenerate}>
             <RefreshCw />
@@ -278,13 +281,9 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
         aria-label="Dungeon Master"
       >
         <div className="pt-1">
-          {props.characterAvatar ? (
-            <CharacterAvatar name={props.characterName ?? 'DM'} avatar={props.characterAvatar} size={36} />
-          ) : (
-            <span className="grid size-9 place-items-center rounded-full border border-gold/40 bg-surface-2 text-gold">
-              <Logo className="size-5" />
-            </span>
-          )}
+          <span className="grid size-9 place-items-center rounded-full border border-gold/40 bg-surface-2 text-gold">
+            <Logo className="size-5" />
+          </span>
         </div>
         <div className="paper min-w-0 flex-1 rounded-xl rounded-tl-sm border bg-page px-5 py-4 shadow-card">
           <div className="font-chat text-parchment">{body}</div>
@@ -297,9 +296,21 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   }
 
   // Player
+  const showAvatar = !!props.characterAvatar && !!m.name && m.name === props.characterName
   return (
-    <motion.article initial={false} className="group relative ml-auto flex max-w-[78%] flex-col items-end" aria-label={m.name ?? 'Player'}>
-      {m.name && <span className="mb-1 mr-1 text-[11px] font-medium text-muted-foreground">{m.name}</span>}
+    <motion.article
+      initial={streaming ? { opacity: 0, y: 6 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      className="group relative ml-auto flex max-w-[78%] flex-col items-end"
+      aria-label={m.name ?? 'Player'}
+    >
+      {m.name && (
+        <span className="mb-1 mr-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          {showAvatar && <CharacterAvatar name={m.name} avatar={props.characterAvatar} size={18} />}
+          {m.name}
+          {isAi && <span className="rounded bg-muted px-1 text-[9px] tracking-wide uppercase">AI</span>}
+        </span>
+      )}
       <div
         className={cn(
           'rounded-2xl rounded-br-md border border-primary/30 bg-primary/12 px-4 py-2.5 text-foreground',
@@ -308,7 +319,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
       >
         <div className="font-chat text-[length:calc(var(--chat-font-size)*0.95)]">{body}</div>
       </div>
-      {!editing && <div className="absolute -top-3 right-2">{actions}</div>}
+      {!editing && !streaming && <div className="absolute -top-3 right-2">{actions}</div>}
     </motion.article>
   )
 })

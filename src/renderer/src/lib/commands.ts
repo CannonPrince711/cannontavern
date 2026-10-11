@@ -8,6 +8,8 @@ import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
 import { invoke } from './ipc'
+import { PLAY_MODE_INFO, PLAY_MODES, playModeOf } from '@shared/play'
+import { useAutoplay } from './play'
 
 export interface CommandContext {
   session: Session
@@ -127,6 +129,31 @@ registerCommand({
   run: async ({ session, args }) => {
     if (!args) throw new Error('Usage: /title <new title>')
     useChat.setState({ session: await invoke('sessions:updateMeta', session.path, { title: args }) })
+  }
+})
+
+registerCommand({
+  name: 'mode',
+  usage: '/mode ai-dm | user-dm | ai-only',
+  description: 'Who plays: the AI as DM, you as DM, or the AI on both sides',
+  run: async ({ session, args }) => {
+    const wanted = args.trim().toLowerCase()
+    const mode = PLAY_MODES.find((m) => m === wanted || PLAY_MODE_INFO[m].short.toLowerCase() === wanted)
+    if (!mode) throw new Error('Usage: /mode ai-dm | user-dm | ai-only')
+    useChat.setState({ session: await invoke('sessions:updateMeta', session.path, { mode }) })
+    toast.info(PLAY_MODE_INFO[mode].label, PLAY_MODE_INFO[mode].description)
+  }
+})
+
+registerCommand({
+  name: 'autoplay',
+  usage: '/autoplay [turns]',
+  description: 'AI-only sessions: let the story play itself for a number of turns',
+  run: async ({ session, args }) => {
+    if (playModeOf(session.frontmatter) !== 'ai-only') throw new Error('Auto-play works in AI-only sessions. Switch with /mode ai-only.')
+    const n = args.trim() ? Number(args) : undefined
+    if (n !== undefined && (!Number.isInteger(n) || n < 1 || n > 100)) throw new Error('Usage: /autoplay [1–100]')
+    useAutoplay.getState().start(n)
   }
 })
 

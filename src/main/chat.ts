@@ -5,6 +5,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
+import { aiSpeakers, lastAiMessage, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
 import { buildPrompt, messageToTurn, normalizeBlockOrder, selectLore, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import type { CharacterNote, Message, PromptPreview, Session, VaultPath } from '@shared/types'
@@ -28,6 +29,8 @@ interface Job {
   kind: JobKind
   sessionPath: VaultPath
   messageId: string
+  /** The story role the AI writes in this reply. */
+  speaker: Speaker
   controller: AbortController
 }
 
@@ -35,7 +38,11 @@ export interface ChatContext {
   session: Session
   character: CharacterNote | null
   prompt: BuiltPrompt
+  /** Label for the other side of the conversation (the player, or the DM). */
   persona: string
+  speaker: Speaker
+  /** The AI's own label: "DM", or the character's name when it plays them. */
+  speakerName: string
 }
 
 const STATE_RE = /<state>([\s\S]*?)<\/state>/gi
@@ -68,7 +75,7 @@ class ChatService {
   private jobs = new Map<string, Job>()
 
   /** Loads everything the prompt needs for a session. */
-  async context(sessionPath: VaultPath, opts: { upto?: string; backend?: TextBackend } = {}): Promise<ChatContext> {
+  async context(sessionPath: VaultPath, opts: { upto?: string; backend?: TextBackend; speaker?: Speaker } = {}): Promise<ChatContext> {
     const vault = vaultService.require()
     const s = settingsStore.get()
     const session = await readSession(vault, sessionPath)
@@ -93,9 +100,16 @@ class ChatService {
     const tokenizer = backend?.tokenizer ?? 'chars4'
     const lore = selectLore(entries, messages, s.prompt.lorebookScanDepth, s.prompt.lorebookTokenBudget, tokenizer)
 
-    const persona = session.frontmatter.persona || character?.card.name || s.general.playerName
+    const mode = playModeOf(session.frontmatter)
+    const speaker = opts.speaker ?? nextSpeaker(mode, messages)
+    const characterName = character?.card.name || session.frontmatter.persona || s.general.playerName
+    // Writing as the DM, the other side is the player character; writing as the character, it's the DM.
+    const persona = speaker === 'player' ? 'DM' : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
+    const speakerName = speaker === 'player' ? characterName : 'DM'
     const prompt = buildPrompt({
       userName: persona,
+      speaker,
+      playerPrompt: s.prompt.playerPrompt,
       character: character?.card ?? null,
       campaign,
       party,
@@ -110,7 +124,7 @@ class ChatService {
       budget: s.prompt.contextBudget || backend?.generation.contextSize || 8192,
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,
-      autoState: s.prompt.autoState && !!character?.card.dnd
+      autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd
     })
     // Extensions may add or change blocks (only when the "extensions" block is on).
     if (s.prompt.blocks.some((b) => b.id === 'extensions' && b.enabled)) {
@@ -123,7 +137,7 @@ class ChatService {
         prompt.totalTokens = Math.ceil(system.length / 4) + historyTokens
       }
     }
-    return { session, character, prompt, persona }
+    return { session, character, prompt, persona, speaker, speakerName }
   }
 
   async inspect(sessionPath: VaultPath): Promise<PromptPreview> {
@@ -145,39 +159,47 @@ class ChatService {
     }
   }
 
-  /** Posts the player's message (if any) and starts a DM reply. */
-  async send(sessionPath: VaultPath, text: string, persona?: string): Promise<{ requestId: string }> {
+  /**
+   * Posts the user's text, in their role for the session's mode (their
+   * character, the DM, or a director's note in AI-only play), then starts the
+   * next AI reply.
+   */
+  async send(sessionPath: VaultPath, text: string, persona?: string, speaker?: Speaker): Promise<{ requestId: string }> {
     const vault = vaultService.require()
+    let session = await readSession(vault, sessionPath)
+    const mode = playModeOf(session.frontmatter)
     if (text.trim()) {
       const s = settingsStore.get()
-      const session = await readSession(vault, sessionPath)
+      const role = userRole(mode)
       const message: Message = {
         id: newMessageId(),
-        role: 'player',
-        name: persona || session.frontmatter.persona || s.general.playerName,
+        role,
+        ...(role === 'player' ? { name: persona || session.frontmatter.persona || s.general.playerName } : role === 'system' ? { name: 'Director' } : {}),
         text: text.trim(),
         swipes: [text.trim()],
         swipeIndex: 0,
         createdAt: new Date().toISOString()
       }
-      this.publish(await postMessage(vault, sessionPath, message))
+      session = await postMessage(vault, sessionPath, message)
+      this.publish(session)
     }
-    return this.start('new', sessionPath, newMessageId())
+    return this.start('new', sessionPath, newMessageId(), speaker ?? nextSpeaker(mode, session.messages))
   }
 
-  /** A new swipe for the last DM message. */
+  /** A new swipe for the last AI reply (or a fresh reply if the last message isn't one). */
   async regenerate(sessionPath: VaultPath): Promise<{ requestId: string }> {
     const session = await readSession(vaultService.require(), sessionPath)
+    const mode = playModeOf(session.frontmatter)
     const last = session.messages[session.messages.length - 1]
-    if (!last || last.role !== 'dm') return this.start('new', sessionPath, newMessageId())
-    return this.start('swipe', sessionPath, last.id)
+    if (last && (aiSpeakers(mode) as string[]).includes(last.role)) return this.start('swipe', sessionPath, last.id, last.role as Speaker)
+    return this.start('new', sessionPath, newMessageId(), nextSpeaker(mode, session.messages))
   }
 
   async continue(sessionPath: VaultPath): Promise<{ requestId: string }> {
     const session = await readSession(vaultService.require(), sessionPath)
-    const last = [...session.messages].reverse().find((m) => m.role === 'dm')
-    if (!last) throw new AppError('NOTHING_TO_CONTINUE', 'There is no DM reply to continue yet.')
-    return this.start('continue', sessionPath, last.id)
+    const last = lastAiMessage(playModeOf(session.frontmatter), session.messages)
+    if (!last) throw new AppError('NOTHING_TO_CONTINUE', 'There is no AI reply to continue yet.')
+    return this.start('continue', sessionPath, last.id, last.role as Speaker)
   }
 
   stop(requestId: string): void {
@@ -189,10 +211,10 @@ class ChatService {
     return [...this.jobs.values()].some((j) => j.sessionPath === sessionPath)
   }
 
-  private start(kind: JobKind, sessionPath: VaultPath, messageId: string): { requestId: string } {
+  private start(kind: JobKind, sessionPath: VaultPath, messageId: string, speaker: Speaker): { requestId: string } {
     if (this.isBusy(sessionPath)) throw new AppError('BUSY', 'A reply is already being written for this session.')
     if (settingsStore.get().textBackends.length === 0) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
-    const job: Job = { requestId: randomUUID(), kind, sessionPath, messageId, controller: new AbortController() }
+    const job: Job = { requestId: randomUUID(), kind, sessionPath, messageId, speaker, controller: new AbortController() }
     this.jobs.set(job.requestId, job)
     void this.run(job).finally(() => {
       this.jobs.delete(job.requestId)
@@ -209,14 +231,23 @@ class ChatService {
     let streamed = ''
     let result: GenerateResult | null = null
     let used: TextBackend | null = null
+    let speakerName = job.speaker === 'dm' ? 'DM' : ''
     let lastError: unknown = null
     win?.setProgressBar(2) // indeterminate on the taskbar
 
     for (const backend of chain) {
       try {
-        const ctx = await this.context(job.sessionPath, { upto: job.kind === 'swipe' ? job.messageId : undefined, backend })
+        const ctx = await this.context(job.sessionPath, { upto: job.kind === 'swipe' ? job.messageId : undefined, backend, speaker: job.speaker })
         const turns = ctx.prompt.messages
-        send(win, 'chat:started', { requestId: job.requestId, sessionPath: job.sessionPath, messageId: job.messageId, backendName: backend.name })
+        speakerName = ctx.speakerName
+        send(win, 'chat:started', {
+          requestId: job.requestId,
+          sessionPath: job.sessionPath,
+          messageId: job.messageId,
+          backendName: backend.name,
+          speaker: job.speaker,
+          speakerName: ctx.speakerName
+        })
         extensionHost.notify(
           'onBeforeSend',
           redactRequest(textAdapter(backend.type).prepare(resolveTextBackend(backend), { system: ctx.prompt.system, messages: turns }, backend.generation.stream)),
@@ -224,7 +255,7 @@ class ChatService {
         )
         result = await textAdapter(backend.type).generate(
           resolveTextBackend(backend),
-          { system: ctx.prompt.system, messages: turns, userLabel: ctx.persona },
+          { system: ctx.prompt.system, messages: turns, userLabel: ctx.persona, assistantLabel: ctx.speakerName },
           {
             signal: job.controller.signal,
             onToken: (delta) => {
@@ -256,7 +287,7 @@ class ChatService {
 
     try {
       let session: Session | null = null
-      if (text) session = await this.write(job, text, used ?? chain[0] ?? null, result?.model)
+      if (text) session = await this.write(job, text, used ?? chain[0] ?? null, result?.model, speakerName)
       if (result?.refusal) {
         session = await postMessage(vault, job.sessionPath, {
           id: newMessageId(),
@@ -268,7 +299,8 @@ class ChatService {
           hidden: true
         })
       }
-      if (changes.length && session) this.onStateChanges?.(job.sessionPath, job.messageId, changes)
+      // Only the DM may change the character's sheet.
+      if (changes.length && session && job.speaker === 'dm') this.onStateChanges?.(job.sessionPath, job.messageId, changes)
       if (session) this.publish(session)
       if (session && !aborted) void this.maybeSummarize(job.sessionPath)
       if (session && text && !aborted && job.kind !== 'continue') this.onReply?.(job.sessionPath, text)
@@ -352,14 +384,15 @@ class ChatService {
   /** Hook for auto-state (character sheet changes); wired by the sheet module. */
   onStateChanges: ((sessionPath: VaultPath, messageId: string, changes: Record<string, unknown>[]) => void) | null = null
 
-  private async write(job: Job, text: string, backend: TextBackend | null, model?: string): Promise<Session> {
+  private async write(job: Job, text: string, backend: TextBackend | null, model?: string, speakerName?: string): Promise<Session> {
     const vault = vaultService.require()
     const now = new Date().toISOString()
     switch (job.kind) {
       case 'new':
         return postMessage(vault, job.sessionPath, {
           id: job.messageId,
-          role: 'dm',
+          role: job.speaker,
+          ...(job.speaker === 'player' && speakerName ? { name: speakerName } : {}),
           text,
           swipes: [text],
           swipeIndex: 0,

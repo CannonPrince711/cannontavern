@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, ScrollText, Sparkles } from 'lucide-react'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { EmptyState } from '@/components/EmptyState'
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useActiveCampaign, useVault } from '@/stores/vault'
+import { useApp } from '@/stores/app'
+import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
 
 export function CreateCampaignPanel(): React.JSX.Element {
   const setActiveCampaign = useVault((s) => s.setActiveCampaign)
@@ -68,13 +70,28 @@ export function NewSessionPanel(): React.JSX.Element {
   const [character, setCharacter] = useState<string | null>(selectedCharacter ?? index?.characters[0]?.path ?? null)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
+  const defaultMode = useApp((s) => s.settings?.play.defaultMode ?? 'ai-dm')
+  const [mode, setMode] = useState<PlayMode>(defaultMode)
   const recent = (index?.sessions ?? []).filter((s) => s.campaignPath === campaign?.path).slice(0, 5)
+
+  // A campaign can set its own default mode (Campaign.md: "mode: ai-only").
+  useEffect(() => {
+    if (!campaign) return
+    let stale = false
+    invoke('campaigns:get', campaign.path)
+      .then((r) => !stale && r.campaign.mode && setMode(r.campaign.mode))
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [campaign?.path]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async (): Promise<void> => {
     if (!campaign) return
     setBusy(true)
     try {
-      const s = await invoke('sessions:create', { campaignPath: campaign.path, characterPath: character ?? undefined, title: title.trim() || undefined })
+      const s = await invoke('sessions:create', { campaignPath: campaign.path, characterPath: character ?? undefined, title: title.trim() || undefined, mode })
+      if (mode !== defaultMode) void useApp.getState().updateSettings({ play: { defaultMode: mode } })
       selectSession(s.path)
     } catch (err) {
       toast.error(err, 'Could not start the session')
@@ -119,6 +136,24 @@ export function NewSessionPanel(): React.JSX.Element {
                   <span className="block truncate text-sm font-medium">{c.displayName}</span>
                   <span className="block truncate text-[11px] text-muted-foreground">{[c.class, c.level && `Lv ${c.level}`].filter(Boolean).join(' ') || 'No sheet'}</span>
                 </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Who plays</Label>
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Who plays">
+            {PLAY_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                onClick={() => setMode(m)}
+                className={cn('rounded-lg border px-3 py-2 text-left hover:bg-accent', mode === m && 'border-primary ring-1 ring-primary')}
+              >
+                <span className="block text-sm font-medium">{PLAY_MODE_INFO[m].label}</span>
+                <span className="block text-[11px] leading-snug text-muted-foreground">{PLAY_MODE_INFO[m].description}</span>
               </button>
             ))}
           </div>

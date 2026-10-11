@@ -9,6 +9,7 @@
  * errors keep their code and detail across the boundary.
  */
 import type { SessionRecap } from './recap'
+import type { PlayMode, Speaker } from './play'
 import type {
   AppInfo,
   Campaign,
@@ -141,7 +142,7 @@ export interface InvokeMap {
   /** Recaps of the sessions before this one in its campaign, oldest first. */
   'sessions:recaps': Invoke<[path: VaultPath, limit: number], SessionRecap[]>
   'sessions:create': Invoke<
-    [opts: { campaignPath: VaultPath; characterPath?: VaultPath; title?: string }],
+    [opts: { campaignPath: VaultPath; characterPath?: VaultPath; title?: string; mode?: PlayMode }],
     Session
   >
   'sessions:fork': Invoke<[path: VaultPath, messageId: Id], Session>
@@ -150,13 +151,14 @@ export interface InvokeMap {
   'sessions:deleteMessage': Invoke<[path: VaultPath, id: Id], Session>
   'sessions:saveCombat': Invoke<[path: VaultPath, combat: CombatState | null], Session>
   'sessions:updateMeta': Invoke<
-    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string }],
+    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode }],
     Session
   >
   'sessions:undoState': Invoke<[path: VaultPath, messageId: Id], Session>
 
   // Chat generation (tokens arrive as chat:* events)
-  'chat:send': Invoke<[opts: { sessionPath: VaultPath; text: string; persona?: string }], { requestId: Id }>
+  /** Posts the user's text (in their role for the session's mode) and starts the next AI reply. */
+  'chat:send': Invoke<[opts: { sessionPath: VaultPath; text: string; persona?: string; speaker?: Speaker }], { requestId: Id }>
   'chat:regenerate': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:continue': Invoke<[opts: { sessionPath: VaultPath }], { requestId: Id }>
   'chat:stop': Invoke<[requestId: Id], void>
@@ -203,7 +205,7 @@ export interface EventMap {
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session
-  'chat:started': { requestId: Id; sessionPath: VaultPath; messageId: Id; backendName: string }
+  'chat:started': { requestId: Id; sessionPath: VaultPath; messageId: Id; backendName: string; speaker: Speaker; speakerName?: string }
   'chat:token': { requestId: Id; delta: string }
   'chat:done': { requestId: Id; session: Session }
   'chat:error': { requestId: Id; error: ErrorInfo }

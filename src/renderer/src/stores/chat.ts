@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { MessagePatch } from '@shared/ipc'
 import type { ErrorInfo, Message, Session } from '@shared/types'
+import { aiSpeakers, playModeOf, type Speaker } from '@shared/play'
 import { invoke, on } from '@/lib/ipc'
 import { toast } from './toasts'
 
@@ -10,6 +11,9 @@ export interface Streaming {
   /** Set once the main process reports which message is being written. */
   messageId: string | null
   backendName: string
+  /** Which story role the AI is writing (known once the main process starts). */
+  speaker: Speaker | null
+  speakerName?: string
   text: string
 }
 
@@ -20,7 +24,7 @@ interface ChatStore {
   lastError: ErrorInfo | null
   init: () => () => void
   open: (path: string | null) => Promise<void>
-  send: (text: string) => Promise<void>
+  send: (text: string, speaker?: Speaker) => Promise<void>
   regenerate: () => Promise<void>
   continueReply: () => Promise<void>
   stop: () => Promise<void>
@@ -35,7 +39,7 @@ export const useChat = create<ChatStore>((set, get) => {
   const start = async (kind: Streaming['kind'], call: () => Promise<{ requestId: string }>): Promise<void> => {
     if (get().streaming) return
     // Reserve the slot before the request so tokens arriving early have a home.
-    set({ streaming: { requestId: '', kind, messageId: null, backendName: '', text: '' }, lastError: null })
+    set({ streaming: { requestId: '', kind, messageId: null, backendName: '', speaker: null, text: '' }, lastError: null })
     try {
       const { requestId } = await call()
       const s = get().streaming
@@ -68,7 +72,7 @@ export const useChat = create<ChatStore>((set, get) => {
       const offs = [
         on('chat:started', (e) => {
           const s = get().streaming
-          if (s && mine(e.requestId)) set({ streaming: { ...s, requestId: e.requestId, messageId: e.messageId, backendName: e.backendName } })
+          if (s && mine(e.requestId)) set({ streaming: { ...s, requestId: e.requestId, messageId: e.messageId, backendName: e.backendName, speaker: e.speaker, speakerName: e.speakerName } })
         }),
         on('chat:token', (e) => {
           const s = get().streaming
@@ -81,7 +85,7 @@ export const useChat = create<ChatStore>((set, get) => {
         on('chat:error', (e) => {
           if (!mine(e.requestId)) return
           set({ streaming: null, lastError: e.error })
-          toast.error(e.error, 'The DM couldn’t answer')
+          toast.error(e.error, 'The AI couldn’t answer')
           // Partial text may have been saved; refresh.
           const path = get().session?.path
           if (path) void invoke('sessions:get', path).then((session) => set({ session })).catch(() => {})
@@ -110,17 +114,18 @@ export const useChat = create<ChatStore>((set, get) => {
       }
     },
 
-    async send(text) {
+    async send(text, speaker) {
       const session = get().session
       if (!session) return
-      await start('new', () => invoke('chat:send', { sessionPath: session.path, text }))
+      await start('new', () => invoke('chat:send', { sessionPath: session.path, text, ...(speaker ? { speaker } : {}) }))
     },
 
     async regenerate() {
       const session = get().session
       if (!session) return
       const last = session.messages[session.messages.length - 1]
-      await start(last?.role === 'dm' ? 'swipe' : 'new', () => invoke('chat:regenerate', { sessionPath: session.path }))
+      const ai: string[] = aiSpeakers(playModeOf(session.frontmatter))
+      await start(last && ai.includes(last.role) ? 'swipe' : 'new', () => invoke('chat:regenerate', { sessionPath: session.path }))
     },
 
     async continueReply() {
@@ -142,7 +147,7 @@ export const useChat = create<ChatStore>((set, get) => {
       const isLast = session.messages[session.messages.length - 1]?.id === id
       if (next >= m.swipes.length) {
         // Past the last swipe on the newest reply: write a new one.
-        if (isLast && m.role === 'dm') await get().regenerate()
+        if (isLast && (aiSpeakers(playModeOf(session.frontmatter)) as string[]).includes(m.role)) await get().regenerate()
         return
       }
       if (next < 0) return

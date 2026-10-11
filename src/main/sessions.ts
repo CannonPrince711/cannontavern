@@ -15,6 +15,7 @@ import {
 } from '@shared/callouts'
 import { CAMPAIGN_FILE, SESSIONS_FOLDER } from '@shared/layout'
 import { formatDate, joinVaultPath, noteName, toWikilink } from '@shared/names'
+import { isPlayMode, type PlayMode } from '@shared/play'
 import type { CombatState, Message, Session, SessionFrontmatter, VaultPath } from '@shared/types'
 import { AppError } from './errors'
 import { parseNote, serializeNote, updateNote } from './vault/frontmatter'
@@ -29,6 +30,7 @@ function frontmatterOf(data: Record<string, unknown>, path: VaultPath): SessionF
     campaign: str(data.campaign),
     characters: Array.isArray(data.characters) ? data.characters.filter((c): c is string => typeof c === 'string') : [],
     persona: str(data.persona) || undefined,
+    mode: isPlayMode(data.mode) ? data.mode : undefined,
     created: str(data.created),
     updated: str(data.updated),
     summary: str(data.summary) || undefined,
@@ -70,6 +72,7 @@ export interface NewSession {
   persona?: string
   dateFormat: string
   firstMessage?: string
+  mode?: PlayMode
 }
 
 export async function createSession(vault: Vault, opts: NewSession): Promise<Session> {
@@ -89,12 +92,14 @@ export async function createSession(vault: Vault, opts: NewSession): Promise<Ses
     campaign: toWikilink(joinVaultPath(opts.campaignPath, CAMPAIGN_FILE), { full: true, alias: noteName(opts.campaignPath) }),
     characters: opts.characterPath ? [toWikilink(opts.characterPath, { full: true, alias: opts.characterName })] : [],
     persona: opts.persona || undefined,
+    mode: opts.mode && opts.mode !== 'ai-dm' ? opts.mode : undefined,
     created: now,
     updated: now,
     tags: ['dnd-session']
   }
   let body = ''
-  if (opts.firstMessage?.trim()) {
+  // When the user is the DM, they set the opening scene themselves.
+  if (opts.firstMessage?.trim() && opts.mode !== 'user-dm') {
     body = appendMessage('', {
       id: newMessageId(),
       role: 'dm',

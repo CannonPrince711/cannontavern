@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, ExternalLink, Pencil, ScanSearch, UserRound } from 'lucide-react'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
+import { PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/controls'
@@ -21,6 +22,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(session.frontmatter.title)
 
+  const mode = playModeOf(session.frontmatter)
   const persona = session.frontmatter.persona || character?.displayName || settings.general.playerName
   const personas = [...new Set([settings.general.playerName, ...(characters ?? []).map((c) => c.displayName), persona])]
 
@@ -67,16 +69,28 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </p>
       </div>
 
-      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="hidden @min-[860px]:inline">Playing as</span>
-        <NativeSelect value={persona} onChange={(e) => void meta({ persona: e.target.value })} className="w-32 @min-[760px]:w-44" aria-label="Persona">
-          {personas.map((p) => (
-            <option key={p} value={p}>
-              {p}
+      <Tip label={PLAY_MODE_INFO[mode].description}>
+        <NativeSelect value={mode} onChange={(e) => void meta({ mode: e.target.value as PlayMode })} className="w-28 @min-[760px]:w-36" aria-label="Play mode">
+          {PLAY_MODES.map((m) => (
+            <option key={m} value={m}>
+              {PLAY_MODE_INFO[m].short}
             </option>
           ))}
         </NativeSelect>
-      </label>
+      </Tip>
+
+      {mode === 'ai-dm' && (
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="hidden @min-[960px]:inline">Playing as</span>
+          <NativeSelect value={persona} onChange={(e) => void meta({ persona: e.target.value })} className="w-28 @min-[760px]:w-40" aria-label="Persona">
+            {personas.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+      )}
 
       <NativeSelect
         value={settings.roles.chat ?? settings.defaultTextBackendId ?? ''}
