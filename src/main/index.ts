@@ -3,6 +3,7 @@ import { registerAppHandlers } from './handlers/app'
 import { registerBackendHandlers } from './handlers/backends'
 import { registerModelHandlers } from './handlers/models'
 import { registerMapHandlers } from './handlers/maps'
+import { registerTableHandlers, stopTable } from './handlers/table'
 import { registerCharacterHandlers } from './handlers/characters'
 import { registerImageHandlers } from './handlers/images'
 import { registerLoreHandlers } from './handlers/lore'
@@ -55,6 +56,7 @@ if (!app.requestSingleInstanceLock()) {
     registerBackendHandlers()
     registerModelHandlers()
     registerMapHandlers()
+    registerTableHandlers()
     registerSessionHandlers()
     registerCharacterHandlers()
     registerLoreHandlers()
@@ -107,6 +109,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('before-quit', () => {
+    void stopTable()
     void vaultService.close()
   })
 }

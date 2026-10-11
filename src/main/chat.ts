@@ -86,8 +86,10 @@ class ChatService {
     if (recapsOn && !opts.upto) await recapService.ensurePrevious(session)
     const recaps = recapsOn ? await recapService.recapsFor(session, s.prompt.recapCount) : []
 
-    const characterPath = session.frontmatter.characters[0] ? await resolveCharacterLink(vault, session.frontmatter.characters[0]) : null
-    const character = characterPath ? await readCharacter(vault, characterPath).catch(() => null) : null
+    // Every character in the session (several when players share a table); the first is "the" character.
+    const partyPaths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
+    const partyNotes = (await Promise.all(partyPaths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((c): c is CharacterNote => !!c)
+    const character = partyNotes[0] ?? null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
     const map = await readMap(vault, session.campaignPath).catch(() => null)
     const preset = s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null
@@ -108,13 +110,15 @@ class ChatService {
     const speaker = opts.speaker ?? nextSpeaker(mode, messages)
     const characterName = character?.card.name || session.frontmatter.persona || s.general.playerName
     // Writing as the DM, the other side is the player character; writing as the character, it's the DM.
-    const persona = speaker === 'player' ? 'DM' : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
+    const persona =
+      speaker === 'player' ? 'DM' : partyNotes.length > 1 ? partyNotes.map((c) => c.card.name).join(', ') : mode === 'ai-dm' ? session.frontmatter.persona || characterName : characterName
     const speakerName = speaker === 'player' ? characterName : 'DM'
     const prompt = buildPrompt({
       userName: persona,
       speaker,
       playerPrompt: s.prompt.playerPrompt,
       character: character?.card ?? null,
+      partyCards: partyNotes.length > 1 ? partyNotes.map((c) => c.card) : undefined,
       campaign,
       party,
       preset,

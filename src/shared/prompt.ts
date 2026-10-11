@@ -28,7 +28,7 @@ export const DEFAULT_DM_PROMPT = `You are the Dungeon Master of a Dungeons & Dra
 
 Narrate in the second person and present tense ("You push open the door…"). Describe the world vividly but concisely, give NPCs distinct voices, and keep the story moving. End most replies with a situation the player can react to.
 
-Never act, speak or decide for {{user}}'s character. Never roll dice for the player. When an action's outcome is uncertain, ask for a check in exactly this format and then stop: [CHECK <ability or skill> DC <number>], for example [CHECK dex DC 14] or [CHECK perception DC 12]. Dice results from the player appear in the conversation in square brackets; narrate the outcome they imply.
+Never act, speak or decide for the player characters ({{user}}). Never roll dice for the players. When an action's outcome is uncertain, ask for a check in exactly this format and then stop: [CHECK <ability or skill> DC <number>], for example [CHECK dex DC 14] or [CHECK perception DC 12]. Dice results from the players appear in the conversation in square brackets; narrate the outcome they imply.
 
 Track hit points, conditions and inventory consistently with the character sheet you are given. Keep replies to one to four paragraphs unless a scene calls for more.`
 
@@ -52,6 +52,8 @@ export interface PromptPreset {
 export interface PromptInput {
   userName: string
   character: CharacterCard | null
+  /** All player characters when several share the session (multiplayer). */
+  partyCards?: CharacterCard[]
   campaign: Campaign | null
   party: Party | null
   preset: PromptPreset | null
@@ -320,7 +322,9 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         break
       }
       case 'character':
-        if (input.character) add('character', 'Character card', renderCharacter(input.character))
+        if (input.partyCards && input.partyCards.length > 1) {
+          add('character', `Party (${input.partyCards.length})`, `The player characters:\n\n${input.partyCards.map((c) => applyMacros(renderCharacter(c), { user: vars.user, char: c.name })).join('\n\n---\n\n')}`)
+        } else if (input.character) add('character', 'Character card', renderCharacter(input.character))
         break
       case 'campaign':
         add(
@@ -333,7 +337,10 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
         if (input.lore.length) add('lorebook', `Lorebook (${input.lore.length})`, renderLore(input.lore))
         break
       case 'sheet':
-        if (input.sheet) add('sheet', 'Character sheet', renderSheet(vars.char, input.sheet))
+        if (input.partyCards && input.partyCards.length > 1) {
+          const sheets = input.partyCards.filter((c) => c.dnd).map((c) => renderSheet(c.name, c.dnd!))
+          if (sheets.length) add('sheet', `Character sheets (${sheets.length})`, sheets.join('\n\n'))
+        } else if (input.sheet) add('sheet', 'Character sheet', renderSheet(vars.char, input.sheet))
         break
       case 'combat':
         if (input.combat?.active && input.combat.combatants.length) add('combat', 'Combat', renderCombat(input.combat))

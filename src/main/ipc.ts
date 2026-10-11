@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { z } from 'zod'
 import type {
@@ -48,6 +49,10 @@ export function handle<C extends InvokeChannel>(
   })
 }
 
+/** Every event sent to the window is also emitted here (the multiplayer host listens). */
+export const outbound = new EventEmitter()
+
 export function send<C extends EventChannel>(win: BrowserWindow | null | undefined, channel: C, payload: EventMap[C]): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  outbound.emit('event', channel, payload)
 }

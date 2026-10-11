@@ -13,6 +13,7 @@ import type { VaultGraph } from './graph'
 import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { Edition } from './editions'
+import type { AutoRespond, TableStatus } from './table'
 import type { PlayMode, Speaker } from './play'
 import type {
   AppInfo,
@@ -161,6 +162,14 @@ export interface InvokeMap {
     [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode }],
     Campaign
   >
+  /** Multiplayer hosting (see shared/table.ts). */
+  'table:start': Invoke<[opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null }], TableStatus>
+  'table:stop': Invoke<[], TableStatus>
+  'table:status': Invoke<[], TableStatus>
+  'table:kick': Invoke<[playerId: string], TableStatus>
+  'table:setAutoRespond': Invoke<[mode: AutoRespond], TableStatus>
+  'table:setSession': Invoke<[path: VaultPath | null], void>
+  'table:openScreen': Invoke<[], void>
   'campaigns:get': Invoke<[path: VaultPath], { campaign: Campaign; party: Party }>
   'campaigns:create': Invoke<[name: string], Campaign>
   'campaigns:saveParty': Invoke<[path: VaultPath, party: Party], Party>
@@ -252,6 +261,7 @@ export interface EventMap {
   'window:state': WindowState
   'toast': ToastEvent
   'updates:changed': UpdateStatus
+  'table:changed': TableStatus
   'vault:index': VaultIndex
   'vault:changed': { path: VaultPath; event: 'add' | 'change' | 'unlink' }
   'session:updated': Session
@@ -330,6 +340,13 @@ const invokeChannels = {
   'characters:setAvatar': 1,
   'characters:updateSheet': 1,
   'campaigns:get': 1,
+  'table:start': 1,
+  'table:stop': 1,
+  'table:status': 1,
+  'table:kick': 1,
+  'table:setAutoRespond': 1,
+  'table:setSession': 1,
+  'table:openScreen': 1,
   'campaigns:update': 1,
   'maps:get': 1,
   'maps:save': 1,
@@ -389,7 +406,8 @@ const eventChannels = {
   'images:done': 1,
   'images:error': 1,
   'extensions:notify': 1,
-  'updates:changed': 1
+  'updates:changed': 1,
+  'table:changed': 1
 } satisfies Record<EventChannel, 1>
 
 export const INVOKE_CHANNELS = Object.keys(invokeChannels) as InvokeChannel[]

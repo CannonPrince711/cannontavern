@@ -22,6 +22,7 @@ import { Wizard } from '@/components/wizard/Wizard'
 import { initAutoplay } from '@/lib/play'
 import { initMouseShortcuts } from '@/lib/mouse'
 import { useUpdatesSync } from '@/components/Updates'
+import { useTableSync } from '@/components/table/TablePanel'
 import { useApp } from '@/stores/app'
 import { useChat } from '@/stores/chat'
 import { useImages } from '@/stores/images'
@@ -51,6 +52,7 @@ export function App(): React.JSX.Element {
   const reduced = useReducedMotion()
   useAppearance()
   useUpdatesSync()
+  useTableSync()
 
   useEffect(() => {
     let cleanup: (() => void) | undefined

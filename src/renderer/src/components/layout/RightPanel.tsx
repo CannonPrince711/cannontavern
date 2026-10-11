@@ -1,4 +1,5 @@
-import { BookOpen, Image, Network, Puzzle, ScrollText, Swords } from 'lucide-react'
+import { BookOpen, Image, Network, Puzzle, ScrollText, Swords, Users } from 'lucide-react'
+import { TablePanel } from '@/components/table/TablePanel'
 import { GraphPanel } from '@/components/graph/GraphView'
 import { EmptyState } from '@/components/EmptyState'
 import { BookArt, FrameArt, HoodArt, RuneArt, SwordsArt } from '@/components/illustrations'
@@ -53,6 +54,14 @@ const TABS: { id: RightTab; label: string; icon: React.ElementType; art: React.R
     text: 'Your notes and the links between them.'
   },
   {
+    id: 'table',
+    label: 'Table',
+    icon: Users,
+    art: <RuneArt />,
+    title: 'Play together',
+    text: 'Host the session for other players.'
+  },
+  {
     id: 'extensions',
     label: 'Extensions',
     icon: Puzzle,
@@ -95,6 +104,8 @@ export function RightPanel(): React.JSX.Element {
             <ImagesPanel />
           ) : t.id === 'graph' ? (
             <GraphPanel />
+          ) : t.id === 'table' ? (
+            <TablePanel />
           ) : t.id === 'extensions' ? (
             <ExtensionsPanel />
           ) : (

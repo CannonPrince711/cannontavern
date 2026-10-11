@@ -24,6 +24,12 @@ function devCsp(): Plugin {
 export default defineConfig({
   main: {
     resolve: { alias: { '@shared': shared } },
+    // ws (the multiplayer server) tries optional native add-ons; bundling turns
+    // them into empty stubs that crash on the first message. Tell it to skip them.
+    define: {
+      'process.env.WS_NO_BUFFER_UTIL': JSON.stringify('1'),
+      'process.env.WS_NO_UTF_8_VALIDATE': JSON.stringify('1')
+    },
     build: {
       // Bundle dependencies into the main bundle: some are ESM-only (chokidar),
       // and the packaged app then needs no node_modules at all.
@@ -47,6 +53,15 @@ export default defineConfig({
     plugins: [react(), tailwindcss(), devCsp()],
     // electron-vite doesn't minify by default. Main/preload stay readable for
     // stack traces; the renderer is minified to keep startup fast.
-    build: { minify: 'esbuild' }
+    build: {
+      minify: 'esbuild',
+      rollupOptions: {
+        // The app, and the player page the multiplayer host serves to browsers.
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          player: resolve(__dirname, 'src/renderer/player.html')
+        }
+      }
+    }
   }
 })
