@@ -34,6 +34,13 @@ cannontavern/
    │  ├─ callouts.ts                session note ⇄ messages (lossless, surgical edits)
    │  ├─ prompt.ts                  prompt assembly, block order, lorebook triggering
    │  ├─ recap.ts                   session compression helpers (previous sessions, chunking, rendering)
+   │  ├─ play.ts                    play modes (AI DM / you as DM / AI only), who speaks next
+   │  ├─ editions.ts                5e and 3.5e: 3.5 skills, saves, XP, conditions, sourcebooks, rules line
+   │  ├─ builder.ts                 campaign builder: concept, draft schema, prompt, notes from a draft
+   │  ├─ map.ts                     campaign maps: pins, party marker, scale, layout
+   │  ├─ graph.ts                   note graph: wikilink resolution, mentions, neighbourhoods
+   │  ├─ table.ts                   multiplayer protocol and what players may see
+   │  ├─ tips.ts                    static tips and AI idea parsing
    │  ├─ dice.ts, checks.ts         dice expressions, checks and saves
    │  ├─ combat.ts, sheet.ts        initiative tracker, sheet changes, rests, level-up
    │  ├─ notes.ts, layout.ts        note normalisers, vault folder layout
@@ -51,18 +58,24 @@ cannontavern/
    │  ├─ library.ts, sessions.ts    characters, campaigns, lorebooks, presets; session notes
    │  ├─ chat.ts                    generation, streaming, fallback chain, rolling summary, auto-state
    │  ├─ recap.ts                   session compression when a session ends
+   │  ├─ builder.ts, maps.ts        campaign builder; map notes, map images, AI map painting
+   │  ├─ graph.ts, tips.ts          note graph for the graph view; AI ideas for the tips bubble
+   │  ├─ table/host.ts              multiplayer host: HTTP + WebSocket server for the player page
+   │  ├─ updater.ts                 in-app updates (electron-updater, GitHub Releases)
+   │  ├─ context-menu.ts            native right-click menus
    │  ├─ images.ts                  image jobs, auto-illustration
    │  ├─ backends/text/             openai, anthropic, ollama, kobold, textgen, custom
    │  ├─ backends/image/            comfyui (workflows, websocket progress, uploads), a1111, openai, custom
    │  ├─ import/                    SillyTavern V1/V2 JSON + PNG cards
    │  ├─ extensions/                loader, vm sandbox, ext:// panels
-   │  ├─ sample.ts, updates.ts      sample campaign; opt-in GitHub release check
+   │  ├─ sample.ts                  sample campaign
    │  └─ handlers/                  one file per IPC namespace
    ├─ preload/                      window.api bridge
    └─ renderer/src/
       ├─ App.tsx, styles/           themes as CSS variables, fonts, prose styles
       ├─ stores/                    zustand: app, vault, chat, ui, layout, dice, images, extensions, toasts
       ├─ lib/                       typed IPC, slash commands, dice/combat helpers
+      ├─ player/                    the player page served to browsers by the multiplayer host
       └─ components/
          ├─ layout/                 AppShell (resizable panes), LeftSidebar, ChatPane, RightPanel
          ├─ chat/                   messages, composer, prompt inspector, "Previously" recap card
@@ -71,6 +84,10 @@ cannontavern/
          ├─ characters/, lore/      editors
          ├─ sheet/, dice/           character sheet, combat, 3D dice
          ├─ images/, extensions/    gallery, lightbox, extension panels
+         ├─ builder/                campaign builder and campaign settings
+         ├─ map/, graph/            campaign map and mini-map; graph view
+         ├─ table/                  multiplayer Table tab and DM screen
+         ├─ ModelSwitcher.tsx       text and image model pickers
          ├─ CommandPalette.tsx      Ctrl+K
          └─ ui/                     shadcn-style primitives
 ```
@@ -95,18 +112,21 @@ and redacts secrets from error messages.
 
 | Namespace | Channels |
 |---|---|
-| `app:` `window:` | getInfo, openExternal (https/obsidian only), openFolder, minimize, toggleMaximize, close, getState |
+| `app:` `window:` | getInfo, openExternal (https/obsidian only), openFolder, contextMenu, minimize, toggleMaximize, close, getState |
 | `settings:` | get, update (patch), export, import |
-| `textBackends:` `imageBackends:` | save, delete, duplicate, reorder, test, fetchModels (text) |
+| `textBackends:` `imageBackends:` | save, delete, duplicate, reorder, test, models, use, fetchModels (text) |
 | `comfy:` | importWorkflow, inspectWorkflow |
-| `vault:` | detect, pick, validate, configure, getIndex, readNote, searchNotes, openInObsidian, createSampleCampaign, readImage |
+| `vault:` | detect, pick, validate, configure, getIndex, graph, readNote, searchNotes, openInObsidian, createSampleCampaign, readImage |
 | `characters:` | get, save, create, delete, import, export, setAvatar, updateSheet |
-| `campaigns:` `lorebooks:` `presets:` | get, create, saveParty, setLorebooks / get, create, save / get, create, save |
+| `campaigns:` `lorebooks:` `presets:` | get, create, update, draft, build, saveParty, setLorebooks / get, create, save / get, create, save |
+| `maps:` | get, save, importImage, images, generate |
+| `table:` | start, stop, status, kick, setAutoRespond, setSession, openScreen |
+| `updates:` | status, check, download, install |
 | `sessions:` | get, create, fork, post, updateMessage, deleteMessage, updateMeta, saveCombat, undoState, compress, recaps |
-| `chat:` | send, regenerate, continue, stop, inspectPrompt |
+| `chat:` | send, regenerate, continue, stop, inspectPrompt, ideas |
 | `images:` | generate, cancel |
 | `extensions:` | list, setEnabled, runCommand, saveSettings, reload, uiState |
-| **events** | settings:changed, window:state, toast, vault:index, vault:changed, session:updated, chat:started/token/done/error, images:progress/done/error, extensions:notify |
+| **events** | settings:changed, window:state, toast, vault:index, vault:changed, session:updated, chat:started/token/done/error, images:progress/done/error, extensions:notify, updates:changed, table:changed |
 
 ## Secrets
 

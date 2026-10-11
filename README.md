@@ -6,7 +6,10 @@ Everything it creates is stored as plain Markdown and image files in an **Obsidi
 
 - **Any text model.** OpenAI-compatible servers (OpenRouter, LM Studio, llama.cpp, vLLM, Groq and others), Anthropic Claude, Ollama, KoboldCpp, text-generation-webui, or any HTTP API through a body template. Local, LAN or remote, with an optional fallback chain.
 - **Any image backend.** ComfyUI with your own workflows (fully supported, including remote servers behind a proxy), Automatic1111/Forge, OpenAI images, or a custom API.
-- **D&D mechanics.** A dice engine with 3D dice, ability checks and saves, a 5e character sheet, initiative and combat tracking, and optional automatic sheet updates from the story.
+- **D&D 5e and 3.5e.** A dice engine with 3D dice, checks and saves, character sheets for both editions (3.5 with skill ranks, base attack and Fort/Ref/Will), allowed sourcebooks per campaign, initiative and combat tracking, and optional automatic sheet updates from the story.
+- **Who plays.** The AI as DM, you as DM with the AI playing the character, or the AI on both sides while you watch and steer.
+- **Multiplayer.** Host a table: friends join from any browser with a link and code, claim a character and play. A read-only player screen for a second monitor or TV, and a DM screen with private rolls and quick reference.
+- **Campaigns.** An AI campaign builder, campaign maps with pins and a game-style mini-map, and an Obsidian-style graph of your notes.
 - **Memory.** Lorebooks with keyword triggers, a rolling in-session summary, and automatic session recaps, so each new session starts knowing what happened before.
 - **Extensions.** Small JavaScript add-ons that run sandboxed and add commands, prompt context, panels and hooks.
 
@@ -16,10 +19,15 @@ Everything it creates is stored as plain Markdown and image files in an **Obsidi
 - [First run](#first-run)
 - [Your vault](#your-vault)
 - [Playing](#playing)
+- [Who plays: AI DM, you as DM, or AI only](#who-plays-ai-dm-you-as-dm-or-ai-only)
+- [Campaigns, editions and sourcebooks](#campaigns-editions-and-sourcebooks)
+- [Maps and the graph view](#maps-and-the-graph-view)
+- [Multiplayer](#multiplayer)
 - [Text backends](#text-backends)
 - [Image backends and ComfyUI](#image-backends-and-comfyui)
 - [Memory: summaries and session recaps](#memory-summaries-and-session-recaps)
 - [Settings, keys and privacy](#settings-keys-and-privacy)
+- [Updates](#updates)
 - [Writing extensions](#writing-extensions)
 - [Development](#development)
 - [Building the installer](#building-the-installer)
@@ -61,8 +69,9 @@ Press **Ctrl+K** at any time to search commands, sessions, characters, lorebooks
     ├── Presets/               DM system prompts
     └── Campaigns/
         └── <Campaign>/
-            ├── Campaign.md    setting, tone, house rules, linked lorebooks
+            ├── Campaign.md    setting, tone, house rules, edition, sourcebooks, lorebooks
             ├── Party.md       shared gold, inventory, quests
+            ├── <Name> Map.md  the campaign map: image, pins, the party's position
             ├── Sessions/      one note per session: the chat log
             └── Images/        generated illustrations
 ```
@@ -98,7 +107,17 @@ Type what your character does and press **Enter** (Shift+Enter for a new line). 
 | Continue a reply that stopped early | `/continue` |
 | Edit, delete or fork from a message | The message's hover toolbar |
 | See exactly what is sent to the model | The **Prompt inspector** button in the chat header |
+| Switch the text or image model | The model pickers in the chat header and title bar |
 | Search everything | **Ctrl+K** |
+| Message actions | Right-click a message (copy, edit, replies, regenerate, fork, delete) |
+| Edit your own message | Double-click it |
+| Previous / next reply | Your mouse's back / forward buttons (or back/forward through sessions, in Settings) |
+| Zoom the interface | **Ctrl+scroll** (**Ctrl+0** resets) |
+| Open a session or character in Obsidian | Middle-click it in the sidebar |
+
+The lightbulb above the message box offers **tips and ideas**: three AI suggestions for your next move (or, as the DM, a complication, an NPC line and a check to call), plus rotating tips. Click an idea to put it in the message box.
+
+The clock button next to the message box turns on the **turn timer**: a countdown for your turn after each AI reply and for each combatant in combat. When it runs out it chimes, or (if you choose) the story moves on. Settings → General → Turn timer.
 
 When the DM asks for a check (`[CHECK perception DC 13]`), a button appears that rolls it with your sheet's modifiers.
 
@@ -117,9 +136,50 @@ When the DM asks for a check (`[CHECK perception DC 13]`), a button appears that
 | `/note <name>` | Pull any vault note into the conversation |
 | `/sys <text>` | Add a narrator/system note |
 | `/compress` | Compress this session into a recap now |
+| `/mode ai-dm \| user-dm \| ai-only` | Who plays (see below) |
+| `/autoplay [turns]` | AI-only sessions: let the story play itself |
 | `/title <title>`, `/new`, `/help` | Rename, new session, list commands |
 
-Extensions add more (for example `/loot cr 3`, `/npc`, `/weather`, `/pin`).
+Extensions add more (for example `/loot cr 3`, `/npc`, `/weather`, `/pin`, `/stat`).
+
+## Who plays: AI DM, you as DM, or AI only
+
+Each session (and, as a default, each campaign) has a mode, switched from the chat header or with `/mode`:
+
+| Mode | You | The AI |
+| --- | --- | --- |
+| **AI is the DM** (default) | play your character | runs the game |
+| **You are the DM** | narrate, voice NPCs, call for checks | plays the character, using its own player prompt (Settings → Prompt) and never seeing the campaign note's DM secrets |
+| **AI only** | watch, or steer with director's notes | plays both sides, one turn at a time |
+
+As the DM, writing `[CHECK perception DC 13]` rolls the check for the character instead of asking the AI. In AI-only sessions, **Next turn** asks for one reply and **Auto-play** keeps going for a number of turns, rolling any checks the DM asks for. Messages keep their story role whoever wrote them, so you can switch modes mid-session.
+
+## Campaigns, editions and sourcebooks
+
+- **Campaign builder** (campaign menu or Ctrl+K): describe a premise, tone, setting, length and who plays. The AI drafts a campaign (pitch, setting, hook, opening scene, locations, NPCs with wants and secrets, factions, an outline, quests and DM secrets) that you review and edit before anything is written. Or fill it in by hand. It creates the campaign note, the party sheet, a linked lorebook with what players may learn, a note per NPC, a starter map with the locations, and Session 01.
+- **Campaign settings** (campaign menu or Ctrl+K): the rules edition, allowed sourcebooks, the default play mode, setting, tone and house rules, all saved in Campaign.md.
+- **D&D 3.5 edition**: choose it per campaign and per character sheet. 3.5 sheets have skill ranks, base attack bonus, Fortitude/Reflex/Will base saves and feats; checks add ranks and saves add base saves (a natural 20 or 1 on a save always succeeds or fails); the 3.5 XP table and conditions apply, and resting heals 1 HP per level. Sourcebooks include the core books and expansions such as the Complete series, Races of…, Player's Handbook II, Spell and Magic Item Compendium, Tome of Battle, Expanded Psionics Handbook, the Monster Manuals, Eberron and Forgotten Realms. The DM is told the edition, the allowed books and to use 3.5 check names such as `[CHECK spot DC 15]`.
+
+## Maps and the graph view
+
+- **Campaign map** (map button in the chat header): use a picture (any file, an image from the campaign, or one painted by your image backend) or a blank grid. Add pins (location, point of interest, danger, note) with descriptions and linked notes, drag them around, and move the green party token. Dropping the party on a pin tells the DM ("The party travels to …") and puts the location in the prompt. Set the map's width for a scale bar. The map is a normal note with a readable pin list.
+- **Mini-map**: a game-style schematic in the corner of the chat, centred on the party's HERE marker, with a compass and scale bar. Click it to open the map; hide it from its corner button or the map view.
+- **Graph view**: an Obsidian-style graph of your campaign notes and the wikilinks between them, plus dashed links where a session mentions a character or NPC. The right panel's Graph tab shows the local graph around the open session; Ctrl+K → Graph view shows everything, with search and filters. Click a note to open it.
+
+## Multiplayer
+
+Open a session, then the right panel's **Table** tab:
+
+1. Choose **Local network & online** (phones and laptops on your Wi-Fi, or anyone you share it with through port forwarding or Tailscale) or **This PC only**, and press **Start hosting**. Windows may ask to let DND Tavern use the network; allow it for private networks.
+2. Share the link shown (the join code is in it). Players open it in any browser, enter their name, and pick a character, which joins the session's party.
+3. Players read the story as it's written, act as their character, and roll their checks and dice from their page (rolls happen on the host). When the DM asks for a check, players get a **Roll it** button.
+
+With the AI as DM, choose whether it answers every player message, waits until everyone has acted, or waits for you. With you as DM, players act and you narrate from your screen. You can remove a player at any time.
+
+- **Player screen**: a read-only window with the story in large type and the party's HP, for a second monitor or a TV at the table.
+- **DM screen** tab: private dice rolls that aren't posted, the DC ladder for the campaign's edition, condition reminders, the campaign note's secrets and your NPCs.
+
+Players only see the session's visible messages, the party's public stats and the campaign's images. They never see the vault, settings, prompts or hidden notes.
 
 ### Automatic sheet updates
 
@@ -214,12 +274,16 @@ The prompt is assembled from blocks you can reorder and switch off in **Settings
 - Settings live in `%APPDATA%\DND Tavern\settings.json`. Your vault holds your content; nothing else is written there.
 - API keys and secret headers are encrypted with Windows DPAPI (Electron `safeStorage`), so they can only be decrypted by your Windows account on this PC. Instead of storing a key, you can enter `env:NAME` to read it from an environment variable at request time.
 - Keys never reach the app's UI process, and they are redacted from logs, error messages and the prompt inspector.
-- DND Tavern makes no network requests except to the backends you configure. The optional **Check for updates** setting (off by default) asks GitHub for the latest release once per launch and shows a download link; nothing installs automatically.
+- DND Tavern makes no network requests except to the backends you configure, the update check if you turn it on, and the multiplayer server while you host.
 - **Minimise to tray** keeps the app in the notification area when you close the window. Quit from the tray icon's menu.
+
+## Updates
+
+Settings → General → **Updates**: **Check now**, check on startup, and optionally download in the background. Installed copies update themselves from GitHub Releases: when a new version is ready, a pill in the title bar offers **Restart to update** (it also installs when you quit). Portable and development copies can't replace themselves, so they link to the release page instead. Nothing installs without you.
 
 ## Writing extensions
 
-Extensions are folders in `%APPDATA%\DND Tavern\extensions\` (open it from **Settings → Extensions**). Five examples are installed on first run: Weather & Time, Loot Generator, NPC Generator, Session Recap and Map Pins. New extensions start disabled; enabling one shows the permissions it asks for, and you can grant or refuse each one.
+Extensions are folders in `%APPDATA%\DND Tavern\extensions\` (open it from **Settings → Extensions**). Six examples are installed: Weather & Time, Loot Generator, NPC Generator, Session Recap, Map Pins, and **Mature Mode (18+)**, which (once enabled and confirmed 18+) allows adult content between consenting adult characters and tracks its own per-character stat blocks such as Arousal, Affection and Stamina, updated by the model and editable in its panel. New extensions start disabled; enabling one shows the permissions it asks for, and you can grant or refuse each one.
 
 ```text
 extensions/my-extension/
@@ -348,6 +412,16 @@ This type-checks, builds, and writes both installers to `dist/`:
 - `dist/DND Tavern <version>.exe` (portable)
 
 `npm run dist:dir` builds an unpacked app in `dist/win-unpacked/` for quick testing. Regenerate the icon from `build/icon.svg` with `npm run icon`.
+
+### Publishing a release (for in-app updates)
+
+Bump `version` in `package.json`, set `GH_TOKEN` to a GitHub token that can create releases, and run:
+
+```bash
+npm run release
+```
+
+This uploads the installer, its blockmap and `latest.yml` to a GitHub release, which installed copies check. The releases must be readable without a token, so the repository (or at least its releases) has to be public for updates to download.
 
 ### Code signing
 
