@@ -3,6 +3,7 @@ import { newMessageId } from '@shared/callouts'
 import { toWikilink } from '@shared/names'
 import { normalizeCard } from '@shared/notes'
 import { PARTY_LIMITS, PLAY_MODES } from '@shared/play'
+import { generateCharacter } from '../chargen'
 import type { CharacterNote, CombatState, Message } from '@shared/types'
 import { chatService } from '../chat'
 import { AppError } from '../errors'
@@ -204,6 +205,22 @@ export function registerSessionHandlers(): void {
       return note
     },
     z.tuple([z.string().min(1).max(120), z.boolean().optional()])
+  )
+
+  handle(
+    'characters:generate',
+    (_e, opts) => generateCharacter(opts),
+    z.tuple([
+      z.object({
+        concept: z.string().max(2000),
+        level: z.number().int().min(1).max(20),
+        race: z.string().max(80).optional(),
+        cls: z.string().max(120).optional(),
+        campaignPath: path.optional(),
+        edition: z.enum(['5e', '3.5e']).optional(),
+        npc: z.boolean().optional()
+      })
+    ])
   )
 
   handle('campaigns:get', (_e, p) => readCampaign(vaultService.require(), p), z.tuple([path]))
