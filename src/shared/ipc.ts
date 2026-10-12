@@ -193,7 +193,10 @@ export interface InvokeMap {
   'lorebooks:create': Invoke<[name: string], Lorebook>
   'campaigns:setLorebooks': Invoke<[campaignPath: VaultPath, lorebookPaths: VaultPath[]], Campaign>
   /** Reads text aloud with the Speech server; returns the audio file (mp3). */
-  'speech:synthesize': Invoke<[text: string], Uint8Array>
+  /** `who` picks the voice: the speaker's own (character or NPC note), else the world's narrator, else Settings → Speech. */
+  'speech:synthesize': Invoke<[text: string, who?: { sessionPath?: VaultPath; role?: string; name?: string; voice?: string }], Uint8Array>
+  /** Voices the speech server offers (GET /v1/audio/voices); empty when it has no list. */
+  'speech:voices': Invoke<[], string[]>
   'presets:get': Invoke<[path: VaultPath], { path: VaultPath; name: string; system_prompt: string; dm_mode: boolean }>
   'presets:create': Invoke<[name: string], VaultPath>
   'presets:save': Invoke<[path: VaultPath, systemPrompt: string], void>
@@ -394,6 +397,7 @@ const invokeChannels = {
   'lorebooks:create': 1,
   'campaigns:setLorebooks': 1,
   'speech:synthesize': 1,
+  'speech:voices': 1,
   'presets:get': 1,
   'presets:create': 1,
   'presets:save': 1,

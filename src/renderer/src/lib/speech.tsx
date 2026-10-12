@@ -1,5 +1,32 @@
 import { invoke } from '@/lib/ipc'
+import { useEffect, useState } from 'react'
 import { useApp } from '@/stores/app'
+
+let voiceList: Promise<string[]> | null = null
+
+/** The speech server's voices (fetched once per app run), for voice pickers. */
+export function useServerVoices(): string[] {
+  const server = useApp((s) => (s.settings?.tts.mode === 'server' ? s.settings.tts.baseUrl : ''))
+  const [voices, setVoices] = useState<string[]>([])
+  useEffect(() => {
+    if (!server) return setVoices([])
+    voiceList ??= invoke('speech:voices').catch(() => [])
+    void voiceList.then(setVoices)
+  }, [server])
+  return voices
+}
+
+/** A <datalist> of the server's voices; give an input list={id}. */
+export function VoiceOptions({ id }: { id: string }): React.JSX.Element {
+  const voices = useServerVoices()
+  return (
+    <datalist id={id}>
+      {voices.map((v) => (
+        <option key={v} value={v} />
+      ))}
+    </datalist>
+  )
+}
 
 let audio: HTMLAudioElement | null = null
 let audioUrl: string | null = null
@@ -22,7 +49,7 @@ function spoken(text: string): string {
  * Reads a message aloud with the Speech settings: the computer's voices, or an
  * OpenAI-compatible speech server, which the main process calls for us.
  */
-export async function speak(text: string): Promise<void> {
+export async function speak(text: string, who?: { sessionPath?: string; role?: string; name?: string }): Promise<void> {
   const tts = useApp.getState().settings?.tts
   const input = spoken(text)
   if (!input) return
@@ -38,7 +65,7 @@ export async function speak(text: string): Promise<void> {
     return
   }
 
-  const bytes = await invoke('speech:synthesize', input)
+  const bytes = await invoke('speech:synthesize', input, who)
   audioUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' }))
   audio = new Audio(audioUrl)
   audio.onended = () => stopSpeaking()
