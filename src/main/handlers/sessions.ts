@@ -16,6 +16,8 @@ import { settingsStore } from '../settings-store'
 import { vaultService } from '../vault/service'
 import { extensionHost } from '../extensions/host'
 import { getMainWindow } from '../window'
+import { parseNote } from '../vault/frontmatter'
+import { tableHost } from '../table/host'
 
 const path = z.string().min(1).max(1024)
 
@@ -205,6 +207,22 @@ export function registerSessionHandlers(): void {
       return note
     },
     z.tuple([z.string().min(1).max(120), z.boolean().optional()])
+  )
+
+  handle(
+    'sessions:delete',
+    async (_e, p) => {
+      const vault = vaultService.require()
+      const file = await vault.readIfExists(p)
+      if (!file) return
+      if (parseNote(file.content).data.type !== 'session') throw new AppError('NOT_SESSION', 'That note is not a session.')
+      chatService.stopSession(p)
+      if (tableHost.status().sessionPath === p) tableHost.setSession(null)
+      // To the Recycle Bin (system trash), so it can be restored.
+      await vault.delete(p)
+      vaultService.removeFromIndex(p)
+    },
+    z.tuple([path])
   )
 
   handle(

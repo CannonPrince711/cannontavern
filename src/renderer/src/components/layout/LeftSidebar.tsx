@@ -20,6 +20,8 @@ import { Tip } from '@/components/ui/tooltip'
 import { ListSkeleton } from '@/components/ui/skeleton'
 import { mouseShortcutsOn, separator, showMenu } from '@/lib/mouse'
 import { invoke } from '@/lib/ipc'
+import { askConfirm } from '@/components/AskDialog'
+import { useChat } from '@/stores/chat'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { cn } from '@/lib/utils'
@@ -157,6 +159,24 @@ function CampaignSwitcher(): React.JSX.Element {
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+/** Asks first, then moves the session note to the Recycle Bin (closing it if it's open). */
+async function deleteSession(s: SessionSummary): Promise<void> {
+  const ok = await askConfirm({
+    title: `Delete “${s.title}”?`,
+    description: `The session and its ${s.messageCount} ${s.messageCount === 1 ? 'message' : 'messages'} move to the Recycle Bin, where you can restore them. Pictures in the campaign’s Images folder stay.`,
+    confirmLabel: 'Delete',
+    danger: true
+  })
+  if (!ok) return
+  try {
+    await invoke('sessions:delete', s.path)
+    if (useChat.getState().session?.path === s.path) useChat.setState({ session: null })
+    toast.success(`Deleted “${s.title}”`, 'It’s in the Recycle Bin if you need it back.')
+  } catch (err) {
+    toast.error(err, 'Couldn’t delete the session')
+  }
 }
 
 function openInObsidian(path: string): void {
@@ -350,7 +370,9 @@ export function LeftSidebar(): React.JSX.Element {
                                       .then(() => toast.success(`Compressed “${s.title}”`))
                                       .catch((err) => toast.error(err, 'Could not compress'))
                                 },
-                                { label: 'Copy title', run: () => void navigator.clipboard.writeText(s.title) }
+                                { label: 'Copy title', run: () => void navigator.clipboard.writeText(s.title) },
+                                separator,
+                                { label: 'Delete session…', run: () => void deleteSession(s) }
                               ])
                             }}
                             className={cn(

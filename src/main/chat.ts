@@ -383,6 +383,11 @@ class ChatService {
     this.jobs.get(requestId)?.controller.abort()
   }
 
+  /** Stops every reply being written for a session (before it's deleted). */
+  stopSession(sessionPath: VaultPath): void {
+    for (const j of this.jobs.values()) if (j.sessionPath === sessionPath) j.controller.abort()
+  }
+
   /** True while a reply is being generated for the session. */
   isBusy(sessionPath: VaultPath): boolean {
     return [...this.jobs.values()].some((j) => j.sessionPath === sessionPath)
