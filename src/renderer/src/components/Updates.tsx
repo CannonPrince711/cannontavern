@@ -39,6 +39,8 @@ async function run(action: 'check' | 'update' | 'download' | 'install'): Promise
   }
 }
 
+const mb = (bytes: number): string => `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`
+
 /** Title bar pill: shown while an update is available, downloading or ready. */
 export function UpdatePill(): React.JSX.Element | null {
   const status = useUpdates((s) => s.status)
@@ -89,9 +91,12 @@ function describe(s: UpdateStatus): string {
     case 'available':
       return s.canInstall ? `Version ${s.version} is available.` : `Version ${s.version} is available. This copy (portable or development) can’t update itself; download it from the release page.`
     case 'downloading':
-      return `Downloading ${s.version}… ${s.percent}%`
+      if (s.partial && s.bytes) return `Downloading only what changed in ${s.version}: ${mb(s.bytes.done)} of ${mb(s.bytes.total)}${s.fullBytes ? ` (the full installer is ${mb(s.fullBytes)})` : ''}.`
+      return `Downloading ${s.version}… ${s.percent}%${s.bytes ? ` (${mb(s.bytes.done)} of ${mb(s.bytes.total)})` : ''}`
     case 'ready':
-      return `Version ${s.version} is downloaded. Restart to install it (or it installs when you quit).`
+      return `Version ${s.version} is downloaded${
+        s.partial && s.downloadedBytes ? `: only the changed parts, ${mb(s.downloadedBytes)}${s.fullBytes ? ` instead of ${mb(s.fullBytes)}` : ''}` : ''
+      }. Restart to install it (or it installs when you quit).`
     case 'error':
       return s.message
   }

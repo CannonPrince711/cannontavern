@@ -539,8 +539,13 @@ export type UpdateStatus =
   | { state: 'none'; checkedAt: string }
   /** canInstall is false for portable and dev builds, which get a download link instead. */
   | { state: 'available'; version: string; canInstall: boolean; url?: string; notes?: string }
-  | { state: 'downloading'; version: string; percent: number }
-  | { state: 'ready'; version: string }
+  /**
+   * partial: only the changed parts of the installer are being fetched (the
+   * rest is reused from the copy cached by the last update). bytes counts what
+   * is actually downloaded; fullBytes is the whole installer.
+   */
+  | { state: 'downloading'; version: string; percent: number; partial?: boolean; bytes?: { done: number; total: number }; fullBytes?: number }
+  | { state: 'ready'; version: string; partial?: boolean; downloadedBytes?: number; fullBytes?: number }
   | { state: 'error'; message: string }
 
 export interface ToastEvent {

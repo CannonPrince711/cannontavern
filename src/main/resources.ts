@@ -4,10 +4,11 @@
  * any lorebook) unless the world turns them off; images in Resources/Images
  * are offered in every campaign's map image chooser.
  *
- * Starter content is written once per vault (a hidden marker remembers it),
- * so deleting the folder or its notes sticks. Existing notes are never
- * overwritten.
+ * Starter content is written once per vault. A hidden marker remembers the
+ * hash of each starter note as written, so an app update can refresh the
+ * notes it changed while leaving alone any the user edited or deleted.
  */
+import { createHash } from 'node:crypto'
 import { RESOURCE_FOLDERS, RESOURCES_MARKER } from '@shared/layout'
 import { serializeLorebookBody } from '@shared/notes'
 import type { LoreEntry, VaultPath } from '@shared/types'
@@ -89,25 +90,102 @@ Shared material every campaign can use.
 DND Tavern wrote the starter lorebooks once. Edit them, add your own, or delete what you don't need: they won't come back.
 `
 
-async function writeIfMissing(vault: Vault, path: VaultPath, content: string): Promise<void> {
-  if (!(await vault.exists(path))) await vault.write(path, content, { baseHash: null })
+/** Every starter file, by its path under the root folder, with the content this version ships. */
+export function starterFiles(): StarterFile[] {
+  return [
+    { rel: `${RESOURCE_FOLDERS.root}/About Resources.md`, content: ABOUT },
+    ...STARTER.map((b) => ({ rel: `${RESOURCE_FOLDERS.lore}/${b.file}`, content: serializeNote({ type: 'lorebook', name: b.name }, serializeLorebookBody(b.intro, b.entries)) }))
+  ]
+}
+
+export interface StarterFile {
+  rel: string
+  content: string
+}
+
+/** What the marker remembers: the hash of each starter file as last written. Older markers held only prose. */
+interface Marker {
+  notes?: Record<string, string>
+}
+
+/** Recorded for a note we can't vouch for: no hash equals it, so it is never overwritten. */
+const USER_OWNED = 'user'
+const hashOf = (text: string): string => createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex')
+
+async function readMarker(vault: Vault): Promise<Marker | null> {
+  const got = await vault.readIfExists(vault.rootPath(RESOURCES_MARKER))
+  if (!got) return null
+  try {
+    const m = JSON.parse(got.content) as Marker
+    return m && typeof m === 'object' ? m : {}
+  } catch {
+    return {}
+  }
+}
+
+async function writeMarker(vault: Vault, notes: Record<string, string>): Promise<void> {
+  const text = JSON.stringify({ about: 'DND Tavern set up the Resources folder in this vault. It updates the starter notes you have not edited.', notes }, null, 2)
+  await vault.mutate(vault.rootPath(RESOURCES_MARKER), () => `${text}\n`).catch(() => {})
 }
 
 /** Writes the starter Resources folder (missing pieces only). */
-export async function createResources(vault: Vault): Promise<void> {
+export async function createResources(vault: Vault, files: StarterFile[] = starterFiles()): Promise<void> {
   for (const folder of Object.values(RESOURCE_FOLDERS)) await vault.mkdir(vault.rootPath(folder))
   for (const sub of ['Portraits', 'Maps', 'Battlemaps']) await vault.mkdir(vault.rootPath(RESOURCE_FOLDERS.images, sub))
-  await writeIfMissing(vault, vault.rootPath(RESOURCE_FOLDERS.root, 'About Resources.md'), ABOUT)
-  for (const book of STARTER) {
-    await writeIfMissing(vault, vault.rootPath(RESOURCE_FOLDERS.lore, book.file), serializeNote({ type: 'lorebook', name: book.name }, serializeLorebookBody(book.intro, book.entries)))
+  const notes = { ...((await readMarker(vault))?.notes ?? {}) }
+  for (const f of files) {
+    const path = vault.rootPath(f.rel)
+    if (!(await vault.exists(path))) {
+      await vault.write(path, f.content, { baseHash: null })
+      notes[f.rel] = hashOf(f.content)
+    }
   }
-  await vault.write(vault.rootPath(RESOURCES_MARKER), 'Remembers that DND Tavern already set up the Resources folder in this vault.\n', { baseHash: null }).catch(() => {})
+  await writeMarker(vault, notes)
 }
 
-/** First time a vault is opened with this version: set up Resources. Later opens leave it alone. */
-export async function ensureResources(vault: Vault): Promise<void> {
-  if (await vault.exists(vault.rootPath(RESOURCES_MARKER))) return
-  await createResources(vault)
+/**
+ * The first time a vault is opened: set up Resources. After that, an app
+ * update refreshes the starter notes it changed, as long as the user hasn't
+ * edited them; deleted notes stay deleted, and new starter notes are added.
+ */
+export async function ensureResources(vault: Vault, files: StarterFile[] = starterFiles()): Promise<void> {
+  const marker = await readMarker(vault)
+  if (!marker) return createResources(vault, files)
+  // An older marker didn't record hashes: a note that already matches this version is adopted, the rest are left alone.
+  const legacy = !marker.notes
+  const notes = { ...(marker.notes ?? {}) }
+  let changed = false
+  for (const f of files) {
+    const path = vault.rootPath(f.rel)
+    const want = hashOf(f.content)
+    const recorded = notes[f.rel]
+    if (!recorded) {
+      if (legacy) {
+        // Matches this version: adopt it. Edited or deleted: mark it as the user's, so it's never touched.
+        const cur = await vault.readIfExists(path)
+        notes[f.rel] = cur && hashOf(cur.content) === want ? want : USER_OWNED
+      } else if (!(await vault.exists(path))) {
+        // New in this version.
+        await vault.write(path, f.content, { baseHash: null })
+        notes[f.rel] = want
+      }
+      changed = changed || notes[f.rel] !== undefined
+      continue
+    }
+    if (recorded === want) continue
+    let updated = false
+    await vault.mutate(path, (cur) => {
+      // Deleted, or edited by the user since it was written: leave it.
+      if (cur === null || hashOf(cur) !== recorded) return null
+      updated = true
+      return f.content
+    })
+    if (updated) {
+      notes[f.rel] = want
+      changed = true
+    }
+  }
+  if (changed || legacy) await writeMarker(vault, notes)
 }
 
 /** Generic images under Resources/Images, for every campaign's image choosers. */

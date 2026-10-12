@@ -14,7 +14,8 @@ interface ExtensionsStore {
   load: () => Promise<void>
   reload: () => Promise<void>
   setEnabled: (id: string, enabled: boolean, granted: ExtensionPermission[]) => Promise<void>
-  saveSettings: (id: string, values: Record<string, unknown>) => Promise<void>
+  /** True once saved; errors are shown as a toast. */
+  saveSettings: (id: string, values: Record<string, unknown>) => Promise<boolean>
 }
 
 /** Registers each enabled extension's commands in the slash-command menu. */
@@ -74,8 +75,10 @@ export const useExtensions = create<ExtensionsStore>((set) => ({
   async saveSettings(id, values) {
     try {
       set({ list: await invoke('extensions:saveSettings', id, values) })
+      return true
     } catch (err) {
-      toast.error(err)
+      toast.error(err, 'Couldn’t save the extension’s settings')
+      return false
     }
   }
 }))

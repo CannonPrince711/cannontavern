@@ -3,7 +3,9 @@
 // Nothing happens until the user confirms they are 18 or older (/mature
 // confirm, or the button in the panel) and mode is on. Then:
 // - a prompt block tells the model mature content between consenting adult
-//   characters is allowed (never minors), at the chosen level, with limits;
+//   characters is allowed (never minors), at the chosen level, with limits,
+//   using the adults-only age (never below 18) and extra rule from settings;
+//   the campaign builder reads the same settings;
 // - per-character stats (e.g. Arousal, Affection, Stamina) are kept per
 //   campaign, shown to the model, and updated from a hidden
 //   <stats>{"Name": {"Stat": 10}}</stats> line the model may add, which is
@@ -106,10 +108,18 @@ function describe(ctx, all) {
     .join('\n')
 }
 
+/** The adults-only age: the setting, but never below 18. */
+function minAge(ctx) {
+  const n = Math.round(Number(ctx.settings.minAge))
+  return Number.isFinite(n) ? Math.max(18, n) : 21
+}
+
 function guidance(ctx) {
   const lines = [
-    'Mature content is enabled for this story. Every character in any sexual content is an adult (18 or older) and consenting. Never sexualise minors or characters who seem young, and never portray sexual violence approvingly.'
+    `Mature content is enabled for this story. Every character in any sexual content is an adult (${minAge(ctx)} or older) and consenting. Never sexualise minors or characters who seem young, and never portray sexual violence approvingly.`
   ]
+  const rule = String(ctx.settings.adultRule == null ? '' : ctx.settings.adultRule).trim()
+  if (rule) lines.push(rule)
   lines.push(
     ctx.settings.intensity === 'suggestive'
       ? 'Romance, flirtation and sensuality are welcome, but fade to black before explicit sexual detail.'
@@ -121,6 +131,9 @@ function guidance(ctx) {
 }
 
 module.exports = {
+  // Exposed for tests; the host only reads commands and hooks.
+  _guidance: guidance,
+
   commands: {
     async mature(args, ctx) {
       const a = args.trim().toLowerCase()
