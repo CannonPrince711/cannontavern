@@ -30,6 +30,7 @@ cannontavern/
    ├─ shared/                       pure logic and types used by both processes
    │  ├─ types.ts                   Message, Session, CharacterCard, DndSheet, VaultIndex, Extension…
    │  ├─ settings.ts                zod: Settings, TextBackend, ImageBackend, secrets, patches, extension manifest
+   │  ├─ world.ts                   per-world overrides (Campaign.md `world:`), applyWorld, validating model suggestions
    │  ├─ ipc.ts                     InvokeMap / EventMap contract + preload allow-lists
    │  ├─ callouts.ts                session note ⇄ messages (lossless, surgical edits)
    │  ├─ prompt.ts                  prompt assembly, block order, lorebook triggering
@@ -66,6 +67,9 @@ cannontavern/
    │  ├─ backends/context.ts        asks self-hosted servers for their real context window
    │  ├─ context-menu.ts            native right-click menus
    │  ├─ images.ts                  image jobs, auto-illustration
+   │  ├─ world.ts, world-suggest.ts settings as a campaign sees them; "pick best for this world"
+   │  ├─ world-resources.ts         "generate resources for this world" lorebooks
+   │  ├─ resources.ts               shared Resources folder (starter lore, shared images)
    │  ├─ backends/text/             openai, anthropic, ollama, kobold, textgen, custom
    │  ├─ backends/image/            comfyui (workflows, websocket progress, uploads), a1111, openai, custom
    │  ├─ import/                    SillyTavern V1/V2 JSON + PNG cards

@@ -18,6 +18,8 @@ import { settingsStore } from './settings-store'
 import { parseNote } from './vault/frontmatter'
 import { vaultService } from './vault/service'
 import { getMainWindow } from './window'
+import { noteCampaigns } from './npcs'
+import { anyAutoPortraits, settingsFor } from './world'
 
 const key = (p: string): string => p.toLowerCase()
 
@@ -55,8 +57,7 @@ class PortraitService {
   }
 
   private consider(path: VaultPath, content: string, created: boolean): void {
-    const s = settingsStore.get()
-    if (!s.imageTriggers.autoPortraits || !s.imageBackends.length || !this.isCharacterNote(path)) return
+    if (!anyAutoPortraits() || !settingsStore.get().imageBackends.length || !this.isCharacterNote(path)) return
     const k = key(path)
     if (this.tried.has(k) || this.queued.has(k) || (!created && !this.waiting.has(k))) return
     let data: Record<string, unknown>
@@ -96,14 +97,18 @@ class PortraitService {
         this.queued.delete(key(path))
         this.tried.add(key(path))
         // It may have been deleted, given a portrait, or the setting turned off while it waited.
-        if (!settingsStore.get().imageTriggers.autoPortraits) continue
-        const file = await vaultService.vault?.readIfExists(path).catch(() => null)
-        if (!file) continue
+        const vault = vaultService.vault
+        const file = await vault?.readIfExists(path).catch(() => null)
+        if (!vault || !file) continue
         const { data } = parseNote(file.content)
         if (typeof data.avatar === 'string' && data.avatar.trim()) continue
+        // A note tied to one campaign is painted with that world's settings.
+        const tied = await noteCampaigns(vault, vaultService.getIndex(), path).catch(() => [])
+        const campaignPath = tied.length === 1 ? tied[0] : undefined
+        if (!settingsFor(campaignPath).imageTriggers.autoPortraits) continue
         const name = typeof data.name === 'string' && data.name.trim() ? data.name.trim() : (path.split('/').pop() ?? path).replace(/\.md$/i, '')
         try {
-          await imageService.generateNow({ kind: 'portrait', characterPath: path })
+          await imageService.generateNow({ kind: 'portrait', characterPath: path, ...(campaignPath ? { campaignPath } : {}) })
           this.painted.push(name)
         } catch (err) {
           // A broken backend would fail for every one: stop and say so once.

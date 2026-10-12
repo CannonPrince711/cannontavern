@@ -8,10 +8,11 @@ import { newMessageId } from '@shared/callouts'
 import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
 import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
+import { withWorldInstructions } from '@shared/world'
 import type { CharacterNote, LoreEntry, Message, PromptPreview, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCampaign, readCampaignModelMap, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
+import { readCampaign, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
 import { postMessage, readSession, updateFrontmatter, updateMessage } from './sessions'
 import { settingsStore } from './settings-store'
 import { redactRequest, resolveTextBackend, textAdapter } from './backends/text'
@@ -27,19 +28,13 @@ import { mergeNpcLore, npcLoreEntry } from '@shared/npcs'
 import { vaultService } from './vault/service'
 import { extensionHost } from './extensions/host'
 import { getMainWindow } from './window'
+import { settingsFor, settingsForSession, worldOf } from './world'
 
 type JobKind = 'new' | 'swipe' | 'continue'
 
 /** Whether the Session summary block is sent; compressing only helps when it is. */
 const summaryInPrompt = (s: ReturnType<typeof settingsStore.get>): boolean =>
   normalizeBlockOrder(s.prompt.blocks).some((b) => b.id === 'summary' && b.enabled)
-
-/** The chat backends for a session, with its campaign's chat model put in first when it names one. */
-async function chatChain(vault: ReturnType<typeof vaultService.require>, s: ReturnType<typeof settingsStore.get>, sessionPath: VaultPath): Promise<TextBackend[]> {
-  const session = await readSession(vault, sessionPath)
-  const models = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
-  return withModel(backendChain(s), models.chat)
-}
 
 interface Job {
   requestId: string
@@ -98,8 +93,8 @@ class ChatService {
   /** Loads everything the prompt needs for a session. */
   async context(sessionPath: VaultPath, opts: { upto?: string; backend?: TextBackend; speaker?: Speaker; as?: string } = {}): Promise<ChatContext> {
     const vault = vaultService.require()
-    const s = settingsStore.get()
     const session = await readSession(vault, sessionPath)
+    const s = settingsFor(session.campaignPath)
     const recapsOn = s.prompt.recapCount > 0 && normalizeBlockOrder(s.prompt.blocks).some((b) => b.id === 'recaps' && b.enabled)
     if (recapsOn && !opts.upto) await recapService.ensurePrevious(session)
     const recaps = recapsOn ? await recapService.recapsFor(session, s.prompt.recapCount) : []
@@ -116,7 +111,7 @@ class ChatService {
     const character = self ?? partyNotes[0] ?? null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
     const map = await readMap(vault, session.campaignPath).catch(() => null)
-    const preset = s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null
+    const preset = withWorldInstructions(s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null, campaign.world?.dm_instructions)
 
     let messages = session.messages
     if (opts.upto) {
@@ -129,7 +124,9 @@ class ChatService {
       if (covered !== -1) messages = messages.slice(covered + 1)
     }
 
-    const lorePaths = await resolveLorebookLinks(vault, campaign.lorebooks)
+    // The campaign's lorebooks, plus the shared ones in Resources/Lore unless this world turns them off.
+    const shared = campaign.world?.shared_resources === false ? [] : (vaultService.getIndex()?.lorebooks ?? []).filter((l) => l.shared).map((l) => l.path)
+    const lorePaths = [...new Set([...(await resolveLorebookLinks(vault, campaign.lorebooks)), ...shared])]
     const entries = (await Promise.all(lorePaths.map((p) => readLorebook(vault, p).catch(() => null)))).flatMap((b) => b?.entries ?? [])
     const backend = opts.backend ?? backendChain(s)[0]
     const window = backend ? await effectiveContext(backend) : 8192
@@ -233,8 +230,8 @@ class ChatService {
   }
 
   async inspect(sessionPath: VaultPath): Promise<PromptPreview> {
-    const s = settingsStore.get()
-    const backend = (await chatChain(vaultService.require(), s, sessionPath))[0]
+    const s = settingsForSession(sessionPath)
+    const backend = backendChain(s)[0]
     if (!backend) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
     const { prompt } = await this.context(sessionPath, { backend })
     const window = await effectiveContext(backend)
@@ -357,8 +354,8 @@ class ChatService {
   private async run(job: Job): Promise<boolean> {
     const win = getMainWindow()
     const vault = vaultService.require()
-    const s = settingsStore.get()
-    const chain = await chatChain(vault, s, job.sessionPath)
+    const s = settingsForSession(job.sessionPath)
+    const chain = backendChain(s)
     let streamed = ''
     let result: GenerateResult | null = null
     let used: TextBackend | null = null
@@ -462,10 +459,10 @@ class ChatService {
    * but the newest few into the session summary. Returns true when it did.
    */
   async maybeCompress(sessionPath: VaultPath): Promise<boolean> {
-    const s = settingsStore.get()
+    const s = settingsForSession(sessionPath)
     if (!s.prompt.autoCompressAt || !summaryInPrompt(s) || this.summarizing.has(sessionPath)) return false
     try {
-      const backend = (await chatChain(vaultService.require(), s, sessionPath))[0]
+      const backend = backendChain(s)[0]
       if (!backend) return false
       const { prompt } = await this.context(sessionPath, { backend })
       const window = await effectiveContext(backend)
@@ -485,7 +482,7 @@ class ChatService {
    * frontmatter, using the "summaries" backend.
    */
   async maybeSummarize(sessionPath: VaultPath, force = false): Promise<void> {
-    const s = settingsStore.get()
+    const s = settingsForSession(sessionPath)
     if ((!s.prompt.summaryEvery && !force) || this.summarizing.has(sessionPath)) return
     let backend = backendChain(s, 'summary')[0]
     if (!backend) return
@@ -493,8 +490,8 @@ class ChatService {
     try {
       const vault = vaultService.require()
       const session = await readSession(vault, sessionPath)
-      const campaignModels = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
-      backend = withModel([backend], campaignModels.summary)[0] ?? backend
+      // The world's own summary model, in the summaries backend (see world.ts).
+      backend = withModel([backend], worldOf(session.campaignPath)?.summary_model)[0] ?? backend
       const visible = session.messages.filter((m) => !m.hidden && m.role !== 'image')
       const upto = session.frontmatter.summary_upto ? visible.findIndex((m) => m.id === session.frontmatter.summary_upto) : -1
       const pending = visible.slice(upto + 1)

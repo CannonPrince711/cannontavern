@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { WebSocketServer } from 'ws'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ImageBackendSchema, ComfyWorkflowSchema } from '@shared/settings'
-import { applyMapping, builtinWorkflow, comfyAdapter, comfySampler, guessMapping, parseWorkflow, summarizeWorkflow, type ApiWorkflow } from '../src/main/backends/image/comfy'
+import { applyMapping, builtinWorkflow, comfyAdapter, comfySampler, guessMapping, parseWorkflow, previewOutputs, summarizeWorkflow, type ApiWorkflow } from '../src/main/backends/image/comfy'
 import { solidPng } from '../src/main/import/png'
 import type { ResolvedImageBackend } from '../src/main/backends/image/types'
 
@@ -194,5 +194,20 @@ describe('example workflows in docs/comfyui', () => {
     expect(guessMapping(map)).toMatchObject({ positive: { nodeId: '6' }, negative: { nodeId: '7' }, width: { nodeId: '5' }, checkpoint: { nodeId: '4' }, lora: { nodeId: '10', input: 'lora_name' }, loraStrength: { nodeId: '10' } })
     const sketch = guessMapping(parseWorkflow(JSON.parse(readFileSync('docs/comfyui/sdxl-lora-map-sketch.json', 'utf8'))))
     expect(sketch).toMatchObject({ sourceImage: { nodeId: '11', input: 'image' }, width: { nodeId: '12', input: 'width' }, height: { nodeId: '12', input: 'height' } })
+  })
+})
+
+describe('keeping images off the server', () => {
+  it('turns SaveImage nodes into PreviewImage and leaves the rest alone', () => {
+    const { api } = builtinWorkflow(false)
+    const out = previewOutputs(api)
+    const saves = Object.values(api).filter((n) => n.class_type === 'SaveImage')
+    expect(saves.length).toBeGreaterThan(0)
+    for (const [id, node] of Object.entries(api)) {
+      if (node.class_type === 'SaveImage') expect(out[id]).toEqual({ ...node, class_type: 'PreviewImage', inputs: { images: node.inputs.images } })
+      else expect(out[id]).toBe(node)
+    }
+    // The original graph is untouched.
+    expect(Object.values(api).some((n) => n.class_type === 'SaveImage')).toBe(true)
   })
 })

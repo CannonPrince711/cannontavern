@@ -233,7 +233,7 @@ export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
       }
 
       const seed = wf.seedMode === 'fixed' ? wf.fixedSeed : req.seed >= 0 ? req.seed : randomSeed()
-      const prompt = applyMapping(api, wf.mapping, {
+      const mapped = applyMapping(api, wf.mapping, {
         positive: req.prompt,
         negative: req.negative,
         seed,
@@ -246,6 +246,7 @@ export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
         loraStrength: wf.lora ? wf.loraStrength : undefined,
         sourceImage: sourceName
       })
+      const prompt = b.comfy.deleteAfterDownload ? previewOutputs(mapped) : mapped
 
       const clientId = randomUUID()
       // Open the socket first so no progress message is missed.
@@ -279,6 +280,7 @@ export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
           const view = await request(b.net, { url: `${root}/view?${q}`, headers: authHeaders, signal: opts.signal })
           const data = Buffer.from(await view.res.arrayBuffer())
           view.deadline.clear()
+          if (b.comfy.deleteAfterDownload) await forgetJob(b, root, promptId, authHeaders)
           return { data, ext: sniffExt(data), seed }
         } finally {
           opts.signal?.removeEventListener('abort', onAbort)
@@ -287,6 +289,33 @@ export function comfyAdapter(deps: ComfyDeps): ImageAdapter {
         progress.close()
       }
     }
+  }
+}
+
+/**
+ * Sends a graph's saved images to ComfyUI's temp folder instead of output/:
+ * SaveImage nodes become PreviewImage, which takes the same images input.
+ */
+export function previewOutputs(wf: ApiWorkflow): ApiWorkflow {
+  const out: ApiWorkflow = {}
+  for (const [id, node] of Object.entries(wf)) {
+    out[id] = node.class_type === 'SaveImage' ? { ...node, class_type: 'PreviewImage', inputs: { images: node.inputs.images } } : node
+  }
+  return out
+}
+
+/** Clears a finished job from the server's history (best effort). */
+async function forgetJob(b: ResolvedImageBackend, root: string, promptId: string, headers: Record<string, string>): Promise<void> {
+  try {
+    const { res, deadline } = await request({ ...b.net, retries: 0 }, {
+      url: `${root}/history`,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ delete: [promptId] })
+    })
+    await res.arrayBuffer()
+    deadline.clear()
+  } catch {
+    // The image is already saved; a stale history entry does no harm.
   }
 }
 

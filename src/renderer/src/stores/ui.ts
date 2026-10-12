@@ -23,6 +23,8 @@ interface UiStore {
   buildingCampaign: boolean
   /** Campaign folder whose settings dialog is open. */
   campaignSettings: string | null
+  /** Which tab that dialog opens on. */
+  campaignSettingsTab: 'campaign' | 'world'
   settingsOpen: boolean
   settingsSection: SettingsSection
   paletteOpen: boolean
@@ -40,6 +42,7 @@ export const useUi = create<UiStore>((set) => ({
   creatingCampaign: false,
   buildingCampaign: false,
   campaignSettings: null,
+  campaignSettingsTab: 'campaign',
   settingsOpen: false,
   settingsSection: 'general',
   paletteOpen: false,

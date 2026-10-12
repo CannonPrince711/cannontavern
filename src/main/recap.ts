@@ -22,7 +22,7 @@ import { effectiveContext } from './backends/context'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCampaignModelMap } from './library'
+import { settingsFor, worldOf } from './world'
 import { readSession, updateFrontmatter } from './sessions'
 import { settingsStore } from './settings-store'
 import { parseNote } from './vault/frontmatter'
@@ -59,17 +59,17 @@ class RecapService {
   }
 
   private async run(path: VaultPath, { force = false, notify = false }: { force?: boolean; notify?: boolean }): Promise<Session | null> {
-    const s = settingsStore.get()
     const vault = vaultService.require()
     const session = await readSession(vault, path)
+    const s = settingsFor(session.campaignPath)
     const visible = recapMessages(session.messages)
     if (!isRecapWorthy(session.messages)) {
       if (force) throw new AppError('NOTHING_TO_RECAP', 'This session is too short to compress yet. Play a few turns first.')
       return null
     }
     if (!force && session.frontmatter.recap && !isRecapStale(session.frontmatter.recap_upto, session.messages)) return session
-    const campaignModels = await readCampaignModelMap(vault, session.campaignPath, 'text_models')
-    const chain = withModel(backendChain(s, 'summary'), campaignModels.summary)
+    // The world's summaries model goes into the first summaries backend; fallbacks keep their own.
+    const chain = withModel(backendChain(s, 'summary'), worldOf(session.campaignPath)?.summary_model)
     if (!chain.length) {
       if (force) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
       return null

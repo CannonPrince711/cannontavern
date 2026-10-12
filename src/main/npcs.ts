@@ -17,8 +17,8 @@ export interface CampaignNpc {
   body: string
 }
 
-export async function campaignNpcs(vault: Vault, index: VaultIndex | null, campaignFolder: VaultPath): Promise<CampaignNpc[]> {
-  if (!index?.npcs.length) return []
+/** Resolves links between notes and reads which notes each campaign note links to. */
+async function linkContext(vault: Vault, index: VaultIndex): Promise<{ target: (link: string, from: string) => string; campaigns: { folder: string; links: string[] }[] }> {
   const campaignNotes = index.campaigns.map((c) => ({ folder: c.path, note: joinVaultPath(c.path, CAMPAIGN_FILE) }))
   const resolve = makeResolver([
     ...index.npcs.map((n) => n.path),
@@ -36,6 +36,21 @@ export async function campaignNpcs(vault: Vault, index: VaultIndex | null, campa
       return { folder: c.folder, links: file ? extractLinks(file.content).map((l) => target(l, c.note)) : [] }
     })
   )
+  return { target, campaigns }
+}
+
+/** The campaign folders a character or NPC note is tied to; empty when it can turn up anywhere. */
+export async function noteCampaigns(vault: Vault, index: VaultIndex | null, notePath: VaultPath): Promise<VaultPath[]> {
+  if (!index?.campaigns.length) return []
+  const file = await vault.readIfExists(notePath).catch(() => null)
+  if (!file) return []
+  const { target, campaigns } = await linkContext(vault, index)
+  return npcCampaigns(notePath, extractLinks(file.content).map((l) => target(l, notePath)), campaigns)
+}
+
+export async function campaignNpcs(vault: Vault, index: VaultIndex | null, campaignFolder: VaultPath): Promise<CampaignNpc[]> {
+  if (!index?.npcs.length) return []
+  const { target, campaigns } = await linkContext(vault, index)
 
   const npcs = await Promise.all(
     index.npcs.map(async (ref): Promise<CampaignNpc | null> => {

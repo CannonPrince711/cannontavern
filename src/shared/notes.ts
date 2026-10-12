@@ -5,6 +5,7 @@
  */
 import { isPlayMode } from './play'
 import { isEdition, type Edition } from './editions'
+import { worldFromFrontmatter } from './world'
 import type {
   AbilityKey,
   Campaign,
@@ -220,6 +221,7 @@ export function normalizeCampaign(path: string, name: string, data: Record<strin
     mode: isPlayMode(data.mode) ? data.mode : undefined,
     edition: isEdition(data.edition) ? data.edition : undefined,
     sources: strList(data.sources),
+    world: worldFromFrontmatter(data),
     body
   }
 }
