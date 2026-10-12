@@ -32,6 +32,7 @@ import { useExtensions } from '@/stores/extensions'
 import { toast } from '@/stores/toasts'
 import { mouseShortcutsOn, selectionWithin, separator, showMenu } from '@/lib/mouse'
 import { Markdown } from './Markdown'
+import { TagsDialog } from '@/components/images/TagsDialog'
 
 export interface MessageActions {
   onSwipe: (id: string, dir: -1 | 1) => void
@@ -213,6 +214,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
         )}
         {m.name && <figcaption className="mt-1.5 text-center text-xs text-muted-foreground italic">{m.name}</figcaption>}
         <span className="absolute top-2 right-2 hidden rounded-md bg-background/80 group-hover:flex">
+          {m.image && <RegenerateImage message={m} />}
           <ActionButton label="Delete" onClick={() => props.onDelete(m.id)}>
             <Trash2 />
           </ActionButton>
@@ -386,5 +388,33 @@ function SpeakerPortrait({ name, fallbackAvatar }: { name: string; fallbackAvata
     <div className="mt-5 shrink-0">
       <CharacterAvatar name={name} avatar={who?.avatar ?? fallbackAvatar} version={who?.mtimeMs} size={36} />
     </div>
+  )
+}
+
+/** Regenerate a picture: pick its tags, then the same message shows the new version. */
+function RegenerateImage({ message: m }: { message: Message }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const purpose = m.image?.purpose ?? (/^portrait of/i.test(m.name ?? '') ? 'portrait' : /^battlemap/i.test(m.name ?? '') ? 'battlemap' : 'scene')
+  const run = (prompt: string): void => {
+    const sessionPath = useChat.getState().session?.path
+    if (!sessionPath || !prompt.trim()) return
+    toast.info('Regenerating the picture…', 'It replaces this one when it’s done; the old file stays in the campaign’s Images folder.')
+    void invoke('images:generate', { sessionPath, kind: 'prompt', prompt, purpose, replaceMessageId: m.id, ...(m.image?.backendId ? { backendId: m.image.backendId } : {}) }).catch((err) => toast.error(err, 'Couldn’t regenerate the picture'))
+  }
+  return (
+    <>
+      <ActionButton label="Regenerate picture" onClick={() => setOpen(true)}>
+        <RefreshCw />
+      </ActionButton>
+      {open && (
+        <TagsDialog
+          title="Regenerate picture"
+          description="These tags make the new picture. Remove any you don’t want, add your own, then regenerate. It uses the same size and model."
+          initial={m.image?.prompt ?? ''}
+          onSubmit={run}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   )
 }

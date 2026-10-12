@@ -16,7 +16,7 @@ import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
 import { readCampaign, readCharacter, resolveCharacterLink } from './library'
 import { readMap } from './maps'
-import { postMessage, readSession } from './sessions'
+import { postMessage, readSession, updateMessage } from './sessions'
 import { settingsStore } from './settings-store'
 import { updateNote } from './vault/frontmatter'
 import { vaultService } from './vault/service'
@@ -25,7 +25,7 @@ import { campaignOfSession, settingsFor, settingsForSession } from './world'
 
 type GenerateOpts = InvokeArgs<'images:generate'>[0]
 
-const purposeOf = (kind: GenerateOpts['kind']): ImagePurpose => (kind === 'prompt' ? 'other' : kind)
+const purposeOf = (kind: GenerateOpts['kind'], override?: ImagePurpose): ImagePurpose => override ?? (kind === 'prompt' ? 'other' : kind)
 
 const PROMPT_WRITER = `You write prompts for a text-to-image model. Describe one image as a single line of comma-separated visual details: subject, setting, lighting, mood, colours, composition, art style. Fantasy illustration. No story, no dialogue, no text in the image, no real artist names. At most 70 words. Reply with the prompt only.`
 
@@ -48,7 +48,7 @@ class ImageService {
   }
 
   generate(opts: GenerateOpts): { requestId: string } {
-    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind), opts.backendId)
+    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind, opts.purpose), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
     const requestId = randomUUID()
     const controller = new AbortController()
@@ -148,7 +148,7 @@ class ImageService {
 
   /** Generates without the event plumbing, for extensions: resolves with the saved image. */
   async generateNow(opts: GenerateOpts): Promise<MessageImage> {
-    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind), opts.backendId)
+    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind, opts.purpose), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'No image backend is configured.')
     return (await this.produce(backend, opts, undefined, () => {})).image
   }
@@ -167,7 +167,7 @@ class ImageService {
 
       let character: CharacterNote | null = null
       let prompt = opts.prompt?.trim() ?? ''
-      const purpose = purposeOf(opts.kind)
+      const purpose = purposeOf(opts.kind, opts.purpose)
       if (opts.kind === 'scene') {
         if (!session) throw new AppError('NO_SESSION', 'Open a session to illustrate a scene.')
         prompt = await this.scenePrompt(session, opts.messageId, prompt || undefined)
@@ -188,7 +188,8 @@ class ImageService {
       const workflowId = workflowFor(backend, purpose, profile, opts.workflowId)
       const applied = applyImageProfile(backend, purpose, profile, workflowId)
       const over: Partial<ImageRequest> = { ...applied.over }
-      if (applied.style) prompt = `${applied.style}, ${prompt}`
+      // A regenerated prompt already starts with the style.
+      if (applied.style && !prompt.startsWith(applied.style)) prompt = `${applied.style}, ${prompt}`
 
       // img2img from the avatar, when the chosen ComfyUI workflow has a LoadImage mapping.
       const wf = backend.comfy.workflows.find((w) => w.id === workflowId)
@@ -214,10 +215,15 @@ class ImageService {
       const path = await vault.uniquePath(dir, base, `.${result.ext}`)
       await vault.writeBinary(path, result.data)
       const file = path.split('/').pop()!
-      const image: MessageImage = { file, prompt, backendId: backend.id, ...(workflowId ? { workflowId } : {}), ...(result.seed !== undefined ? { seed: result.seed } : {}) }
+      const image: MessageImage = { file, prompt, purpose, backendId: backend.id, ...(workflowId ? { workflowId } : {}), ...(result.seed !== undefined ? { seed: result.seed } : {}) }
 
       let updated: Session | undefined
-      if (session) {
+      if (session && opts.replaceMessageId) {
+        // Regenerate: the same message shows the new picture (the old file stays in Images/).
+        updated = await updateMessage(vault, session.path, opts.replaceMessageId, (m) => ({ ...m, text: `![[${file}]]`, swipes: [`![[${file}]]`], swipeIndex: 0, image }))
+        send(win, 'session:updated', updated)
+        void vaultService.reindex(session.path)
+      } else if (session) {
         const caption = character
           ? `Portrait of ${character.card.name}`
           : opts.kind === 'battlemap'

@@ -108,3 +108,11 @@ describe('voices per speaker', () => {
     expect(worldGroups({ narrator_voice: 'narrator' })).toEqual(['prompt'])
   })
 })
+
+describe('picking tags for a regenerated picture', () => {
+  it('splits a prompt into unique tags', async () => {
+    const { splitTags } = await import('@shared/tags')
+    expect(splitTags('masterpiece,  anime style, , Anime Style, red hair ')).toEqual(['masterpiece', 'anime style', 'red hair'])
+    expect(splitTags('')).toEqual([])
+  })
+})

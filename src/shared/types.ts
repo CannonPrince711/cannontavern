@@ -48,6 +48,8 @@ export interface MessageImage {
   /** File name inside the campaign's Images/ folder, embedded as ![[file]]. */
   file: string
   prompt: string
+  /** Which generation options made it (size, model, style), so Regenerate can reuse them. */
+  purpose?: 'scene' | 'portrait' | 'map' | 'battlemap' | 'other'
   backendId?: Id
   workflowId?: Id
   seed?: number

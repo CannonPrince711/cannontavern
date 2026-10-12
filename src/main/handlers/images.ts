@@ -91,7 +91,9 @@ export function registerImageHandlers(): void {
         characterPath: z.string().optional(),
         messageId: z.string().optional(),
         backendId: z.string().optional(),
-        workflowId: z.string().optional()
+        workflowId: z.string().optional(),
+        replaceMessageId: z.string().max(100).optional(),
+        purpose: z.enum(['scene', 'portrait', 'map', 'battlemap', 'other']).optional()
       })
     ])
   )
