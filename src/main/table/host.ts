@@ -40,6 +40,8 @@ import { outbound, send } from '../ipc'
 import { readCampaign, readCharacter, resolveCharacterLink } from '../library'
 import { postMessage, readSession, updateFrontmatter } from '../sessions'
 import { vaultService } from '../vault/service'
+import { openExternalSafe } from '../security'
+import { startFunnel, stopFunnel, stopFunnelSync } from './funnel'
 import { getMainWindow } from '../window'
 
 interface Player extends TablePlayer {
@@ -93,6 +95,8 @@ class TableHost {
   private stream: { requestId: string; text: string; speaker: 'dm' | 'player'; speakerName?: string; at: number } | null = null
   private broadcastTimer: ReturnType<typeof setTimeout> | undefined
   private busy = false
+  /** Tailscale Funnel address while the table is shared online. */
+  private funnel = ''
   private readonly onEvent = (channel: string, payload: unknown): void => this.event(channel, payload)
 
   get hosting(): boolean {
@@ -108,6 +112,7 @@ class TableHost {
       port: this.port,
       code: this.code,
       urls,
+      ...(this.server && this.funnel ? { publicUrl: `${this.funnel}${query}` } : {}),
       sessionPath: this.sessionPath,
       autoRespond: this.autoRespond,
       players: [...this.players.values()].map(({ id, name, characterPath, connected }) => ({ id, name, characterPath, connected }))
@@ -118,7 +123,7 @@ class TableHost {
     send(getMainWindow(), 'table:changed', this.status())
   }
 
-  async start(opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null }): Promise<TableStatus> {
+  async start(opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null; funnel?: boolean }): Promise<TableStatus> {
     if (this.server) await this.stop()
     this.scope = opts.scope
     this.port = opts.port
@@ -140,6 +145,17 @@ class TableHost {
     this.server = server
     this.wss = wss
     outbound.on('event', this.onEvent)
+    if (opts.funnel) {
+      try {
+        this.funnel = await startFunnel(opts.port)
+      } catch (err) {
+        await this.stop()
+        // Funnel has to be allowed once in the Tailscale admin console: open the page for it.
+        const link = (err as AppError).detail
+        if ((err as AppError).code === 'FUNNEL_NOT_ALLOWED' && link) void openExternalSafe(link).catch(() => {})
+        throw err
+      }
+    }
     this.notifyHost()
     return this.status()
   }
@@ -155,8 +171,19 @@ class TableHost {
     this.server = null
     this.wss = null
     this.code = ''
+    if (this.funnel) {
+      this.funnel = ''
+      await stopFunnel().catch(() => {})
+    }
     this.notifyHost()
     return this.status()
+  }
+
+  /** App quit: turn Funnel off right away (no time for async work). */
+  stopFunnelNow(): void {
+    if (!this.funnel) return
+    this.funnel = ''
+    stopFunnelSync()
   }
 
   setSession(path: VaultPath | null): void {

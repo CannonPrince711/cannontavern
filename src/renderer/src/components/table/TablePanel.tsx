@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
-import { Check, Copy, Loader2, MonitorPlay, Radio, Square, UserX, Users, Wifi } from 'lucide-react'
+import { Check, Copy, Globe, Loader2, MonitorPlay, Radio, Square, UserX, Users, Wifi } from 'lucide-react'
 import { AUTO_RESPOND_INFO, TABLE_DEFAULT_PORT, type AutoRespond, type TableStatus } from '@shared/table'
 import { playModeOf } from '@shared/play'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/controls'
 import { Input, Label } from '@/components/ui/input'
+import { Switch } from '@/components/ui/controls'
 import { Tip } from '@/components/ui/tooltip'
 import { invoke, on } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,23 @@ export function TablePanel(): React.JSX.Element {
   const [scope, setScope] = useState<'local' | 'network'>('network')
   const [port, setPort] = useState(TABLE_DEFAULT_PORT)
   const [busy, setBusy] = useState(false)
+  const [funnel, setFunnelState] = useState(() => {
+    try {
+      return localStorage.getItem('table.funnel') === '1'
+    } catch {
+      return false
+    }
+  })
+  const setFunnel = (on: boolean): void => {
+    setFunnelState(on)
+    // Funnel brings players in through this PC, so "This PC only" is enough and safest.
+    if (on) setScope('local')
+    try {
+      localStorage.setItem('table.funnel', on ? '1' : '0')
+    } catch {
+      /* not remembered */
+    }
+  }
 
   const run = async (fn: () => Promise<TableStatus | void>, error: string): Promise<void> => {
     setBusy(true)
@@ -115,10 +133,19 @@ export function TablePanel(): React.JSX.Element {
             <Label htmlFor="tbl-port">Port</Label>
             <Input id="tbl-port" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value) || TABLE_DEFAULT_PORT)} className="h-8 w-24" />
           </div>
-          <Button className="flex-1" disabled={busy || !session} onClick={() => void run(() => invoke('table:start', { scope, port, sessionPath: session?.path ?? null }), 'Could not start hosting')}>
+          <Button className="flex-1" disabled={busy || !session} onClick={() => void run(() => invoke('table:start', { scope, port, sessionPath: session?.path ?? null, funnel }), 'Could not start hosting')}>
             {busy ? <Loader2 className="animate-spin" /> : <Radio />} Start hosting
           </Button>
         </div>
+        <label className="flex items-start gap-2 rounded-lg border p-2.5">
+          <Switch checked={funnel} onCheckedChange={setFunnel} aria-label="Share online with Tailscale Funnel" className="mt-0.5" />
+          <span className="text-xs leading-relaxed">
+            <span className="font-medium">Share online with Tailscale Funnel</span>
+            <span className="block text-muted-foreground">
+              Players join from anywhere with an https:// link, no port forwarding and nothing to install. Needs Tailscale signed in on this PC; turned off again when you stop hosting.
+            </span>
+          </span>
+        </label>
         {!session && <p className="text-xs text-muted-foreground">Open a session first.</p>}
         {scope === 'network' && <p className="text-[11px] text-muted-foreground">Windows may ask whether DND Tavern can use the network; allow it for private networks.</p>}
       </div>
@@ -140,6 +167,14 @@ export function TablePanel(): React.JSX.Element {
           <span className="font-medium">Hosting{status.scope === 'local' ? ' on this PC' : ''}</span>
           <span className="ml-auto font-mono text-base font-semibold tracking-widest">{status.code}</span>
         </div>
+        {status.publicUrl && (
+          <div className="mb-2 space-y-1">
+            <p className="flex items-center gap-1 text-[11px] font-medium text-gold">
+              <Globe className="size-3" /> Online link (Tailscale Funnel): anyone with the link can reach the join page
+            </p>
+            <CopyLink url={status.publicUrl} />
+          </div>
+        )}
         <div className="space-y-1.5">
           {status.urls.map((u) => (
             <CopyLink key={u} url={u} />

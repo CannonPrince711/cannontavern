@@ -183,7 +183,8 @@ export interface InvokeMap {
   /** Adds the shared Resources folder's starter notes again (only the missing ones). */
   'vault:createResources': Invoke<[], VaultIndex>
   /** Multiplayer hosting (see shared/table.ts). */
-  'table:start': Invoke<[opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null }], TableStatus>
+  /** funnel: also share it online through Tailscale Funnel (status.publicUrl). */
+  'table:start': Invoke<[opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null; funnel?: boolean }], TableStatus>
   'table:stop': Invoke<[], TableStatus>
   'table:status': Invoke<[], TableStatus>
   'table:kick': Invoke<[playerId: string], TableStatus>
