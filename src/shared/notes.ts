@@ -189,6 +189,7 @@ export function normalizeCard(data: Record<string, unknown>, fallbackName: strin
     ...(Array.isArray(data.alternate_greetings) ? { alternate_greetings: strList(data.alternate_greetings) } : {}),
     ...(str(data.voice).trim() ? { voice: str(data.voice).trim() } : {}),
     ...(strList(data.campaigns).length ? { campaigns: strList(data.campaigns) } : {}),
+    ...(str(obj(data.crossover).from) ? { crossover: { from: str(obj(data.crossover).from), ...(str(obj(data.crossover).rules) ? { rules: str(obj(data.crossover).rules) } : {}) } } : {}),
     ...(Array.isArray(data.portraits)
       ? {
           portraits: data.portraits
@@ -219,6 +220,7 @@ export function cardToFrontmatter(card: CharacterCard): Record<string, unknown> 
     alternate_greetings: card.alternate_greetings?.length ? card.alternate_greetings : undefined,
     voice: card.voice?.trim() || undefined,
     campaigns: card.campaigns?.length ? card.campaigns : undefined,
+    crossover: card.crossover ?? undefined,
     portraits: card.portraits?.length ? card.portraits : undefined,
     dnd: card.dnd
   }
@@ -236,6 +238,7 @@ export function normalizeCampaign(path: string, name: string, data: Record<strin
     edition: isEdition(data.edition) ? data.edition : undefined,
     sources: strList(data.sources),
     ...(str(data.ruleset).trim() ? { ruleset: str(data.ruleset).trim() } : {}),
+    ...(str(data.universe).trim() ? { universe: str(data.universe).trim() } : {}),
     world: worldFromFrontmatter(data),
     body
   }

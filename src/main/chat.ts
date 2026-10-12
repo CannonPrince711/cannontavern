@@ -24,6 +24,8 @@ import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
 import { rulesetPrompt } from '@shared/rulesets'
 import { campaignRuleset } from './rulesets'
+import { campaignUniverse } from './universes'
+import { crossoverBlock, withUniverse } from '@shared/universes'
 import { recapService } from './recap'
 import { campaignNpcs } from './npcs'
 import { mergeNpcLore, npcLoreEntry } from '@shared/npcs'
@@ -111,9 +113,14 @@ class ChatService {
     const self = asPath ? (members.find((c) => c.path === asPath) ?? null) : null
     const players = partyNotes
     const character = self ?? partyNotes[0] ?? null
-    const { campaign, party } = await readCampaign(vault, session.campaignPath)
+    const { campaign: own, party } = await readCampaign(vault, session.campaignPath)
+    // A campaign in a universe shares its setting, lorebooks and ruleset.
+    const universe = await campaignUniverse(vault, own).catch(() => null)
+    const campaign = withUniverse(own, universe)
     const map = await readMap(vault, session.campaignPath).catch(() => null)
-    const rules = campaign ? rulesetPrompt(await campaignRuleset(vault, campaign), campaign.sources ?? []) : null
+    const ruleset = await campaignRuleset(vault, campaign)
+    const crossovers = members.filter((c) => c.card.crossover?.from).map((c) => ({ name: c.card.name, from: c.card.crossover!.from, ...(c.card.crossover!.rules ? { rules: c.card.crossover!.rules } : {}) }))
+    const rules = [rulesetPrompt(ruleset, campaign.sources ?? []), crossoverBlock(crossovers, { ...(universe ? { universe: universe.name } : {}), rules: ruleset.name })].filter(Boolean).join('\n\n')
     const preset = withWorldInstructions(s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null, campaign.world?.dm_instructions)
 
     let messages = session.messages

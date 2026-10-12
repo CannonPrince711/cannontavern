@@ -3,6 +3,7 @@ import type { GraphKind, GraphLink, GraphNode, VaultGraph } from '@shared/graph'
 
 /** Node colours by kind (matching the app's palette). */
 export const KIND_COLORS: Record<GraphKind, string> = {
+  universe: '#f472b6',
   campaign: '#d4a843',
   party: '#a8862f',
   session: '#6ea8fe',
@@ -14,6 +15,7 @@ export const KIND_COLORS: Record<GraphKind, string> = {
 }
 
 export const KIND_LABELS: Record<GraphKind, string> = {
+  universe: 'Universes',
   campaign: 'Campaigns',
   party: 'Party sheets',
   session: 'Sessions',

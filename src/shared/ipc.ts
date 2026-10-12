@@ -14,6 +14,7 @@ import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { Edition } from './editions'
 import type { Ruleset } from './rulesets'
+import type { Universe, UniverseDraft } from './universes'
 import type { WorldOverrides, WorldResourceKind } from './world'
 import type { AutoRespond, TableStatus } from './table'
 import type { PlayMode, Speaker } from './play'
@@ -148,7 +149,7 @@ export interface InvokeMap {
   'characters:delete': Invoke<[path: VaultPath], void>
   'characters:import': Invoke<[campaignPath?: VaultPath], CharacterNote[]>
   /** Brings characters from other campaigns in: as copies with their own sheet, or the same note shared. */
-  'characters:addToCampaign': Invoke<[paths: VaultPath[], campaignPath: VaultPath, mode: 'copy' | 'share'], VaultPath[]>
+  'characters:addToCampaign': Invoke<[paths: VaultPath[], campaignPath: VaultPath, mode: 'copy' | 'share' | 'universe'], VaultPath[]>
   'characters:export': Invoke<[path: VaultPath, format: 'json' | 'png'], { path: string } | null>
   'characters:setAvatar': Invoke<[path: VaultPath], CharacterNote | null>
   /** Merges sheet fields into the latest version of the note (null removes the sheet). */
@@ -161,7 +162,7 @@ export interface InvokeMap {
   /** Redoes one section of a draft (overview, places, NPCs, factions or the story), keeping the rest. */
   'campaigns:redraftPiece': Invoke<[concept: CampaignConcept, draft: CampaignDraft, piece: 'overview' | 'locations' | 'npcs' | 'factions' | 'story'], CampaignDraft>
   'campaigns:build': Invoke<
-    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition; ruleset?: string }],
+    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition; ruleset?: string; universe?: VaultPath }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
   >
   /** Campaign maps (image, pins, party marker) kept in a "type: map" note. */
@@ -176,7 +177,7 @@ export interface InvokeMap {
    * and the world's overrides of global settings (null clears them).
    */
   'campaigns:update': Invoke<
-    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode; world?: WorldOverrides | null; ruleset?: string | null }],
+    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode; world?: WorldOverrides | null; ruleset?: string | null; universe?: VaultPath | null }],
     Campaign
   >
   /** Built-in rulesets, then the custom notes in Rulesets/. */
@@ -186,6 +187,13 @@ export interface InvokeMap {
   /** The AI designs a ruleset from a concept; returns a draft to review. */
   'rulesets:generate': Invoke<[concept: string], Omit<Ruleset, 'id'>>
   'rulesets:delete': Invoke<[id: string], void>
+  'universes:get': Invoke<[folder: VaultPath], Universe | null>
+  /** Saves a universe (a new folder when it has no path). */
+  'universes:save': Invoke<[universe: Omit<Universe, 'path' | 'body'> & { path?: string }], Universe>
+  /** The AI drafts a universe from a concept; nothing is saved. */
+  'universes:generate': Invoke<[concept: string], UniverseDraft>
+  /** Writes a drafted universe and its lorebook. */
+  'universes:create': Invoke<[draft: UniverseDraft], Universe>
   /** Asks the AI to pick the best installed text and image models for a campaign; nothing is saved. */
   'campaigns:suggestGenerators': Invoke<[path: VaultPath], { world: WorldOverrides; notes: string }>
   /** Writes items, creatures and more that fit the campaign into its "<name> Resources" lorebook (attached to it). */
@@ -415,6 +423,10 @@ const invokeChannels = {
   'rulesets:save': 1,
   'rulesets:generate': 1,
   'rulesets:delete': 1,
+  'universes:get': 1,
+  'universes:save': 1,
+  'universes:generate': 1,
+  'universes:create': 1,
   'campaigns:suggestGenerators': 1,
   'campaigns:generateResources': 1,
   'vault:createResources': 1,

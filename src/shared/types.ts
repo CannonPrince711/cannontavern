@@ -248,8 +248,10 @@ export interface CharacterCard {
   alternate_greetings?: string[]
   /** Read-aloud voice on the speech server (e.g. "rias"); empty: the narrator's. */
   voice?: string
-  /** Wikilinks to the Campaign.md of each campaign the character belongs to (see shared/membership.ts). */
+  /** Wikilinks to the Campaign.md of each campaign the character belongs to, or to a Universe.md for all its campaigns (see shared/membership.ts). */
   campaigns?: string[]
+  /** Copied in from another universe or rules: the DM translates them (see universes.ts). */
+  crossover?: { from: string; rules?: string }
   /** Earlier and current portraits, newest last, with the event that changed them. */
   portraits?: PortraitEntry[]
   dnd?: DndSheet
@@ -300,6 +302,8 @@ export interface Campaign {
   sources?: string[]
   /** Ruleset: a built-in id ("pf2e") or a link to a note in Rulesets/; missing means the D&D edition above. */
   ruleset?: string
+  /** Link to the universe this campaign is set in (see universes.ts). */
+  universe?: string
   /** Per-world overrides of global settings (the `world:` frontmatter, see world.ts). */
   world?: WorldOverrides
   body: string
@@ -413,6 +417,8 @@ export interface CharacterSummary extends NoteRef {
   max_hp?: number
   /** Campaign folders the character belongs to; empty or missing: any campaign. */
   campaigns?: string[]
+  /** Universe folders it was added to (the indexer expands these into campaigns). */
+  universes?: string[]
 }
 
 export interface SessionSummary extends NoteRef {
@@ -433,6 +439,16 @@ export interface CampaignSummary extends NoteRef {
   /** The campaign's `ruleset` and `edition` values (see rulesets.ts). */
   ruleset?: string
   edition?: string
+  /** Folder of the universe it's set in. */
+  universe?: string
+}
+
+export interface UniverseSummary extends NoteRef {
+  /** Folder path. */
+  folder: VaultPath
+  displayName: string
+  blurb?: string
+  ruleset?: string
 }
 
 export interface LorebookSummary extends NoteRef {
@@ -453,6 +469,7 @@ export interface VaultIndex {
   sessions: SessionSummary[]
   lorebooks: LorebookSummary[]
   presets: NoteRef[]
+  universes?: UniverseSummary[]
 }
 
 export interface DetectedVault {

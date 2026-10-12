@@ -16,6 +16,8 @@ import { vaultService } from '../vault/service'
 import { suggestGenerators } from '../world-suggest'
 import { generateWorldResources } from '../world-resources'
 import { generateRuleset, listRulesets, readRuleset, rulesetValue, saveRuleset } from '../rulesets'
+import { createUniverse, generateUniverse, readUniverse, saveUniverse } from '../universes'
+import { universeLink } from '@shared/universes'
 import { rulesetRef } from '@shared/rulesets'
 
 const path = z.string().min(1).max(1024)
@@ -84,8 +86,8 @@ export function registerLoreHandlers(): void {
     },
     z.tuple([
       CampaignDraftSchema,
-      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional(), edition: z.enum(EDITIONS).optional(), ruleset: z.string().max(1024).optional() })
-    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string; edition?: Edition; ruleset?: string }]>
+      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional(), edition: z.enum(EDITIONS).optional(), ruleset: z.string().max(1024).optional(), universe: path.optional() })
+    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string; edition?: Edition; ruleset?: string; universe?: string }]>
   )
 
   handle(
@@ -97,6 +99,16 @@ export function registerLoreHandlers(): void {
       if (patch.tone !== undefined) fields.tone = patch.tone.trim()
       if (patch.house_rules !== undefined) fields.house_rules = patch.house_rules.trim()
       if (patch.edition !== undefined) fields.edition = patch.edition
+      if (patch.universe !== undefined) {
+        const u = patch.universe ? await readUniverse(vault, patch.universe) : null
+        if (patch.universe && !u) throw new AppError('NO_UNIVERSE', 'That universe isn’t in the vault any more.')
+        fields.universe = u ? universeLink(u.path, u.name) : undefined
+        // Joining a universe takes on its ruleset unless one is picked too.
+        if (u?.ruleset && patch.ruleset === undefined) {
+          const { campaign } = await readCampaign(vault, campaignPath)
+          if (!campaign.ruleset) patch = { ...patch, ruleset: u.ruleset }
+        }
+      }
       if (patch.ruleset !== undefined) {
         // The ruleset picks the sheet engine too.
         const r = patch.ruleset ? await readRuleset(vault, patch.ruleset) : null
@@ -127,12 +139,52 @@ export function registerLoreHandlers(): void {
         sources: z.array(z.string().max(200)).max(200).optional(),
         mode: z.enum(PLAY_MODES).optional(),
         world: WorldOverridesSchema.nullable().optional(),
-        ruleset: z.string().max(1024).nullable().optional()
+        ruleset: z.string().max(1024).nullable().optional(),
+        universe: z.string().max(1024).nullable().optional()
       })
     ])
   )
 
   handle('rulesets:list', () => listRulesets(vaultService.require()))
+
+  handle('universes:get', (_e, folder) => readUniverse(vaultService.require(), folder), z.tuple([path]))
+  handle(
+    'universes:save',
+    async (_e, u) => {
+      const vault = vaultService.require()
+      const r = u.ruleset ? await readRuleset(vault, u.ruleset) : null
+      return saveUniverse(vault, { ...u, ...(r ? { ruleset: rulesetValue(r) } : { ruleset: undefined }) })
+    },
+    z.tuple([
+      z.object({
+        path: path.optional(),
+        name: z.string().min(1).max(80),
+        blurb: z.string().max(300),
+        setting: z.string().max(12_000),
+        tone: z.string().max(300),
+        ruleset: z.string().max(1024).optional(),
+        lorebooks: z.array(z.string().max(1024)).max(50)
+      })
+    ])
+  )
+  handle('universes:generate', (_e, concept) => generateUniverse(concept), z.tuple([z.string().max(2000)]))
+  const entry = z.object({ name: z.string().max(80), text: z.string().max(800) })
+  handle(
+    'universes:create',
+    (_e, draft) => createUniverse(vaultService.require(), draft),
+    z.tuple([
+      z.object({
+        name: z.string().min(1).max(80),
+        blurb: z.string().max(300),
+        tone: z.string().max(300),
+        setting: z.string().max(12_000),
+        ruleset: z.string().max(40),
+        places: z.array(entry).max(20),
+        factions: z.array(entry).max(20),
+        history: z.array(entry).max(20)
+      })
+    ])
+  )
   handle(
     'rulesets:save',
     async (_e, r) => {

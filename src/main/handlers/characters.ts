@@ -4,11 +4,13 @@ import { basename, extname } from 'node:path'
 import { z } from 'zod'
 import { FOLDERS, IMAGE_EXTENSIONS } from '@shared/layout'
 import { campaignLink } from '@shared/membership'
+import { universeLink } from '@shared/universes'
+import { campaignRuleset } from '../rulesets'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import type { CharacterNote, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from '../errors'
 import { handle, send } from '../ipc'
-import { createCharacterFromCard, readCharacter, saveLorebook } from '../library'
+import { createCharacterFromCard, readCampaign, readCharacter, saveLorebook } from '../library'
 import { buildCardV2, embedCard, extractCardJson, parseCard } from '../import/sillytavern'
 import { isPng, solidPng } from '../import/png'
 import { parseNote, updateNote } from '../vault/frontmatter'
@@ -86,13 +88,19 @@ export function registerCharacterHandlers(): void {
       const campaign = index?.campaigns.find((c) => c.path === campaignPath)
       if (!campaign) throw new AppError('NO_CAMPAIGN', 'That campaign isn’t in the vault.')
       const nameOf = (folder: string): string | undefined => index?.campaigns.find((c) => c.path === folder)?.displayName
+      const universe = campaign.universe ? index?.universes?.find((u) => u.folder === campaign.universe) : undefined
+      if (mode === 'universe' && !universe) throw new AppError('NO_UNIVERSE', 'This campaign isn’t set in a universe.')
+      const here = await campaignRuleset(vault, (await readCampaign(vault, campaign.path)).campaign)
       const out: VaultPath[] = []
       for (const p of paths) {
         const summary = index?.characters.find((c) => c.path === p)
         if (!summary) continue
-        if (mode === 'share') {
+        if (mode === 'share' || mode === 'universe') {
           // The same note: whatever happens to it shows up in every campaign it's in.
-          const links = [...new Set([...(summary.campaigns ?? []), campaign.path])].map((f) => campaignLink(f, nameOf(f)))
+          const note = await readCharacter(vault, p)
+          const own = note.card.campaigns?.length ? note.card.campaigns : (summary.campaigns ?? []).map((f) => campaignLink(f, nameOf(f)))
+          const add = mode === 'universe' ? universeLink(universe!.folder, universe!.displayName) : campaignLink(campaign.path, campaign.displayName)
+          const links = [...new Set([...own, add])]
           await vault.mutate(p, (cur) => (cur === null ? null : updateNote(cur, { campaigns: links })))
           await vaultService.reindex(p)
           out.push(p)
@@ -100,6 +108,16 @@ export function registerCharacterHandlers(): void {
           // A copy with its own sheet, so levels and loot stay in this campaign.
           const note = await readCharacter(vault, p)
           const card = { ...structuredClone(note.card), campaigns: [campaignLink(campaign.path, campaign.displayName)] }
+          // From another universe, or made under other rules: a crossover the DM translates.
+          const home = (summary.campaigns ?? []).map((f) => index?.campaigns.find((c) => c.path === f)).filter((c): c is NonNullable<typeof c> => !!c)
+          if (home.length && !card.crossover) {
+            const otherUniverse = !!home[0]!.universe && home[0]!.universe !== campaign.universe
+            const theirs = await campaignRuleset(vault, (await readCampaign(vault, home[0]!.path)).campaign)
+            if (otherUniverse || theirs.id !== here.id) {
+              const homeUniverse = home[0]!.universe ? index?.universes?.find((u) => u.folder === home[0]!.universe)?.displayName : undefined
+              card.crossover = { from: homeUniverse ? `the ${homeUniverse} universe` : home[0]!.displayName, ...(theirs.id !== here.id ? { rules: theirs.name } : {}) }
+            }
+          }
           const body = `${note.body.trimEnd()}\n\nCopied from ${toWikilink(p, { full: true, alias: note.card.name })}.\n`
           const copy = await createCharacterFromCard(vault, card, body, false, `${note.card.name} (${campaign.displayName})`)
           await vaultService.reindex(copy.path)
@@ -108,7 +126,7 @@ export function registerCharacterHandlers(): void {
       }
       return out
     },
-    z.tuple([z.array(z.string().min(1).max(1024)).min(1).max(50), z.string().min(1).max(1024), z.enum(['copy', 'share'])])
+    z.tuple([z.array(z.string().min(1).max(1024)).min(1).max(50), z.string().min(1).max(1024), z.enum(['copy', 'share', 'universe'])])
   )
 
   handle(

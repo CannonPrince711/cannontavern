@@ -31,12 +31,14 @@ export const PARTY_FILE = 'Party.md'
 export const SESSIONS_FOLDER = 'Sessions'
 export const IMAGES_FOLDER = 'Images'
 
-export type NoteKind = 'character' | 'npc' | 'lorebook' | 'preset' | 'campaign' | 'party' | 'session'
+export type NoteKind = 'character' | 'npc' | 'lorebook' | 'preset' | 'campaign' | 'party' | 'session' | 'universe'
 
 export interface Classified {
   kind: NoteKind
   /** For campaign, party and session notes: the campaign folder's vault path. */
   campaignPath?: string
+  /** For universe notes: the universe folder's vault path. */
+  universePath?: string
 }
 
 /**
@@ -60,6 +62,8 @@ export function classifyPath(rootFolder: string, path: string): Classified | nul
   }
   // Shared lorebooks: Resources/Lore/<name>.md
   if (parts.length === 3 && eq(parts[0], RESOURCE_FOLDERS.root) && eq(parts[1], 'Lore')) return { kind: 'lorebook' }
+  // Universes/<name>/Universe.md (see universes.ts).
+  if (parts.length === 3 && eq(parts[0], 'Universes') && eq(parts[2], 'Universe.md')) return { kind: 'universe', universePath: joinVaultPath(root, 'Universes', parts[1]!) }
   if (eq(parts[0], FOLDERS.campaigns)) {
     const campaignPath = joinVaultPath(root, FOLDERS.campaigns, parts[1] ?? '')
     if (parts.length === 3 && eq(parts[2], CAMPAIGN_FILE)) return { kind: 'campaign', campaignPath }

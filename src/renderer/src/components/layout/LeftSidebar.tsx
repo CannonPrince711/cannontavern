@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Users, Wand2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Globe2, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Users, Wand2 } from 'lucide-react'
 import type { SessionSummary } from '@shared/types'
 import { NewCharacterDialog } from '@/components/characters/CharacterEditor'
 import { ImportCharactersDialog } from '@/components/characters/ImportCharactersDialog'
@@ -107,6 +107,7 @@ function CampaignSwitcher(): React.JSX.Element {
   const active = useActiveCampaign()
   const setActiveCampaign = useVault((s) => s.setActiveCampaign)
   const campaigns = index?.campaigns ?? []
+  const universes = index?.universes
 
   const trigger = (
     <button
@@ -141,7 +142,10 @@ function CampaignSwitcher(): React.JSX.Element {
         >
           {campaigns.map((c) => (
             <DropdownMenuRadioItem key={c.path} value={c.path}>
-              <span className="min-w-0 flex-1 truncate">{c.displayName}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{c.displayName}</span>
+                {c.universe && <span className="block truncate text-[11px] text-muted-foreground">{universes?.find((u) => u.folder === c.universe)?.displayName ?? 'Universe'}</span>}
+              </span>
               <span className="text-[11px] text-muted-foreground">{c.sessionCount}</span>
             </DropdownMenuRadioItem>
           ))}
@@ -152,6 +156,9 @@ function CampaignSwitcher(): React.JSX.Element {
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => useUi.setState({ buildingCampaign: true })}>
           <Wand2 /> Campaign builder…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => useUi.setState({ managingUniverses: true })}>
+          <Globe2 /> Universes…
         </DropdownMenuItem>
         {active && (
           <DropdownMenuItem onSelect={() => useUi.setState({ campaignSettings: active.path })}>

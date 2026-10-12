@@ -18,8 +18,8 @@ export interface CampaignNpc {
 }
 
 /** Resolves links between notes and reads which notes each campaign note links to. */
-async function linkContext(vault: Vault, index: VaultIndex): Promise<{ target: (link: string, from: string) => string; campaigns: { folder: string; links: string[] }[] }> {
-  const campaignNotes = index.campaigns.map((c) => ({ folder: c.path, note: joinVaultPath(c.path, CAMPAIGN_FILE) }))
+async function linkContext(vault: Vault, index: VaultIndex): Promise<{ target: (link: string, from: string) => string; campaigns: { folder: string; links: string[]; universe?: string }[] }> {
+  const campaignNotes = index.campaigns.map((c) => ({ folder: c.path, note: joinVaultPath(c.path, CAMPAIGN_FILE), universe: c.universe }))
   const resolve = makeResolver([
     ...index.npcs.map((n) => n.path),
     ...index.characters.map((c) => c.path),
@@ -33,7 +33,7 @@ async function linkContext(vault: Vault, index: VaultIndex): Promise<{ target: (
   const campaigns = await Promise.all(
     campaignNotes.map(async (c) => {
       const file = await vault.readIfExists(c.note).catch(() => null)
-      return { folder: c.folder, links: file ? extractLinks(file.content).map((l) => target(l, c.note)) : [] }
+      return { folder: c.folder, links: file ? extractLinks(file.content).map((l) => target(l, c.note)) : [], ...(c.universe ? { universe: c.universe } : {}) }
     })
   )
   return { target, campaigns }

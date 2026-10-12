@@ -105,10 +105,11 @@ const inFolder = (path: string, folder: string): boolean => path.toLowerCase().s
  * note links to it. An NPC tied to none is a recurring character who can
  * turn up anywhere.
  */
-export function npcCampaigns(npcPath: string, npcLinks: string[], campaigns: { folder: string; links: string[] }[]): string[] {
+export function npcCampaigns(npcPath: string, npcLinks: string[], campaigns: { folder: string; links: string[]; universe?: string }[]): string[] {
   const self = npcPath.toLowerCase()
   return campaigns
-    .filter((c) => npcLinks.some((l) => inFolder(l, c.folder)) || c.links.some((l) => l.toLowerCase() === self))
+    // Linking to the campaign, being linked from it, or linking to its universe (every campaign there).
+    .filter((c) => npcLinks.some((l) => inFolder(l, c.folder) || (c.universe && inFolder(l, c.universe))) || c.links.some((l) => l.toLowerCase() === self))
     .map((c) => c.folder)
 }
 

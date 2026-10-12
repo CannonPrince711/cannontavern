@@ -18,7 +18,8 @@ export function ImportCharactersDialog({ open, onOpenChange }: { open: boolean; 
   const characters = useVault((s) => s.index?.characters ?? NONE)
   const campaigns = useVault((s) => s.index?.campaigns)
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const [mode, setMode] = useState<'copy' | 'share'>('copy')
+  const [mode, setMode] = useState<'copy' | 'share' | 'universe'>('copy')
+  const universe = useVault((s) => (campaign?.universe ? s.index?.universes?.find((u) => u.folder === campaign.universe) : undefined))
   const [busy, setBusy] = useState(false)
 
   // Grouped by the campaign they come from.
@@ -48,7 +49,10 @@ export function ImportCharactersDialog({ open, onOpenChange }: { open: boolean; 
     setBusy(true)
     try {
       const paths = await invoke('characters:addToCampaign', [...picked], campaign.path, mode)
-      toast.success(`${paths.length} character${paths.length === 1 ? '' : 's'} added to ${campaign.displayName}`, mode === 'copy' ? 'Each is a copy with its own sheet.' : 'They’re shared: changes show up in both campaigns.')
+      toast.success(
+        `${paths.length} character${paths.length === 1 ? '' : 's'} added to ${mode === 'universe' && universe ? universe.displayName : campaign.displayName}`,
+        mode === 'copy' ? 'Each is a copy with its own sheet. Ones from another universe or ruleset are crossovers: the DM translates them.' : mode === 'universe' ? 'They show up in every campaign in this universe.' : 'They’re shared: changes show up in both campaigns.'
+      )
       if (paths[0]) useVault.getState().selectCharacter(paths[0])
       setPicked(new Set())
       onOpenChange(false)
@@ -112,6 +116,14 @@ export function ImportCharactersDialog({ open, onOpenChange }: { open: boolean; 
               <b>Share</b>: the same character in both campaigns; changes show up in each.
             </span>
           </label>
+          {universe && (
+            <label className="flex items-start gap-2">
+              <input type="radio" name="import-mode" checked={mode === 'universe'} onChange={() => setMode('universe')} className="mt-1" />
+              <span>
+                <b>Whole universe</b>: the same character in every campaign set in {universe.displayName}, now and later.
+              </span>
+            </label>
+          )}
         </fieldset>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
