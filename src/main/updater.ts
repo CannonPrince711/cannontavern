@@ -33,6 +33,10 @@ class Updater {
   status: UpdateStatus = { state: 'idle' }
   private wired = false
   private latestUrl = RELEASES_URL
+  /** Set from the updater's log: true while only the changed parts are downloaded. */
+  private partial = false
+  private fullBytes: number | undefined
+  private lastTotal = 0
 
   /** NSIS installs and AppImages can replace themselves; portable, .deb and dev builds can't. */
   get canSelfUpdate(): boolean {
@@ -54,18 +58,28 @@ class Updater {
   private wire(): void {
     if (this.wired || !this.canSelfUpdate) return
     this.wired = true
-    autoUpdater.logger = null
+    // The updater's log says whether it is fetching only the changed blocks
+    // (it reuses the installer cached by the last update) or the whole file.
+    const note = (level: 'info' | 'warn' | 'error') => (msg: unknown) => {
+      const text = String(msg)
+      if (/^Differential download:|^Full: .*To download:/.test(text)) this.partial = true
+      if (/fallback to full download/i.test(text)) this.partial = false
+      console[level]('[updates]', text.split('\n')[0])
+    }
+    autoUpdater.logger = { info: note('info'), warn: note('warn'), error: note('error'), debug: () => {} }
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.on('update-available', (info) => {
+      this.fullBytes = info.files?.[0]?.size
       this.set({ state: 'available', version: info.version, canInstall: true, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined })
     })
     autoUpdater.on('update-not-available', () => this.set({ state: 'none', checkedAt: new Date().toISOString() }))
     autoUpdater.on('download-progress', (p) => {
       const version = this.status.state === 'downloading' || this.status.state === 'available' ? this.status.version : ''
-      this.set({ state: 'downloading', version, percent: Math.round(p.percent) })
+      this.lastTotal = p.total
+      this.set({ state: 'downloading', version, percent: Math.round(p.percent), partial: this.partial, bytes: { done: p.transferred, total: p.total }, fullBytes: this.fullBytes })
     })
     autoUpdater.on('update-downloaded', (info) => {
-      this.set({ state: 'ready', version: info.version })
+      this.set({ state: 'ready', version: info.version, partial: this.partial, downloadedBytes: this.lastTotal || undefined, fullBytes: this.fullBytes })
       send(getMainWindow(), 'toast', { level: 'success', title: `DND Tavern ${info.version} is ready`, detail: 'Restart to update now, or it installs when you quit.' })
     })
     autoUpdater.on('error', (err) => this.set({ state: 'error', message: friendly(err) }))
@@ -75,6 +89,9 @@ class Updater {
   async check(manual: boolean): Promise<UpdateStatus> {
     if (this.status.state === 'checking' || this.status.state === 'downloading') return this.status
     this.set({ state: 'checking' })
+    // With automatic downloads on, the download starts right after the check.
+    this.partial = false
+    this.lastTotal = 0
     try {
       if (this.canSelfUpdate) {
         this.wire()
@@ -132,6 +149,8 @@ class Updater {
     }
     if (this.status.state !== 'available' && this.status.state !== 'error') return
     const version = this.status.state === 'available' ? this.status.version : ''
+    this.partial = false
+    this.lastTotal = 0
     this.set({ state: 'downloading', version, percent: 0 })
     try {
       await autoUpdater.downloadUpdate()

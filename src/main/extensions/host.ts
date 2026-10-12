@@ -16,6 +16,7 @@ import { postMessage, readSession } from '../sessions'
 import { settingsStore } from '../settings-store'
 import { vaultService } from '../vault/service'
 import { getMainWindow } from '../window'
+import { syncBundled } from './bundled'
 import { ExtensionSandbox, type HostCall } from './sandbox'
 
 interface Loaded {
@@ -47,25 +48,10 @@ class ExtensionHost {
 
   // ─── Discovery ──────────────────────────────────────────────────────────
 
-  /** Copies bundled example extensions to userData the first time each appears. */
+  /** Installs new bundled extensions and updates the ones the app changed (see bundled.ts). */
   async installBundled(): Promise<void> {
-    const markerFile = join(paths.extensionsDir, '.bundled.json')
-    await fs.mkdir(paths.extensionsDir, { recursive: true })
-    const installed = new Set(((await readJson(markerFile).catch(() => undefined)) as string[] | undefined) ?? [])
-    let entries: string[] = []
-    try {
-      entries = (await fs.readdir(paths.bundledExtensionsDir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name)
-    } catch {
-      return
-    }
-    for (const name of entries) {
-      if (installed.has(name)) continue
-      const target = join(paths.extensionsDir, name)
-      const exists = await fs.stat(target).then(() => true, () => false)
-      if (!exists) await fs.cp(join(paths.bundledExtensionsDir, name), target, { recursive: true })
-      installed.add(name)
-    }
-    await writeFileAtomic(markerFile, JSON.stringify([...installed], null, 2))
+    const r = await syncBundled(paths.bundledExtensionsDir, paths.extensionsDir)
+    if (r.updated.length) console.info(`[extensions] updated: ${r.updated.join(', ')}${r.backedUp.length ? ` (your edits saved in .backups: ${r.backedUp.join(', ')})` : ''}`)
   }
 
   async reload(): Promise<ExtensionInfo[]> {

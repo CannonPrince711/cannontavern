@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, FolderOpen, Puzzle, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Check, FolderOpen, Loader2, Puzzle, RefreshCw, RotateCcw, Save, ShieldCheck, Undo2 } from 'lucide-react'
 import type { ExtensionInfo, ExtensionPermission } from '@shared/types'
 import { EmptyState } from '@/components/EmptyState'
 import { RuneArt } from '@/components/illustrations'
@@ -82,9 +82,122 @@ function PermissionDialog({ ext, onClose }: { ext: ExtensionInfo; onClose: () =>
   )
 }
 
+type SettingValue = string | number | boolean
+
+/** An extension's settings as a form: edits are kept until Save (or Enter), with Undo and Reset to defaults. */
+function ExtensionSettingsForm({ ext }: { ext: ExtensionInfo }): React.JSX.Element {
+  const saveSettings = useExtensions((s) => s.saveSettings)
+  const defs = ext.manifest.settings ?? []
+  const saved = Object.fromEntries(defs.map((d) => [d.key, (ext.values[d.key] ?? d.default) as SettingValue]))
+  const [draft, setDraft] = useState<Record<string, SettingValue>>(saved)
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  // Number boxes hold text while typing, so an empty or half-typed box isn't saved as 0.
+  const clean = (d: (typeof defs)[number], v: SettingValue): SettingValue => {
+    if (d.type !== 'number') return v
+    const n = Number(v)
+    return String(v).trim() !== '' && Number.isFinite(n) ? n : (saved[d.key] as number)
+  }
+  const values = Object.fromEntries(defs.map((d) => [d.key, clean(d, draft[d.key] ?? saved[d.key]!)]))
+  const dirty = defs.some((d) => values[d.key] !== saved[d.key])
+  const atDefaults = defs.every((d) => values[d.key] === d.default)
+  const set = (key: string, v: SettingValue): void => {
+    setDraft((cur) => ({ ...cur, [key]: v }))
+    setSavedAt(null)
+  }
+  const save = async (next = values): Promise<void> => {
+    setSaving(true)
+    const ok = await saveSettings(ext.manifest.id, { ...ext.values, ...next })
+    setSaving(false)
+    if (ok) {
+      setDraft(next)
+      setSavedAt(Date.now())
+    }
+  }
+
+  return (
+    <form
+      className="mt-3 space-y-1 border-t pt-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
+      {defs.map((d) => {
+        const value = draft[d.key] ?? saved[d.key]
+        const id = `ext-${ext.manifest.id}-${d.key}`
+        const changed = values[d.key] !== saved[d.key]
+        const label = (
+          <span>
+            {d.label}
+            {changed && <span className="ml-1.5 text-[11px] font-normal text-gold">changed</span>}
+          </span>
+        )
+        if (d.type === 'boolean') {
+          return (
+            <Field key={d.key} inline label={label} htmlFor={id}>
+              <Switch id={id} aria-label={d.label} checked={!!value} onCheckedChange={(v) => set(d.key, v)} />
+            </Field>
+          )
+        }
+        if (d.type === 'select') {
+          return (
+            <Field key={d.key} inline label={label} htmlFor={id}>
+              <NativeSelect id={id} value={String(value)} onChange={(e) => set(d.key, e.target.value)} className="w-40" aria-label={d.label}>
+                {(d.options ?? []).map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+          )
+        }
+        if (d.type === 'number') {
+          return (
+            <Field key={d.key} inline label={label} htmlFor={id}>
+              <Input id={id} className="w-28" type="number" aria-label={d.label} value={String(value)} onChange={(e) => set(d.key, e.target.value)} />
+            </Field>
+          )
+        }
+        return (
+          <Field key={d.key} label={label} htmlFor={id} className="py-2">
+            <Input id={id} aria-label={d.label} value={String(value)} onChange={(e) => set(d.key, e.target.value)} placeholder={d.default ? `Default: ${String(d.default)}` : undefined} />
+          </Field>
+        )
+      })}
+      <div className="flex flex-wrap items-center gap-2 pt-2">
+        <Button type="submit" size="sm" disabled={!dirty || saving}>
+          {saving ? <Loader2 className="animate-spin" /> : <Save />} Save
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={!dirty || saving} onClick={() => setDraft(saved)}>
+          <Undo2 /> Undo changes
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          disabled={atDefaults || saving}
+          onClick={() => setDraft(Object.fromEntries(defs.map((d) => [d.key, d.default])))}
+        >
+          <RotateCcw /> Reset to defaults
+        </Button>
+        <span className="w-full text-[11px] text-muted-foreground" role="status">
+          {dirty ? 'Unsaved changes: press Save (or Enter in a box).' : savedAt ? (
+            <span className="text-emerald">
+              <Check className="mr-1 inline size-3.5" />
+              Saved.
+            </span>
+          ) : null}
+        </span>
+      </div>
+    </form>
+  )
+}
+
 function ExtensionCard({ ext }: { ext: ExtensionInfo }): React.JSX.Element {
   const setEnabled = useExtensions((s) => s.setEnabled)
-  const saveSettings = useExtensions((s) => s.saveSettings)
   const [asking, setAsking] = useState(false)
   const defs = ext.manifest.settings ?? []
 
@@ -123,39 +236,7 @@ function ExtensionCard({ ext }: { ext: ExtensionInfo }): React.JSX.Element {
           onCheckedChange={(on) => (on ? setAsking(true) : void setEnabled(ext.manifest.id, false, []))}
         />
       </div>
-      {ext.enabled && defs.length > 0 && (
-        <div className="mt-3 border-t pt-2">
-          {defs.map((d) => {
-            const value = ext.values[d.key]
-            const update = (v: string | number | boolean): void => void saveSettings(ext.manifest.id, { ...ext.values, [d.key]: v } as Record<string, unknown>)
-            return d.type === 'boolean' ? (
-              <Field key={d.key} inline label={d.label}>
-                <Switch aria-label={d.label} checked={!!value} onCheckedChange={update} />
-              </Field>
-            ) : d.type === 'select' ? (
-              <Field key={d.key} inline label={d.label}>
-                <NativeSelect value={String(value)} onChange={(e) => update(e.target.value)} className="w-40" aria-label={d.label}>
-                  {(d.options ?? []).map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            ) : (
-              <Field key={d.key} inline label={d.label}>
-                <Input
-                  className="w-48"
-                  aria-label={d.label}
-                  type={d.type === 'number' ? 'number' : 'text'}
-                  defaultValue={String(value ?? '')}
-                  onBlur={(e) => update(d.type === 'number' ? Number(e.target.value) : e.target.value)}
-                />
-              </Field>
-            )
-          })}
-        </div>
-      )}
+      {ext.enabled && defs.length > 0 && <ExtensionSettingsForm key={`${ext.manifest.id}@${ext.manifest.version}`} ext={ext} />}
       {asking && <PermissionDialog ext={ext} onClose={() => setAsking(false)} />}
     </section>
   )

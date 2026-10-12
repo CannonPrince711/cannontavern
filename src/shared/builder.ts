@@ -28,8 +28,43 @@ export const SETTING_GROUPS = [
 ] as const
 export const CAMPAIGN_SETTINGS = SETTING_GROUPS.flatMap((g) => g.items)
 
-/** Tones that bring romance or sexual content: the drafts must keep every character an adult. */
-const ADULT_TONES = /spicy|harem|fanservice|romantic|romance|nsfw|18\+/i
+/**
+ * The adults-only rule, set in the Mature Mode extension's settings (these are
+ * its defaults; extensions/mature-mode/extension.json must match). The age
+ * can be raised but never set below 18.
+ */
+export const ADULT_RULE_DEFAULTS = {
+  minAge: 21,
+  adultRule: 'No school settings or uniforms in romantic or sexual scenes.',
+  adultTones: 'spicy, harem, fanservice, romantic, romance, nsfw, 18+'
+}
+export const ADULT_AGE_FLOOR = 18
+export interface AdultRule {
+  minAge: number
+  adultRule: string
+  adultTones: string
+}
+
+/** The rule from Mature Mode's saved settings; anything missing or invalid falls back to the defaults. */
+export function adultRuleFrom(values: Record<string, unknown> | undefined): AdultRule {
+  const v = values ?? {}
+  const age = Number(v.minAge)
+  return {
+    minAge: Number.isFinite(age) ? Math.max(ADULT_AGE_FLOOR, Math.round(age)) : ADULT_RULE_DEFAULTS.minAge,
+    adultRule: typeof v.adultRule === 'string' ? v.adultRule.trim().slice(0, 500) : ADULT_RULE_DEFAULTS.adultRule,
+    adultTones: typeof v.adultTones === 'string' ? v.adultTones : ADULT_RULE_DEFAULTS.adultTones
+  }
+}
+
+/** True when a picked tone contains one of the rule's trigger words (case-insensitive). */
+export function needsAdultRule(tones: string[], rule: AdultRule): boolean {
+  const words = rule.adultTones.split(',').map((w) => w.trim().toLowerCase()).filter(Boolean)
+  return tones.some((t) => words.some((w) => t.toLowerCase().includes(w)))
+}
+
+export function adultRuleLine(rule: AdultRule): string {
+  return `Every character is an adult (${rule.minAge} or older).${rule.adultRule ? ` ${rule.adultRule}` : ''}`
+}
 
 /** Long enough for a full pasted campaign prompt. */
 export const PREMISE_MAX = 12_000
@@ -413,13 +448,13 @@ export function conceptSetting(c: Pick<CampaignConcept, 'settings' | 'setting'>)
  * The request for one piece. The concept comes first and is the same for every
  * piece, so local servers can reuse it instead of re-reading it each time.
  */
-export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPiece): string {
+export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPiece, rule: AdultRule = ADULT_RULE_DEFAULTS): string {
   const n = pieceCounts(c)
   const lines = [
     c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
     `Premise: ${c.premise.trim() || 'surprise me'}`,
     c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
-    c.tones.some((t) => ADULT_TONES.test(t)) ? 'Every character is an adult (21 or older); no school settings for romance.' : '',
+    needsAdultRule(c.tones, rule) ? adultRuleLine(rule) : '',
     conceptSetting(c) ? `Setting: ${conceptSetting(c)}` : '',
     `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
     `Character levels: ${c.levels || '1–5'}`,

@@ -4,6 +4,7 @@
  * NPCs and an optional first session). Existing notes are never overwritten.
  */
 import {
+  adultRuleFrom,
   BUILDER_SYSTEM,
   DRAFT_PIECES,
   draftCampaignBody,
@@ -97,7 +98,7 @@ async function writePiece(concept: CampaignConcept, d: CampaignDraft, piece: Dra
   const chain = backendChain(settingsStore.get(), 'chat')
   if (!chain.length) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first, or fill in the campaign by hand.')
   const label = DRAFT_PIECES.find((p) => p.id === piece)!.label
-  const prompt = piecePrompt(concept, d, piece)
+  const prompt = piecePrompt(concept, d, piece, adultRuleFrom(settingsStore.get().extensions.settings['mature-mode']))
   let lastError: unknown = null
   let lastReply = ''
   for (const backend of chain) {

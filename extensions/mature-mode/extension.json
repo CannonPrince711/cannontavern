@@ -1,8 +1,8 @@
 {
   "id": "mature-mode",
   "name": "Mature Mode (18+)",
-  "version": "1.0.0",
-  "description": "Opt-in adult content for stories between consenting adult characters, with its own stat blocks (arousal, affection, stamina…) tracked per character. Confirm you are 18+ in its panel before it does anything.",
+  "version": "1.1.0",
+  "description": "Opt-in adult content for stories between consenting adult characters, with its own stat blocks (arousal, affection, stamina…) tracked per character, and the adults-only rule the campaign builder uses. Confirm you are 18+ in its panel before it does anything.",
   "author": "DND Tavern",
   "permissions": [],
   "commands": [
@@ -12,6 +12,9 @@
   ],
   "settings": [
     { "key": "intensity", "label": "Content level", "type": "select", "default": "explicit", "options": ["suggestive", "explicit"] },
+    { "key": "minAge", "label": "Adults-only rule: minimum character age (18 or higher)", "type": "number", "default": 21 },
+    { "key": "adultRule", "label": "Adults-only rule: extra rule for the AI", "type": "string", "default": "No school settings or uniforms in romantic or sexual scenes." },
+    { "key": "adultTones", "label": "Builder tones that add the rule (comma separated)", "type": "string", "default": "spicy, harem, fanservice, romantic, romance, nsfw, 18+" },
     { "key": "stats", "label": "Stats to track (comma separated)", "type": "string", "default": "Arousal, Affection, Stamina" },
     { "key": "max", "label": "Stat maximum", "type": "number", "default": 100 },
     { "key": "limits", "label": "Hard limits: never include (comma separated)", "type": "string", "default": "" },

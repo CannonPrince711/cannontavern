@@ -45,7 +45,7 @@ export default {
       }
 
       const toggle = el('button', { className: on ? '' : 'secondary', textContent: on ? 'On · turn off' : 'Off · turn on', onclick: () => run('mature', on ? 'off' : 'on') })
-      card.append(el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:6px' }, toggle, el('span', { className: 'muted', textContent: settings.intensity === 'suggestive' ? 'Suggestive' : 'Explicit' })))
+      card.append(el('div', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:6px' }, toggle, el('span', { className: 'muted', textContent: `${settings.intensity === 'suggestive' ? 'Suggestive' : 'Explicit'} · adults ${Math.max(18, Math.round(Number(settings.minAge)) || 21)}+` })))
       root.append(card)
 
       const campaign = state && state.campaign ? state.campaign.path : 'none'
