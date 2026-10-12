@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
-import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
+import { aiSpeakers, lastAiMessage, linkLabel, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
 import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, estimateTokens, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import { withWorldInstructions } from '@shared/world'
@@ -159,7 +159,7 @@ class ChatService {
       ? [...new Set([...(mode === 'ai-dm' ? [playerName] : []), ...members.filter((c) => c !== self).map((c) => c.card.name)])].filter((n) => n !== self.card.name)
       : []
     // With AI companions, one shared prompt for everyone so local servers can reuse it between turns.
-    const partyMode = companionNotes.length > 0 && mode !== 'user-dm'
+    const partyMode = mode !== 'user-dm' && (companionNotes.length > 0 || (mode === 'ai-only' && partyNotes.length > 1))
     const order = normalizeBlockOrder(s.prompt.blocks)
     const budget = Math.min(s.prompt.contextBudget || window, window)
     const partyNames = members.map((c) => c.card.name)
@@ -170,6 +170,7 @@ class ChatService {
           return buildPartyPrompt({
             userName: persona,
             partyCards: members.map((c) => c.card),
+            groups: (session.frontmatter.party ?? []).map((g) => ({ lead: linkLabel(g.lead), companions: g.companions.map(linkLabel) })),
             turn: turnName ? { speaker: 'player', name: turnName } : { speaker: 'dm' },
             campaign,
             party,
@@ -235,7 +236,8 @@ class ChatService {
    */
   async inspect(sessionPath: VaultPath, view: { speaker?: Speaker; as?: VaultPath } = {}): Promise<PromptPreview> {
     const s = settingsForSession(sessionPath)
-    const backend = backendChain(s)[0]
+    const role = view.as || (await this.speakerOf(sessionPath, view.speaker)) === 'player' ? 'character' : 'chat'
+    const backend = backendChain(s, role)[0]
     if (!backend) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
     const { prompt, session, speaker } = await this.context(sessionPath, { backend, ...(view.speaker ? { speaker: view.speaker } : {}), ...(view.as ? { as: view.as } : {}) })
     const window = await effectiveContext(backend)
@@ -250,7 +252,12 @@ class ChatService {
     const views: PromptView[] = []
     if (mode !== 'user-dm') views.push({ key: 'dm', label: 'DM', speaker: 'dm' })
     if (mode !== 'ai-dm') views.push({ key: 'player', label: first?.card.name || session.frontmatter.persona || s.general.playerName || 'Character', speaker: 'player' })
-    if (mode !== 'user-dm') for (const c of await this.companions(session)) views.push({ key: `as:${c.path}`, label: c.card.name, speaker: 'player', as: c.path })
+    // The other AI-played characters: further leads in AI-only play, and every companion.
+    if (mode !== 'user-dm') {
+      for (const c of await this.partyOrder(session)) {
+        if (c.path !== firstPath && !views.some((v) => v.as === c.path)) views.push({ key: `as:${c.path}`, label: c.card.name, speaker: 'player', as: c.path })
+      }
+    }
 
     // The history block only says how many messages fit; show the messages themselves.
     const blocks = prompt.blocks.map((b) => ({ ...b }))
@@ -308,8 +315,8 @@ class ChatService {
       session = await postMessage(vault, sessionPath, message)
       this.publish(session)
     }
-    if (!speaker && !as && mode === 'ai-only' && session.frontmatter.companions?.length) {
-      // AI-only party: the character, each companion, then the DM.
+    if (!speaker && !as && mode === 'ai-only' && (session.frontmatter.companions?.length || session.frontmatter.characters.length > 1)) {
+      // AI-only party: each lead character and their companions in turn, then the DM.
       const party = await this.partyOrder(session)
       if (party.length > 1) {
         const turn = nextPartyTurn(session.messages, party.map((c) => c.card.name))
@@ -319,16 +326,32 @@ class ChatService {
     return this.start('new', sessionPath, newMessageId(), speaker ?? nextSpeaker(mode, session.messages), as)
   }
 
-  /** The session's characters, then its companions. */
+  /** Turn order: each lead character followed by their companions (party groups), else the characters, then the companions. */
   private async partyOrder(session: Session): Promise<CharacterNote[]> {
     const vault = vaultService.require()
-    const paths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
-    const players = (await Promise.all(paths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((n): n is CharacterNote => !!n)
-    const companions = await this.companions(session)
-    return [...players, ...companions.filter((c) => !players.some((p) => p.path === c.path))]
+    const read = async (links: string[]): Promise<CharacterNote[]> => {
+      const paths = await Promise.all(links.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
+      return (await Promise.all(paths.map((p) => (p ? readCharacter(vault, p).catch(() => null) : null)))).filter((n): n is CharacterNote => !!n)
+    }
+    const order = session.frontmatter.party?.length
+      ? await read(session.frontmatter.party.flatMap((g) => [g.lead, ...g.companions]))
+      : [...(await read(session.frontmatter.characters)), ...(await this.companions(session))]
+    return order.filter((c, i) => order.findIndex((o) => o.path === c.path) === i)
   }
 
   /** The session's AI companions, read from their notes (missing ones skipped). */
+  /** Who writes next (as context() decides), so the right backend is picked before the prompt is built. */
+  private async speakerOf(sessionPath: VaultPath, speaker?: Speaker, upto?: string): Promise<Speaker> {
+    if (speaker) return speaker
+    const session = await readSession(vaultService.require(), sessionPath)
+    let messages = session.messages
+    if (upto) {
+      const i = messages.findIndex((m) => m.id === upto)
+      if (i !== -1) messages = messages.slice(0, i)
+    }
+    return nextSpeaker(playModeOf(session.frontmatter), messages)
+  }
+
   private async companions(session: Session): Promise<CharacterNote[]> {
     const vault = vaultService.require()
     const links = session.frontmatter.companions ?? []
@@ -390,7 +413,9 @@ class ChatService {
     const win = getMainWindow()
     const vault = vaultService.require()
     const s = settingsForSession(job.sessionPath)
-    const chain = backendChain(s)
+    // The DM and the characters can run on different models (Settings → Text backends → roles).
+    const role = job.as || (await this.speakerOf(job.sessionPath, job.speaker, job.kind === 'swipe' ? job.messageId : undefined)) === 'player' ? 'character' : 'chat'
+    const chain = backendChain(s, role)
     let streamed = ''
     let result: GenerateResult | null = null
     let used: TextBackend | null = null

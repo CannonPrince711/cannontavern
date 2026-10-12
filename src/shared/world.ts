@@ -27,6 +27,8 @@ const WorldFieldSchemas = {
   /** Text backend id for the DM (the chat role). */
   text_backend: z.string().max(200),
   text_model: z.string().max(300),
+  /** Text backend id for the characters when the AI writes as them; empty: the DM's. */
+  character_backend: z.string().max(200),
   temperature: z.number().min(0).max(5),
   /** Model for summaries and recaps, put into the summaries backend only (its fallbacks keep theirs). */
   summary_model: z.string().max(300),
@@ -134,7 +136,7 @@ export function worldGroups(w: WorldOverrides | undefined): WorldGroup[] {
   if (!w) return []
   const has = (...keys: (keyof WorldOverrides)[]): boolean => keys.some((k) => w[k] !== undefined)
   const groups: WorldGroup[] = []
-  if (has('text_backend', 'text_model', 'temperature', 'summary_model')) groups.push('text')
+  if (has('text_backend', 'text_model', 'character_backend', 'temperature', 'summary_model')) groups.push('text')
   if (has('preset', 'dm_instructions', 'player_prompt', 'shared_resources')) groups.push('prompt')
   if (w.images && Object.values(w.images).some((o) => o && Object.keys(o).length)) groups.push('images')
   if (has('auto_portraits', 'scene_every', 'scene_on_location_change')) groups.push('triggers')
@@ -153,6 +155,7 @@ export function applyWorld<S extends Settings>(s: S, w: WorldOverrides | undefin
   const next = structuredClone(s)
 
   if (w.text_backend && next.textBackends.some((b) => b.id === w.text_backend)) next.roles.chat = w.text_backend
+  if (w.character_backend && next.textBackends.some((b) => b.id === w.character_backend)) next.roles.character = w.character_backend
   if (w.text_model !== undefined || w.temperature !== undefined) {
     const id = chatBackendId(next)
     next.textBackends = next.textBackends.map((b) =>

@@ -423,6 +423,8 @@ export interface PartyPromptInput extends Omit<PromptInput, 'character' | 'sheet
   partyCards: CharacterCard[]
   /** Lore every speaker may see (NPC entries without their secrets). */
   lore: LoreEntry[]
+  /** AI-only party groups: who leads whom (names). */
+  groups?: { lead: string; companions: string[] }[]
   /** Who writes next: the DM, or one of the party (by name). */
   turn: { speaker: 'dm' } | { speaker: 'player'; name: string }
   /** DM-only lore (full NPC entries) for the DM's part. */
@@ -470,7 +472,9 @@ export function buildPartyPrompt(input: PartyPromptInput): BuiltPrompt {
 
   // The shared part, in the user's block order (instructions go to the end instead).
   const enabled = new Set(input.order.filter((b) => b.enabled).map((b) => b.id))
-  add('intro', 'Table', `A Dungeons & Dragons game. The DM runs the world; the player characters are ${names.join(', ')}.`)
+  const groups = (input.groups ?? []).filter((g) => g.companions.length)
+  const groupLine = groups.length ? ` They travel in groups: ${groups.map((g) => `${g.lead} leads ${g.companions.join(' and ')}`).join('; ')}.` : ''
+  add('intro', 'Table', `A Dungeons & Dragons game. The DM runs the world; the player characters are ${names.join(', ')}.${groupLine}`)
   for (const { id, enabled: on } of input.order) {
     if (!on) continue
     switch (id as PromptBlockId) {
@@ -524,7 +528,14 @@ export function buildPartyPrompt(input: PartyPromptInput): BuiltPrompt {
     const name = input.turn.name
     const others = names.filter((n) => n !== name)
     const prompt = (input.playerPrompt?.trim() || COMPANION_PROMPT).split('{{party}}').join(others.join(', ') || 'the party')
-    tail = [applyMacros(prompt, { user, char: name }), `Write ${name}'s next turn. Reply with it only, without a "${name}:" label.`].join('\n\n')
+    const leads = groups.find((g) => g.lead === name)
+    const follows = groups.find((g) => g.companions.includes(name))
+    const role = leads
+      ? `${name} leads ${leads.companions.join(' and ')}: make the calls for your group and look out for them.`
+      : follows
+        ? `${name} follows ${follows.lead}: stay close, back them up and take your cues from them, while keeping your own voice.`
+        : ''
+    tail = [applyMacros(prompt, { user, char: name }), role, `Write ${name}'s next turn. Reply with it only, without a "${name}:" label.`].filter(Boolean).join('\n\n')
   }
 
   const lines = enabled.has('history') ? input.messages.map((m) => transcriptLine(m, user)).filter((l): l is string => !!l) : []

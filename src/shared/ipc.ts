@@ -214,7 +214,11 @@ export interface InvokeMap {
   'sessions:deleteMessage': Invoke<[path: VaultPath, id: Id], Session>
   'sessions:saveCombat': Invoke<[path: VaultPath, combat: CombatState | null], Session>
   'sessions:updateMeta': Invoke<
-    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode; companions?: VaultPath[] }],
+    [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode; companions?: VaultPath[]
+        /** AI only: lead characters and their companions (paths); sets characters and companions too. */
+        party?: { lead: VaultPath; companions: VaultPath[] }[]
+      }
+    ],
     Session
   >
   'sessions:undoState': Invoke<[path: VaultPath, messageId: Id], Session>

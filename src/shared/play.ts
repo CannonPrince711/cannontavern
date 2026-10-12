@@ -57,6 +57,16 @@ export function lastAiMessage(mode: PlayMode, messages: Message[]): Message | un
   return [...messages].reverse().find((m) => roles.includes(m.role))
 }
 
+/** AI-only party size: lead characters, and companions per lead. */
+export const PARTY_LIMITS = { leads: 3, companions: 2 } as const
+
+/** The name a wikilink shows: its alias, else the note's name ("[[NPCs/Ashara Dell|Ashara]]" → "Ashara"). */
+export function linkLabel(link: string): string {
+  const m = /^\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]$/.exec(link.trim())
+  if (!m) return link.trim()
+  return (m[2] ?? m[1]!.split('/').pop()!.replace(/\.md$/i, '')).trim()
+}
+
 export const CHECK_RE = /\[CHECK\s+([a-z ]+?)\s+DC\s*(\d+)\]/gi
 
 /** "[CHECK perception DC 13]" requests in a message. */

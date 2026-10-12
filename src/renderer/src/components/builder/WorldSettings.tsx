@@ -136,6 +136,7 @@ export function WorldSettings({ campaignPath, world, onChange }: { campaignPath:
 
   const globalChat = settings.textBackends.find((b) => b.id === chatBackendId(settings))
   const chat = settings.textBackends.find((b) => b.id === world.text_backend) ?? globalChat
+  const globalCharacter = settings.roles.character ? settings.textBackends.find((b) => b.id === settings.roles.character) : undefined
   const summary = settings.textBackends.find((b) => b.id === (settings.roles.summary ?? settings.defaultTextBackendId)) ?? settings.textBackends[0]
   const globalPreset = settings.general.defaultPreset ? (presets.find((p) => p.path === settings.general.defaultPreset)?.name ?? 'Preset') : 'Built-in DM prompt'
   const defaultImage = settings.imageBackends.find((b) => b.id === settings.defaultImageBackendId) ?? settings.imageBackends[0]
@@ -166,7 +167,7 @@ export function WorldSettings({ campaignPath, world, onChange }: { campaignPath:
         </Button>
       </div>
 
-      <SettingsGroup title="Text model" description="The model that plays the DM in this world.">
+      <SettingsGroup title="Text models" description="The models that play the DM and the characters in this world.">
         <div className="grid grid-cols-2 gap-4 py-3">
           <Field label="Backend" htmlFor="ws-text-backend" className="py-0">
             <NativeSelect id="ws-text-backend" value={world.text_backend ?? ''} onChange={(e) => set({ text_backend: e.target.value || undefined, text_model: undefined })}>
@@ -182,6 +183,20 @@ export function WorldSettings({ campaignPath, world, onChange }: { campaignPath:
             <ModelSelect id="ws-text-model" value={world.text_model} models={chat ? textModels[chat.id] : []} inheritLabel={`The backend’s (${chat?.model || 'server default'})`} onChange={(v) => set({ text_model: v })} />
           </Field>
         </div>
+        <Field
+          label="Characters’ backend"
+          htmlFor="ws-character-backend"
+          description="Plays the characters when the AI writes as them: AI only, You are the DM, and companions. Global follows Settings → Text backends → Characters."
+        >
+          <NativeSelect id="ws-character-backend" value={world.character_backend ?? ''} onChange={(e) => set({ character_backend: e.target.value || undefined })}>
+            <option value="">Global ({globalCharacter?.name ?? 'same as the DM'})</option>
+            {settings.textBackends.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
         <Field label="Model for summaries and recaps" htmlFor="ws-summary-model" description={`Used in the summaries backend (${summary?.name ?? 'none'}); its fallbacks keep their own models.`}>
           <ModelSelect id="ws-summary-model" value={world.summary_model} models={summary ? textModels[summary.id] : []} inheritLabel={`Global (${summary?.model || 'server default'})`} onChange={(v) => set({ summary_model: v })} />
         </Field>

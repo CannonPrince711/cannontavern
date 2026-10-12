@@ -76,14 +76,14 @@ export function TextBackendsSection(): React.JSX.Element {
     }
   }
 
-  const roleSelect = (role: 'chat' | 'summary' | 'imagePrompt', label: string, description: string): React.JSX.Element => (
+  const roleSelect = (role: 'chat' | 'character' | 'summary' | 'imagePrompt', label: string, description: string, empty = 'Default backend'): React.JSX.Element => (
     <Field label={label} description={description} htmlFor={`role-${role}`}>
       <NativeSelect
         id={`role-${role}`}
         value={settings.roles[role] ?? ''}
         onChange={(e) => void updateSettings({ roles: { [role]: e.target.value || null } })}
       >
-        <option value="">Default backend</option>
+        <option value="">{empty}</option>
         {backends.map((b) => (
           <option key={b.id} value={b.id}>
             {b.name}
@@ -208,8 +208,9 @@ export function TextBackendsSection(): React.JSX.Element {
             <Switch aria-label="Fallback chain" checked={settings.fallbackChain} onCheckedChange={(v) => void updateSettings({ fallbackChain: v })} />
           </Tip>
         </Field>
-        <div className="grid grid-cols-3 gap-4 pt-2">
-          {roleSelect('chat', 'Chat', 'The DM’s replies.')}
+        <div className="grid grid-cols-2 gap-4 pt-2 xl:grid-cols-4">
+          {roleSelect('chat', 'DM', 'The DM’s replies.')}
+          {roleSelect('character', 'Characters', 'When the AI plays the characters: AI only, You are the DM, and companions.', 'Same as the DM')}
           {roleSelect('summary', 'Summaries & recaps', 'A cheaper model works well here.')}
           {roleSelect('imagePrompt', 'Image prompts', 'Writes prompts for /image scene.')}
         </div>

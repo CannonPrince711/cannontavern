@@ -15,11 +15,21 @@ import {
 } from '@shared/callouts'
 import { CAMPAIGN_FILE, SESSIONS_FOLDER } from '@shared/layout'
 import { formatDate, joinVaultPath, noteName, toWikilink } from '@shared/names'
-import { isPlayMode, type PlayMode } from '@shared/play'
-import type { CombatState, Message, Session, SessionFrontmatter, VaultPath } from '@shared/types'
+import { isPlayMode, PARTY_LIMITS, type PlayMode } from '@shared/play'
+import type { CombatState, Message, PartyGroup, Session, SessionFrontmatter, VaultPath } from '@shared/types'
 import { AppError } from './errors'
 import { parseNote, serializeNote, updateNote } from './vault/frontmatter'
 import type { Vault } from './vault/vault'
+
+/** The party groups in a session's frontmatter, leniently (bad entries are skipped). */
+export function partyOf(raw: unknown): PartyGroup[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const groups = raw
+    .filter((g): g is { lead: string; companions?: unknown } => !!g && typeof g === 'object' && typeof (g as { lead?: unknown }).lead === 'string')
+    .map((g) => ({ lead: g.lead, companions: Array.isArray(g.companions) ? g.companions.filter((c): c is string => typeof c === 'string').slice(0, PARTY_LIMITS.companions) : [] }))
+    .slice(0, PARTY_LIMITS.leads)
+  return groups.length ? groups : undefined
+}
 
 function frontmatterOf(data: Record<string, unknown>, path: VaultPath): SessionFrontmatter {
   const str = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -32,6 +42,7 @@ function frontmatterOf(data: Record<string, unknown>, path: VaultPath): SessionF
     ...(Array.isArray(data.companions) && data.companions.some((c) => typeof c === 'string')
       ? { companions: data.companions.filter((c): c is string => typeof c === 'string') }
       : {}),
+    ...(partyOf(data.party) ? { party: partyOf(data.party) } : {}),
     persona: str(data.persona) || undefined,
     mode: isPlayMode(data.mode) ? data.mode : undefined,
     created: str(data.created),
