@@ -262,6 +262,89 @@ function Avatar({ c, size = 40 }: { c: { name: string; avatarUrl?: string }; siz
   )
 }
 
+/** "Create my character": the host's AI writes it, the host approves it, then it's yours. */
+function CreateCharacter({ state, you, send }: { state: TableState; you: TablePlayer; send: (m: ClientMessage) => void }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ concept: '', level: 1, race: '', cls: '' })
+  const mine = state.requests.filter((r) => r.playerId === you.id).at(-1)
+  const waiting = mine && (mine.status === 'writing' || mine.status === 'ready')
+  const field = 'w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:border-primary'
+
+  if (waiting) {
+    return (
+      <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5 text-sm">
+        {mine.status === 'writing' ? (
+          <span className="flex items-center gap-2">
+            <Loader2 className="size-4 animate-spin" /> Writing your character… (about a minute)
+          </span>
+        ) : (
+          <span>
+            <span className="font-medium">{mine.name}</span>
+            {mine.summary ? ` (${mine.summary})` : ''} is ready. Waiting for the host to approve…
+          </span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2 pt-1">
+      {mine?.status === 'declined' && <p className="text-xs text-muted-foreground">The host declined {mine.name ?? 'your last character'}. You can try another idea.</p>}
+      {mine?.status === 'failed' && <p className="text-xs text-[#e5484d]">That didn’t work: {mine.error}</p>}
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className="w-full rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground">
+          + Create my character
+        </button>
+      ) : (
+        <form
+          className="space-y-2 rounded-lg border bg-card/60 p-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!form.concept.trim()) return
+            send({ type: 'create', concept: form.concept.trim(), level: form.level, ...(form.race.trim() ? { race: form.race.trim() } : {}), ...(form.cls.trim() ? { cls: form.cls.trim() } : {}) })
+            setOpen(false)
+          }}
+        >
+          <label className="block space-y-1 text-xs">
+            <span className="font-medium">Who are they?</span>
+            <textarea
+              rows={3}
+              maxLength={1000}
+              value={form.concept}
+              onChange={(e) => setForm({ ...form, concept: e.target.value })}
+              placeholder="A grumpy dwarf cannoneer who lost a bet and now owes the Academy ten years of service"
+              className={field}
+              autoFocus
+            />
+          </label>
+          <div className="grid grid-cols-[4.5rem_1fr_1fr] gap-2 text-xs">
+            <label className="space-y-1">
+              <span className="font-medium">Level</span>
+              <input type="number" min={1} max={20} value={form.level} onChange={(e) => setForm({ ...form, level: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })} className={field} />
+            </label>
+            <label className="space-y-1">
+              <span className="font-medium">Race (optional)</span>
+              <input value={form.race} maxLength={60} onChange={(e) => setForm({ ...form, race: e.target.value })} placeholder="Any" className={field} />
+            </label>
+            <label className="space-y-1">
+              <span className="font-medium">Class (optional)</span>
+              <input value={form.cls} maxLength={100} onChange={(e) => setForm({ ...form, cls: e.target.value })} placeholder="Any" className={field} />
+            </label>
+          </div>
+          <p className="text-[11px] text-muted-foreground">The host’s AI writes the whole character and sheet for this campaign, then the host approves it.</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
+              Cancel
+            </button>
+            <button type="submit" disabled={!form.concept.trim()} className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50">
+              Create
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 function MyCharacter({ state, you, send }: { state: TableState; you: TablePlayer; send: (m: ClientMessage) => void }): React.JSX.Element {
   const mine = state.party.find((c) => c.path === you.characterPath)
   const [expr, setExpr] = useState('1d20')
@@ -270,13 +353,14 @@ function MyCharacter({ state, you, send }: { state: TableState; you: TablePlayer
     return (
       <section className="space-y-2">
         <h2 className="font-display text-sm font-semibold tracking-wide">Choose your character</h2>
-        {state.available.length === 0 && <p className="text-xs text-muted-foreground">No characters left to claim. Ask the host to add one.</p>}
+        {state.available.length === 0 && <p className="text-xs text-muted-foreground">No characters left to claim. Make your own below, or ask the host to add one.</p>}
         {state.available.map((c) => (
           <button key={c.path} type="button" onClick={() => send({ type: 'claim', characterPath: c.path })} className="flex w-full items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-left hover:border-primary hover:bg-accent">
             <Avatar c={{ name: c.name }} size={32} />
             <span className="text-sm font-medium">Play as {c.name}</span>
           </button>
         ))}
+        <CreateCharacter state={state} you={you} send={send} />
       </section>
     )
   }

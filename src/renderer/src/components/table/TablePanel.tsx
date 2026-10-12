@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
 import { toast } from '@/stores/toasts'
 import { useVault } from '@/stores/vault'
+import { useUi } from '@/stores/ui'
 
 export const useTable = create<{ status: TableStatus | null }>(() => ({ status: null }))
 
@@ -210,6 +211,48 @@ export function TablePanel(): React.JSX.Element {
       )}
       {mode === 'user-dm' && <p className="text-xs text-muted-foreground">You are the DM: players act, you narrate from this screen.</p>}
       {mode === 'ai-only' && <p className="text-xs text-muted-foreground">AI only: players watch the story unfold.</p>}
+
+      {status.requests.some((r) => r.status === 'writing' || r.status === 'ready' || r.status === 'failed') && (
+        <section className="space-y-1">
+          <h3 className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">New characters</h3>
+          {status.requests
+            .filter((r) => r.status === 'writing' || r.status === 'ready' || r.status === 'failed')
+            .map((r) => (
+              <div key={r.id} className={cn('space-y-1.5 rounded-md border px-2.5 py-2', r.status === 'ready' ? 'border-gold/50 bg-gold/5' : 'bg-card/60')}>
+                <p className="text-xs">
+                  <span className="font-medium">{r.playerName}</span>
+                  {r.status === 'writing' && <span className="text-muted-foreground"> is making a character…</span>}
+                  {r.status === 'ready' && (
+                    <span>
+                      ’s character: <span className="font-medium">{r.name}</span>
+                      {r.summary && <span className="text-muted-foreground"> ({r.summary})</span>}
+                    </span>
+                  )}
+                  {r.status === 'failed' && <span className="text-crimson"> couldn’t get a character: {r.error}</span>}
+                </p>
+                <p className="line-clamp-2 text-[11px] text-muted-foreground italic">“{r.concept}”</p>
+                {r.status === 'writing' && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                {r.status !== 'writing' && (
+                  <div className="flex gap-1.5">
+                    {r.status === 'ready' && r.characterPath && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => useUi.setState({ editingCharacter: r.characterPath! })}>
+                          Review
+                        </Button>
+                        <Button size="sm" className="h-7" disabled={busy} onClick={() => void run(() => invoke('table:approveCharacter', r.id), 'Could not approve')}>
+                          Approve
+                        </Button>
+                      </>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 text-crimson" disabled={busy} onClick={() => void run(() => invoke('table:declineCharacter', r.id), 'Could not decline')}>
+                      {r.status === 'failed' ? 'Dismiss' : 'Decline'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+        </section>
+      )}
 
       <section className="space-y-1">
         <h3 className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Players ({players.length})</h3>

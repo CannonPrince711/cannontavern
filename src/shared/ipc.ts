@@ -188,6 +188,9 @@ export interface InvokeMap {
   'table:stop': Invoke<[], TableStatus>
   'table:status': Invoke<[], TableStatus>
   'table:kick': Invoke<[playerId: string], TableStatus>
+  /** A player's generated character: approve (joins the party, they get it) or decline (to the Recycle Bin). */
+  'table:approveCharacter': Invoke<[requestId: string], TableStatus>
+  'table:declineCharacter': Invoke<[requestId: string], TableStatus>
   'table:setAutoRespond': Invoke<[mode: AutoRespond], TableStatus>
   'table:setSession': Invoke<[path: VaultPath | null], void>
   'table:openScreen': Invoke<[], void>
@@ -388,6 +391,8 @@ const invokeChannels = {
   'characters:updateSheet': 1,
   'campaigns:get': 1,
   'table:start': 1,
+  'table:approveCharacter': 1,
+  'table:declineCharacter': 1,
   'table:stop': 1,
   'table:status': 1,
   'table:kick': 1,
