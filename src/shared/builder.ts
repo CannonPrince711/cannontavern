@@ -18,7 +18,10 @@ export const CampaignConceptSchema = z.object({
   name: z.string().max(120).default(''),
   premise: z.string().max(PREMISE_MAX).default(''),
   tones: z.array(z.string().max(40)).max(6).default([]),
-  setting: z.string().max(200).default(''),
+  /** Picked setting chips; a campaign can mix several (Modern day + Urban fantasy). */
+  settings: z.array(z.string().max(60)).max(CAMPAIGN_SETTINGS.length).default([]),
+  /** The player's own setting idea, alongside or instead of the chips. */
+  setting: z.string().max(500).default(''),
   levels: z.string().max(40).default('1–5'),
   length: z.enum(['one-shot', 'short', 'long']).default('short'),
   players: z.number().int().min(1).max(8).default(1),
@@ -379,6 +382,13 @@ function draftSoFar(d: CampaignDraft, piece: DraftPiece): string {
   return lines.join('\n')
 }
 
+/** Every setting the player picked, plus their own idea: "Modern day + Urban fantasy. The Underworld". */
+export function conceptSetting(c: Pick<CampaignConcept, 'settings' | 'setting'>): string {
+  const picked = (c.settings ?? []).map((s) => s.trim()).filter(Boolean).join(' + ')
+  const own = c.setting.trim()
+  return picked && own ? `${picked}. ${own}` : picked || own
+}
+
 /**
  * The request for one piece. The concept comes first and is the same for every
  * piece, so local servers can reuse it instead of re-reading it each time.
@@ -389,7 +399,7 @@ export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPi
     c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
     `Premise: ${c.premise.trim() || 'surprise me'}`,
     c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
-    c.setting.trim() ? `Setting: ${c.setting.trim()}` : '',
+    conceptSetting(c) ? `Setting: ${conceptSetting(c)}` : '',
     `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
     `Character levels: ${c.levels || '1–5'}`,
     `Players: ${c.players} ${c.players === 1 ? 'player character' : 'player characters'}`,

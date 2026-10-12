@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { CampaignConceptSchema, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX, salvageLists } from '../src/shared/builder'
+import { CampaignConceptSchema, conceptSetting, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX, salvageLists } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -175,6 +175,15 @@ describe('campaign builder: drafting in pieces', () => {
     const head = pieces[0]!.slice(0, pieces[0]!.indexOf('\n\n'))
     expect(head).toContain('Premise: High School DxD')
     for (const p of pieces) expect(p.startsWith(head)).toBe(true)
+  })
+
+  it('blends several settings with the player’s own idea', () => {
+    const mixed = CampaignConceptSchema.parse({ settings: ['Modern day', 'Urban fantasy'], setting: ' The Underworld ' })
+    expect(conceptSetting(mixed)).toBe('Modern day + Urban fantasy. The Underworld')
+    expect(piecePrompt(mixed, emptyDraft(), 'overview')).toContain('Setting: Modern day + Urban fantasy. The Underworld')
+    expect(conceptSetting(CampaignConceptSchema.parse({ settings: ['Sci-fi'] }))).toBe('Sci-fi')
+    expect(conceptSetting(CampaignConceptSchema.parse({ setting: 'Own idea' }))).toBe('Own idea')
+    expect(piecePrompt(CampaignConceptSchema.parse({}), emptyDraft(), 'overview')).not.toContain('Setting:')
   })
 
   it('tells later pieces what exists so names stay consistent', () => {

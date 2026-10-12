@@ -20,7 +20,7 @@ type Stage = 'concept' | 'drafting' | 'review'
 // A stable empty list: a fresh [] from a store selector would re-render forever.
 const NONE: never[] = []
 
-const DEFAULT_CONCEPT: CampaignConcept = { name: '', premise: '', tones: [], setting: '', levels: '1–5', length: 'short', players: 1, mode: 'ai-dm', edition: '5e', avoid: '' }
+const DEFAULT_CONCEPT: CampaignConcept = { name: '', premise: '', tones: [], settings: [], setting: '', levels: '1–5', length: 'short', players: 1, mode: 'ai-dm', edition: '5e', avoid: '' }
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }): React.JSX.Element {
   return (
@@ -76,7 +76,8 @@ function listOps<K extends 'locations' | 'npcs' | 'factions' | 'outline' | 'ques
 
 function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { concept: CampaignConcept; setConcept: (c: CampaignConcept) => void; onDraft: () => void; onManual: () => void; hasBackend: boolean }): React.JSX.Element {
   const set = <K extends keyof CampaignConcept>(k: K, v: CampaignConcept[K]): void => setConcept({ ...concept, [k]: v })
-  const custom = !CAMPAIGN_SETTINGS.slice(0, -1).includes(concept.setting as (typeof CAMPAIGN_SETTINGS)[number]) && concept.setting !== ''
+  // The own-idea box is open while it holds anything (a lone space just opened it).
+  const custom = concept.setting !== ''
   const tooLong = concept.premise.length > PREMISE_MAX
   return (
     <div className="space-y-5">
@@ -119,18 +120,25 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
       </div>
       <div className="space-y-1.5">
         <Label>Setting</Label>
+        <p className="text-[11px] text-muted-foreground">Pick as many as you like: the AI blends them.</p>
         <div className="flex flex-wrap gap-1.5">
           {CAMPAIGN_SETTINGS.map((t) => {
             const isCustom = t === 'Your own idea'
-            const active = isCustom ? custom : concept.setting === t
+            const active = isCustom ? custom : concept.settings.includes(t)
             return (
-              <Chip key={t} active={active} onClick={() => set('setting', isCustom ? (custom ? '' : ' ') : active ? '' : t)}>
+              <Chip
+                key={t}
+                active={active}
+                onClick={() =>
+                  isCustom ? set('setting', custom ? '' : ' ') : set('settings', active ? concept.settings.filter((x) => x !== t) : [...concept.settings, t])
+                }
+              >
                 {t}
               </Chip>
             )
           })}
         </div>
-        {custom && <Input value={concept.setting.trimStart()} onChange={(e) => set('setting', e.target.value || ' ')} placeholder="Describe your setting" aria-label="Your setting" autoFocus />}
+        {custom && <Input value={concept.setting.trimStart()} onChange={(e) => set('setting', e.target.value || ' ')} placeholder={concept.settings.length ? 'Add your own details, e.g. the Underworld and Heaven’s gate' : 'Describe your setting'} aria-label="Your setting" maxLength={500} autoFocus />}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
