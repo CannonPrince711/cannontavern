@@ -1,7 +1,7 @@
 {
   "name": "dnd-tavern",
   "productName": "DND Tavern",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "description": "A SillyTavern-style D&D chat frontend that stores everything in an Obsidian vault.",
   "main": "./out/main/index.js",
   "author": "DND Tavern",
