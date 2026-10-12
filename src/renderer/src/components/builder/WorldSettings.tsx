@@ -10,6 +10,9 @@ import { Disclosure, NumberInput } from '@/components/settings/fields'
 import { invoke } from '@/lib/ipc'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
+
+// A stable empty list: a fresh [] from a store selector would re-render forever.
+const NO_PRESETS: never[] = []
 import { useVault } from '@/stores/vault'
 
 const PURPOSE_LABEL: Record<ImagePurpose, string> = {
@@ -110,7 +113,7 @@ function ModelSelect({ id, value, models, inheritLabel, onChange }: { id: string
  */
 export function WorldSettings({ campaignPath, world, onChange }: { campaignPath: string; world: WorldOverrides; onChange: (w: WorldOverrides) => void }): React.JSX.Element | null {
   const settings = useApp((s) => s.settings)
-  const presets = useVault((s) => s.index?.presets ?? [])
+  const presets = useVault((s) => s.index?.presets ?? NO_PRESETS)
   const [imageModels, setImageModels] = useState<Record<string, string[]>>({})
   const [textModels, setTextModels] = useState<Record<string, string[]>>({})
   const [suggesting, setSuggesting] = useState(false)
