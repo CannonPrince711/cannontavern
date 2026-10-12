@@ -535,3 +535,15 @@ export type SettingsPatch = {
 export function defaultSettings(): Settings {
   return SettingsSchema.parse({})
 }
+
+/** A backend from an export made without keys: a "none" key or secret header means "keep this PC's". */
+export function keepMissingKeys(b: unknown): unknown {
+  if (!b || typeof b !== 'object') return b
+  const keep = (v: unknown): unknown => ((v as { kind?: string } | null)?.kind === 'none' ? { kind: 'keep' } : v)
+  const backend = b as { apiKey?: unknown; network?: { headers?: { name: string; value: unknown }[] } }
+  return {
+    ...backend,
+    apiKey: keep(backend.apiKey),
+    ...(backend.network ? { network: { ...backend.network, headers: (backend.network.headers ?? []).map((h) => ({ ...h, value: keep(h.value) })) } } : {})
+  }
+}

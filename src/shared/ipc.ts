@@ -95,7 +95,8 @@ export interface InvokeMap {
   'settings:get': Invoke<[], PublicSettings>
   'settings:update': Invoke<[patch: SettingsPatch], PublicSettings>
   'settings:export': Invoke<[opts: { includeKeys: boolean }], { path: string } | null>
-  'settings:import': Invoke<[], PublicSettings | null>
+  /** Opens a settings file; the settings it replaced are saved to backupPath first. */
+  'settings:import': Invoke<[], { settings: PublicSettings; backupPath: string } | null>
 
   // Text backends
   'textBackends:save': Invoke<[backend: TextBackendInput], PublicSettings>

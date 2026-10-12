@@ -100,7 +100,8 @@ function defaultKey(key: ListKey): DefaultKey {
 export function exportSecret(secret: SecretStored, includeKeys: boolean): SecretInput {
   switch (secret.kind) {
     case 'encrypted':
-      return includeKeys ? { kind: 'set', value: reveal(secret) } : { kind: 'none' }
+      // Without keys, the file says "keep": opening it keeps whatever key this PC has for that backend.
+      return includeKeys ? { kind: 'set', value: reveal(secret) } : { kind: 'keep' }
     case 'plain':
       return { kind: 'plain', value: secret.value }
     case 'env':

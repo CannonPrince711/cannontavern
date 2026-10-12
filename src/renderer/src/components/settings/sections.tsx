@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { openSettingsFile, saveSettingsFile } from '@/lib/settings-file'
 import { Download, FolderOpen, Loader2, RotateCcw, Upload } from 'lucide-react'
 import { THEMES } from '@shared/themes'
 import type { ThemeId } from '@shared/types'
@@ -247,26 +248,6 @@ export function SecuritySection(): React.JSX.Element {
   const updateSettings = useApp((s) => s.updateSettings)
   const [includeKeys, setIncludeKeys] = useState(false)
 
-  const exportSettings = async (): Promise<void> => {
-    try {
-      const r = await invoke('settings:export', { includeKeys })
-      if (r) toast.success('Settings exported', r.path)
-    } catch (err) {
-      toast.error(err, 'Export failed')
-    }
-  }
-  const importSettings = async (): Promise<void> => {
-    try {
-      const s = await invoke('settings:import')
-      if (s) {
-        useApp.setState({ settings: s })
-        toast.success('Settings imported')
-      }
-    } catch (err) {
-      toast.error(err, 'Import failed')
-    }
-  }
-
   return (
     <div className="space-y-6">
       <SettingsGroup title="Connections">
@@ -280,21 +261,21 @@ export function SecuritySection(): React.JSX.Element {
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title="Export & import" description="Back up or move your settings. Your vault path is never overwritten by an import.">
-        <Field inline label="Include API keys" description="Off by default. Keys are written in plain text to the export file.">
+      <SettingsGroup title="Save & open settings" description="Save all your settings to a file to back them up or move them to another PC, and open one to load it. Opening a file never changes your vault, and keeps API keys the file doesn’t include.">
+        <Field inline label="Include API keys" description="Off by default. Keys are written in plain text to the file.">
           <Switch aria-label="Include API keys in export" checked={includeKeys} onCheckedChange={setIncludeKeys} />
         </Field>
         {includeKeys && (
           <Callout tone="crimson" className="my-2">
-            The exported file will contain your keys unencrypted. Keep it somewhere private and delete it when you’re done.
+            The saved file will contain your keys unencrypted. Keep it somewhere private and delete it when you’re done.
           </Callout>
         )}
         <div className="flex gap-2 py-3">
-          <Button variant="outline" onClick={() => void exportSettings()}>
-            <Download /> Export settings…
+          <Button variant="outline" onClick={() => void saveSettingsFile(includeKeys)}>
+            <Download /> Save settings…
           </Button>
-          <Button variant="outline" onClick={() => void importSettings()}>
-            <Upload /> Import settings…
+          <Button variant="outline" onClick={() => void openSettingsFile()}>
+            <Upload /> Open settings…
           </Button>
         </div>
       </SettingsGroup>

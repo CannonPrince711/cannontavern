@@ -6,6 +6,7 @@ import { Map as MapIcon } from 'lucide-react'
 import { useMap } from '@/components/map/MapView'
 import { listCommands, runCommand } from '@/lib/commands'
 import { invoke } from '@/lib/ipc'
+import { openSettingsFile, saveSettingsFile } from '@/lib/settings-file'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
 import { useDiceFx } from '@/stores/dice'
@@ -97,6 +98,22 @@ function useItems(query: string): Item[] {
           const c = useVault.getState().activeCampaign
           if (c) useUi.setState({ campaignSettings: c })
         }
+      },
+      {
+        id: 'settings-save',
+        group: 'Actions',
+        label: 'Save settings to a file',
+        icon: Settings,
+        keywords: 'export backup settings file save config',
+        run: () => void saveSettingsFile()
+      },
+      {
+        id: 'settings-open',
+        group: 'Actions',
+        label: 'Open a settings file',
+        icon: Settings,
+        keywords: 'import restore load settings file open config',
+        run: () => void openSettingsFile()
       },
       {
         id: 'world-settings',
