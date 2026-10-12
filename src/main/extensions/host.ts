@@ -360,7 +360,13 @@ class ExtensionHost {
         await this.warmStore(id)
         const out = await ext.sandbox!.call<PromptBlock[]>('hooks.onPromptBuild', [current], await this.snapshot(id, sessionPath), 8000)
         if (Array.isArray(out) && out.every((b) => b && typeof b.content === 'string' && typeof b.id === 'string')) {
-          current = out.map((b) => ({ id: String(b.id), label: String(b.label ?? b.id), role: b.role === 'user' || b.role === 'assistant' ? b.role : 'system', content: b.content, tokens: Math.ceil(b.content.length / 4) }))
+          // Unchanged blocks keep their counts: the history block's text is only a summary of what it holds.
+          const before = new Map(current.map((b) => [b.id, b]))
+          current = out.map((b) => {
+            const prev = before.get(String(b.id))
+            const tokens = prev && prev.content === b.content ? prev.tokens : Math.ceil(b.content.length / 4)
+            return { id: String(b.id), label: String(b.label ?? b.id), role: b.role === 'user' || b.role === 'assistant' ? b.role : 'system', content: b.content, tokens }
+          })
         } else if (out !== undefined) {
           throw new Error('onPromptBuild must return an array of blocks.')
         }
