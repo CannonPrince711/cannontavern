@@ -228,7 +228,8 @@ export interface InvokeMap {
   'chat:stop': Invoke<[requestId: Id], void>
   /** Three AI ideas for the user's next move (tips bubble). */
   'chat:ideas': Invoke<[sessionPath: VaultPath], string[]>
-  'chat:inspectPrompt': Invoke<[opts: { sessionPath: VaultPath }], PromptPreview>
+  /** speaker/as pick whose prompt to show; by default whoever writes next. */
+  'chat:inspectPrompt': Invoke<[opts: { sessionPath: VaultPath; speaker?: 'dm' | 'player'; as?: VaultPath }], PromptPreview>
 
   // Images (progress arrives as images:* events)
   'images:generate': Invoke<

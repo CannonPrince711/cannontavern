@@ -165,7 +165,11 @@ export function registerSessionHandlers(): void {
   handle('chat:continue', (_e, { sessionPath }) => chatService.continue(sessionPath), z.tuple([z.object({ sessionPath: path })]))
   handle('chat:stop', (_e, requestId) => chatService.stop(requestId), z.tuple([z.string()]))
   handle('chat:ideas', (_e, p) => suggestIdeas(p), z.tuple([path]))
-  handle('chat:inspectPrompt', (_e, { sessionPath }) => chatService.inspect(sessionPath), z.tuple([z.object({ sessionPath: path })]))
+  handle(
+    'chat:inspectPrompt',
+    (_e, { sessionPath, speaker, as }) => chatService.inspect(sessionPath, { speaker, as }),
+    z.tuple([z.object({ sessionPath: path, speaker: z.enum(['dm', 'player']).optional(), as: path.optional() })])
+  )
 
   // ── Characters & campaigns (basics; import/export live in characters.ts) ─
   handle('characters:get', (_e, p) => readCharacter(vaultService.require(), p), z.tuple([path]))

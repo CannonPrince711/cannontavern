@@ -327,6 +327,15 @@ export interface ChatTurn {
 }
 
 /** What the prompt inspector shows. Secrets are already redacted. */
+/** One prompt the inspector can show: the DM's, the character's, or a companion's. */
+export interface PromptView {
+  key: string
+  label: string
+  speaker: 'dm' | 'player'
+  /** A companion's character path (the AI writes as them). */
+  as?: VaultPath
+}
+
 export interface PromptPreview {
   backendId: Id
   backendName: string
@@ -336,6 +345,19 @@ export interface PromptPreview {
   blocks: PromptBlock[]
   totalTokens: number
   budget: number
+  /** Whose prompt this is, and the others in this session (several in AI-only play or with companions). */
+  view: string
+  views: PromptView[]
+  stats: {
+    mode: PlayMode
+    model: string
+    window: number
+    replyTokens: number
+    systemTokens: number
+    historyTokens: number
+    messagesKept: number
+    messagesTotal: number
+  }
 }
 
 // ─── Vault index ─────────────────────────────────────────────────────────────

@@ -6,10 +6,10 @@
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
 import { aiSpeakers, lastAiMessage, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
-import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
+import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, estimateTokens, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
 import { withWorldInstructions } from '@shared/world'
-import type { CharacterNote, LoreEntry, Message, PromptPreview, Session, VaultPath } from '@shared/types'
+import type { CharacterNote, LoreEntry, Message, PromptPreview, PromptView, Session, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
 import { readCampaign, readCharacter, readLorebook, readPreset, resolveCharacterLink, resolveLorebookLinks } from './library'
@@ -221,7 +221,7 @@ class ChatService {
         const historyTokens = blocks.find((b) => b.id === 'history')?.tokens ?? 0
         prompt.blocks = blocks
         prompt.system = system
-        prompt.totalTokens = Math.ceil(system.length / 4) + historyTokens
+        prompt.totalTokens = estimateTokens(system, tokenizer) + historyTokens
       }
     }
     const ownLabel = turnName ?? 'DM'
@@ -229,23 +229,58 @@ class ChatService {
     return { session, character, prompt, persona, speaker, speakerName: turnName ?? speakerName, ...(stop ? { stop } : {}) }
   }
 
-  async inspect(sessionPath: VaultPath): Promise<PromptPreview> {
+  /**
+   * The prompt the next request would send. `view` picks whose prompt to show
+   * (the DM, the character, or a companion); by default it's whoever writes next.
+   */
+  async inspect(sessionPath: VaultPath, view: { speaker?: Speaker; as?: VaultPath } = {}): Promise<PromptPreview> {
     const s = settingsForSession(sessionPath)
     const backend = backendChain(s)[0]
     if (!backend) throw new AppError('NO_BACKEND', 'Add a text backend in Settings first.')
-    const { prompt } = await this.context(sessionPath, { backend })
+    const { prompt, session, speaker } = await this.context(sessionPath, { backend, ...(view.speaker ? { speaker: view.speaker } : {}), ...(view.as ? { as: view.as } : {}) })
     const window = await effectiveContext(backend)
     const resolved = resolveTextBackend(backend)
     const req = redactRequest(textAdapter(backend.type).prepare(resolved, { system: prompt.system, messages: prompt.messages }, backend.generation.stream))
+
+    // Who the AI can write as in this session, so the inspector can switch between their prompts.
+    const mode = playModeOf(session.frontmatter)
+    const vault = vaultService.require()
+    const firstPath = session.frontmatter.characters[0] ? await resolveCharacterLink(vault, session.frontmatter.characters[0]).catch(() => null) : null
+    const first = firstPath ? await readCharacter(vault, firstPath).catch(() => null) : null
+    const views: PromptView[] = []
+    if (mode !== 'user-dm') views.push({ key: 'dm', label: 'DM', speaker: 'dm' })
+    if (mode !== 'ai-dm') views.push({ key: 'player', label: first?.card.name || session.frontmatter.persona || s.general.playerName || 'Character', speaker: 'player' })
+    if (mode !== 'user-dm') for (const c of await this.companions(session)) views.push({ key: `as:${c.path}`, label: c.card.name, speaker: 'player', as: c.path })
+
+    // The history block only says how many messages fit; show the messages themselves.
+    const blocks = prompt.blocks.map((b) => ({ ...b }))
+    const history = blocks.find((b) => b.id === 'history')
+    const counts = /^(\d+) of (\d+) messages/.exec(history?.content ?? '')
+    if (history && prompt.messages.length && !/transcript/i.test(history.label)) {
+      history.content = `${history.content}\n\n${prompt.messages.map((m) => `[${m.role}]\n${m.content}`).join('\n\n')}`
+    }
+    const historyTokens = history?.tokens ?? 0
     return {
       backendId: backend.id,
       backendName: backend.name,
       url: req.url,
       headers: req.headers,
       body: req.body,
-      blocks: prompt.blocks,
+      blocks,
       totalTokens: prompt.totalTokens,
-      budget: Math.min(s.prompt.contextBudget || window, window)
+      budget: Math.min(s.prompt.contextBudget || window, window),
+      view: view.as ? `as:${view.as}` : speaker,
+      views,
+      stats: {
+        mode,
+        model: backend.model,
+        window,
+        replyTokens: backend.generation.maxTokens,
+        systemTokens: Math.max(0, prompt.totalTokens - historyTokens),
+        historyTokens,
+        messagesKept: counts ? Number(counts[1]) : prompt.messages.length,
+        messagesTotal: counts ? Number(counts[2]) : prompt.messages.length
+      }
     }
   }
 
