@@ -113,7 +113,7 @@ const bab35 = (p: Prog, lvl: number): number => (p === 'good' ? lvl : p === 'avg
  * if any class is unknown the model's numbers are kept for that part.
  * Returns the sheet and a list of what changed (shown to the player).
  */
-export function fixSheet(sheet: DndSheet): { sheet: DndSheet; changes: string[] } {
+export function fixSheet(sheet: DndSheet, opts: { math?: boolean; variant?: 'pf1e' } = {}): { sheet: DndSheet; changes: string[] } {
   const s: DndSheet = { ...sheet }
   const changes: string[] = []
   const classes = parseClasses(s.class, s.level)
@@ -122,7 +122,19 @@ export function fixSheet(sheet: DndSheet): { sheet: DndSheet; changes: string[] 
     changes.push(`level ${s.level} → ${total}`)
     s.level = total
   }
+  // Games that count differently (Pathfinder 2e, superheroes, custom rules): the sheet stays as written,
+  // except hit points the model left at zero.
+  if (opts.math === false) {
+    if (!(s.max_hp > 0)) {
+      const hp = Math.max(1, 8 + mod(s.con) + (Math.max(1, s.level) - 1) * (5 + mod(s.con)))
+      changes.push(`hit points ${s.max_hp} → ${hp}`)
+      s.max_hp = hp
+      s.hp = hp
+    } else if (!(s.hp > 0)) s.hp = s.max_hp
+    return { sheet: s, changes }
+  }
   const con = mod(s.con)
+  const pf1e = opts.variant === 'pf1e'
 
   if (s.edition === '3.5e') {
     const known = classes.map((c) => ({ ...c, t: CLASSES_35[c.name] }))
@@ -144,7 +156,8 @@ export function fixSheet(sheet: DndSheet): { sheet: DndSheet; changes: string[] 
       s.hp = hp
       // Feats: 1 + one per 3 levels, +1 for humans, plus fighter bonus feats (1st and every even level). Flag too many.
       const fighter = known.find((k) => k.name === 'fighter')?.level ?? 0
-      const expected = 1 + Math.floor(s.level / 3) + (/\bhuman\b/i.test(s.race) && !/half/i.test(s.race) ? 1 : 0) + (fighter ? 1 + Math.floor(fighter / 2) : 0)
+      // Pathfinder 1e: a feat at every odd level instead.
+      const expected = 1 + Math.floor((pf1e ? s.level - 1 : s.level) / (pf1e ? 2 : 3)) +(/\bhuman\b/i.test(s.race) && !/half/i.test(s.race) ? 1 : 0) + (fighter ? 1 + Math.floor(fighter / 2) : 0)
       const listed = (s.feats ?? []).filter((f) => !/\((class|.*class feature|planned)/i.test(f)).length
       if (listed > expected) changes.push(`check feats: ${listed} listed, ${expected} expected for this build`)
     }
@@ -152,9 +165,10 @@ export function fixSheet(sheet: DndSheet): { sheet: DndSheet; changes: string[] 
     const ranks: Record<string, number> = {}
     for (const [raw, r] of Object.entries(s.skill_ranks ?? {})) {
       const key = raw.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
-      const name = SKILLS_TO_35[key] ?? key
+      // Pathfinder keeps its own skill names (Perception, Stealth…), with ranks up to the level.
+      const name = pf1e ? key : (SKILLS_TO_35[key] ?? key)
       if (name !== key) changes.push(`skill ${raw} → ${name}`)
-      ranks[name] = Math.min(s.level + 3, (ranks[name] ?? 0) + Math.max(0, Math.round(Number(r) || 0)))
+      ranks[name] = Math.min(pf1e ? s.level : s.level + 3,(ranks[name] ?? 0) + Math.max(0, Math.round(Number(r) || 0)))
     }
     s.skill_ranks = ranks
   } else {
@@ -195,6 +209,8 @@ export interface CharacterRequest {
   race?: string
   cls?: string
   edition: '5e' | '3.5e'
+  /** A game other than D&D (see rulesets.ts): its rules and lists replace the D&D ones. */
+  ruleset?: { name: string; rules: string; classes: string[]; ancestries: string[]; terms: { race: string; class: string; level: string; spells: string } }
   minAge: number
   campaign?: { name: string; setting: string; tone: string; houseRules: string; sources: string[] }
   avoidNames: string[]
@@ -208,10 +224,18 @@ You already wrote this character: ${name}. ${description.slice(0, 600)}
 Now reply with only their sheet, in this shape: {"dnd": { ... }} with every field above filled in.`
 }
 
-export const CHARGEN_SYSTEM = `You are an expert Dungeons & Dragons character designer. You turn a short concept into a complete, playable player character with a vivid personality. Reply with JSON only. Inside text values, write dialogue with single quotes, never double quotes.`
+export const CHARGEN_SYSTEM = `You are an expert tabletop roleplaying game character designer (Dungeons & Dragons, Pathfinder, superheroes, sci-fi and more). You turn a short concept into a complete, playable player character with a vivid personality. Reply with JSON only. Inside text values, write dialogue with single quotes, never double quotes.`
 
 export function chargenPrompt(r: CharacterRequest): string {
-  const rules = r.edition === '3.5e'
+  const g = r.ruleset
+  const rules = g
+    ? [
+        g.rules.replace(/^Rules:\s*/, ''),
+        `The sheet's "race" field is the ${g.terms.race}${g.ancestries.length ? ` (e.g. ${g.ancestries.join(', ')})` : ''}; "class" is the ${g.terms.class}${g.classes.length ? ` (e.g. ${g.classes.join(', ')})` : ''}; "level" is the ${g.terms.level}; "spells" holds their ${g.terms.spells}.`,
+        r.edition === '3.5e' ? 'Include base attack bonus, base saves and skill ranks in the game’s own skill names.' : 'Use the game’s own skill names.',
+        'Fill in real numbers for hp, max_hp, ac and every ability (the zeros below are placeholders).'
+      ].join('\n')
+    : r.edition === '3.5e'
     ? `D&D 3.5 edition: 3.5e classes, races, feats and skills only (Spot, Listen, Hide, Move Silently, Tumble… not Perception or Stealth). Point buy 32. Include base attack bonus, base saves and skill ranks.`
     : `D&D 5th edition: 5e classes, species, backgrounds and skills. Point buy 27 or standard array.`
   const campaign = r.campaign

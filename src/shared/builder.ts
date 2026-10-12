@@ -82,6 +82,8 @@ export const CampaignConceptSchema = z.object({
   players: z.number().int().min(1).max(8).default(1),
   mode: z.enum(PLAY_MODES).default('ai-dm'),
   edition: z.enum(EDITIONS).default('5e'),
+  /** A ruleset other than D&D (see rulesets.ts); edition is then its sheet engine. */
+  ruleset: z.object({ id: z.string().max(1024), name: z.string().max(80), rules: z.string().max(12_000) }).optional(),
   /** Lines and veils: things to keep out of the story. */
   avoid: z.string().max(1000).default('')
 })
@@ -456,7 +458,7 @@ export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPi
     c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
     needsAdultRule(c.tones, rule) ? adultRuleLine(rule) : '',
     conceptSetting(c) ? `Setting: ${conceptSetting(c)}` : '',
-    `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
+    c.ruleset ? `Rules: ${c.ruleset.name}. ${c.ruleset.rules.replace(/^Rules:\s*[^.]*\.\s*/, '').slice(0, 1500)}` : `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
     `Character levels: ${c.levels || '1–5'}`,
     `Players: ${c.players} ${c.players === 1 ? 'player character' : 'player characters'}`,
     `Length: ${c.length === 'one-shot' ? 'a one-shot (one session)' : c.length === 'short' ? 'a short arc (3–6 sessions)' : 'a long campaign'}`,

@@ -13,6 +13,7 @@ import type { VaultGraph } from './graph'
 import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { Edition } from './editions'
+import type { Ruleset } from './rulesets'
 import type { WorldOverrides, WorldResourceKind } from './world'
 import type { AutoRespond, TableStatus } from './table'
 import type { PlayMode, Speaker } from './play'
@@ -160,7 +161,7 @@ export interface InvokeMap {
   /** Redoes one section of a draft (overview, places, NPCs, factions or the story), keeping the rest. */
   'campaigns:redraftPiece': Invoke<[concept: CampaignConcept, draft: CampaignDraft, piece: 'overview' | 'locations' | 'npcs' | 'factions' | 'story'], CampaignDraft>
   'campaigns:build': Invoke<
-    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition }],
+    [draft: CampaignDraft, opts: { mode: PlayMode; session: boolean; characterPath?: VaultPath; edition?: Edition; ruleset?: string }],
     { index: VaultIndex; campaignPath: VaultPath; sessionPath: VaultPath | null }
   >
   /** Campaign maps (image, pins, party marker) kept in a "type: map" note. */
@@ -175,9 +176,16 @@ export interface InvokeMap {
    * and the world's overrides of global settings (null clears them).
    */
   'campaigns:update': Invoke<
-    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode; world?: WorldOverrides | null }],
+    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode; world?: WorldOverrides | null; ruleset?: string | null }],
     Campaign
   >
+  /** Built-in rulesets, then the custom notes in Rulesets/. */
+  'rulesets:list': Invoke<[], Ruleset[]>
+  /** Saves a custom ruleset (new when it has no id). */
+  'rulesets:save': Invoke<[ruleset: Omit<Ruleset, 'id'> & { id?: string }], Ruleset>
+  /** The AI designs a ruleset from a concept; returns a draft to review. */
+  'rulesets:generate': Invoke<[concept: string], Omit<Ruleset, 'id'>>
+  'rulesets:delete': Invoke<[id: string], void>
   /** Asks the AI to pick the best installed text and image models for a campaign; nothing is saved. */
   'campaigns:suggestGenerators': Invoke<[path: VaultPath], { world: WorldOverrides; notes: string }>
   /** Writes items, creatures and more that fit the campaign into its "<name> Resources" lorebook (attached to it). */
@@ -403,6 +411,10 @@ const invokeChannels = {
   'table:setSession': 1,
   'table:openScreen': 1,
   'campaigns:update': 1,
+  'rulesets:list': 1,
+  'rulesets:save': 1,
+  'rulesets:generate': 1,
+  'rulesets:delete': 1,
   'campaigns:suggestGenerators': 1,
   'campaigns:generateResources': 1,
   'vault:createResources': 1,

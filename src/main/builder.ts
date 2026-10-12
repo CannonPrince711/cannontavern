@@ -21,6 +21,7 @@ import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { serializeLorebookBody } from '@shared/notes'
 import type { PlayMode } from '@shared/play'
 import { SOURCEBOOKS, type Edition } from '@shared/editions'
+import { readRuleset, rulesetValue } from './rulesets'
 import type { VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
 import { effectiveContext } from './backends/context'
@@ -165,6 +166,8 @@ async function writePiece(concept: CampaignConcept, d: CampaignDraft, piece: Dra
 export interface BuildOptions {
   mode: PlayMode
   edition?: Edition
+  /** Ruleset id or note path (see rulesets.ts). */
+  ruleset?: string
   /** Create "Session 01" (opening with the draft's scene unless you are the DM). */
   session: boolean
   characterPath?: VaultPath
@@ -197,13 +200,18 @@ export async function buildCampaign(draft: CampaignDraft, opts: BuildOptions): P
     )
     links.push(toWikilink(lorePath, { full: true }))
   }
+  const ruleset = opts.ruleset ? await readRuleset(vault, opts.ruleset) : null
   await vault.mutate(joinVaultPath(campaign.path, CAMPAIGN_FILE), (cur) =>
     cur === null
       ? null
       : updateNote(cur, {
           lorebooks: links,
           ...(opts.mode !== 'ai-dm' ? { mode: opts.mode } : {}),
-          ...(opts.edition && opts.edition !== '5e' ? { edition: opts.edition, sources: SOURCEBOOKS[opts.edition].filter((b) => b.core).map((b) => b.name) } : {})
+          ...(ruleset && !ruleset.sourcebooks
+            ? { ruleset: rulesetValue(ruleset), ...(ruleset.engine !== '5e' ? { edition: ruleset.engine } : {}) }
+            : opts.edition && opts.edition !== '5e'
+              ? { edition: opts.edition, sources: SOURCEBOOKS[opts.edition].filter((b) => b.core).map((b) => b.name) }
+              : {})
         })
   )
 

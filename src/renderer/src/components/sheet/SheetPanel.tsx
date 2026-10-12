@@ -1,3 +1,4 @@
+import { useCampaignRuleset } from '@/components/rulesets/Rulesets'
 import { useEffect, useState } from 'react'
 import { BedDouble, Coffee, Heart, Minus, Pencil, Plus, ScrollText, Shield, Sparkles, Swords, Trash2, TrendingUp, X, Zap } from 'lucide-react'
 import { ABILITIES, checkBonus, conditionsFor, levelForXp, skillsFor, xpForLevel } from '@shared/checks'
@@ -104,6 +105,8 @@ function useCampaignEdition(): Edition {
   return edition
 }
 
+const DND_TERMS = { race: 'Race', class: 'Class', level: 'Level', spells: 'Spells' }
+
 export function SheetPanel(): React.JSX.Element {
   const path = useActiveCharacterPath()
   const { note, updateSheet } = useCharacterNote(path)
@@ -114,6 +117,7 @@ export function SheetPanel(): React.JSX.Element {
   const [newSpell, setNewSpell] = useState('')
   const [newFeat, setNewFeat] = useState('')
   const campaignEdition = useCampaignEdition()
+  const terms = useCampaignRuleset()?.terms ?? DND_TERMS
 
   if (!path) {
     return (
@@ -189,9 +193,9 @@ export function SheetPanel(): React.JSX.Element {
             </Tip>
           </div>
           <p className="text-xs text-muted-foreground">
-            <EditableText value={sheet.race} label="Race" placeholder="Race" onCommit={(v) => set({ race: v })} />{' '}
-            <EditableText value={sheet.class} label="Class" placeholder="Class" onCommit={(v) => set({ class: v })} /> · Level{' '}
-            <EditableNumber value={sheet.level} label="Level" min={1} max={20} onCommit={(v) => set({ level: v })} />
+            <EditableText value={sheet.race} label={terms.race} placeholder={terms.race} onCommit={(v) => set({ race: v })} />{' '}
+            <EditableText value={sheet.class} label={terms.class} placeholder={terms.class} onCommit={(v) => set({ class: v })} /> · {terms.level}{' '}
+            <EditableNumber value={sheet.level} label={terms.level} min={1} max={20} onCommit={(v) => set({ level: v })} />
           </p>
         </div>
         <div>
@@ -519,7 +523,7 @@ export function SheetPanel(): React.JSX.Element {
       </Section>
 
       {/* Spells */}
-      <Section title="Spells" icon={Sparkles}>
+      <Section title={terms.spells} icon={Sparkles}>
         <div className="mb-2 space-y-1">
           {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((lvl) => {
             const slot = sheet.spell_slots[lvl] ?? { max: 0, used: 0 }

@@ -37,7 +37,9 @@ export function buildOpenAiRequest(b: ResolvedTextBackend, p: TextPrompt, stream
       min_p: g.minP,
       repetition_penalty: g.repetitionPenalty
     }),
-    ...(stop.length ? { stop: official ? stop.slice(0, 4) : stop } : {})
+    ...(stop.length ? { stop: official ? stop.slice(0, 4) : stop } : {}),
+    // Self-hosted servers (llama.cpp, vLLM, LM Studio…) switch a thinking model's reasoning off this way; hosted APIs may reject the field.
+    ...(!g.thinking && !HOSTED_API.test(host) ? { chat_template_kwargs: { enable_thinking: false } } : {})
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (b.key) headers.Authorization = `Bearer ${b.key}`
@@ -52,6 +54,9 @@ export function buildOpenAiRequest(b: ResolvedTextBackend, p: TextPrompt, stream
     body: deepMerge(body, extraBody(b))
   }
 }
+
+/** Hosted APIs that don't take llama.cpp-style template options. */
+const HOSTED_API = /(^|\.)(openai\.com|openrouter\.ai|groq\.com|together\.(ai|xyz)|deepseek\.com|mistral\.ai|x\.ai|fireworks\.ai|anthropic\.com|googleapis\.com|perplexity\.ai|cohere\.(ai|com)|deepinfra\.com|novita\.ai|featherless\.ai|nano-gpt\.com|chutes\.ai)$/i
 
 export async function runOpenAi(
   b: ResolvedTextBackend,
@@ -73,7 +78,8 @@ export async function runOpenAi(
     return {
       text: choice?.message?.content ?? choice?.text ?? '',
       model: json.model,
-      stopReason: choice?.finish_reason ?? undefined
+      stopReason: choice?.finish_reason ?? undefined,
+      ...(choice?.message?.reasoning_content ? { reasoned: true } : {})
     }
   }
 
@@ -82,6 +88,7 @@ export async function runOpenAi(
   let model: string | undefined
   let stopReason: string | undefined
   let firstTokenMs: number | undefined
+  let reasoned = false
   const handle = (data: string): boolean => {
     if (data.trim() === '[DONE]') return true
     let json: OpenAiResponse
@@ -99,6 +106,7 @@ export async function runOpenAi(
       text += delta
       opts.onToken?.(delta)
     }
+    if (choice?.delta?.reasoning_content) reasoned = true
     if (choice?.finish_reason) stopReason = choice.finish_reason
     return false
   }
@@ -106,7 +114,7 @@ export async function runOpenAi(
     for (const ev of parser.feed(chunk)) if (handle(ev.data)) break outer
   }
   for (const ev of parser.end()) handle(ev.data)
-  return { text, model, stopReason, firstTokenMs }
+  return { text, model, stopReason, firstTokenMs, ...(reasoned ? { reasoned } : {}) }
 }
 
 export async function listOpenAiModels(b: ResolvedTextBackend, base: string, signal?: AbortSignal): Promise<string[]> {
@@ -131,8 +139,8 @@ interface OpenAiResponse {
   model?: string
   error?: { message?: unknown }
   choices?: {
-    message?: { content?: string }
-    delta?: { content?: string }
+    message?: { content?: string; reasoning_content?: string }
+    delta?: { content?: string; reasoning_content?: string }
     text?: string
     finish_reason?: string | null
   }[]

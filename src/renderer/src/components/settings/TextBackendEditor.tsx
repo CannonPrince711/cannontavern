@@ -240,6 +240,9 @@ export function TextBackendEditor({ initial, isNew, onSaved, onDeleted, onDiscar
           <Field inline label="Stream tokens" description="Show the reply as it is written.">
             <Switch aria-label="Stream tokens" checked={draft.generation.stream} onCheckedChange={(v) => gen('stream', v)} />
           </Field>
+          <Field inline label="Let the model think first" description="For thinking models (Qwen3, Gemma, DeepSeek R1…). Off asks the server to skip hidden reasoning, which is faster and stops replies coming back empty.">
+            <Switch aria-label="Let the model think first" checked={draft.generation.thinking} onCheckedChange={(v) => gen('thinking', v)} />
+          </Field>
           <div className="grid grid-cols-3 gap-4">
             <NullableNumber label="Temperature" value={draft.generation.temperature} fallback={0.9} min={0} max={5} onChange={(v) => gen('temperature', v)} />
             <NullableNumber label="Top-p" value={draft.generation.topP} fallback={0.95} min={0} max={1} onChange={(v) => gen('topP', v)} />

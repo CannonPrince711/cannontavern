@@ -235,6 +235,7 @@ export function normalizeCampaign(path: string, name: string, data: Record<strin
     mode: isPlayMode(data.mode) ? data.mode : undefined,
     edition: isEdition(data.edition) ? data.edition : undefined,
     sources: strList(data.sources),
+    ...(str(data.ruleset).trim() ? { ruleset: str(data.ruleset).trim() } : {}),
     world: worldFromFrontmatter(data),
     body
   }

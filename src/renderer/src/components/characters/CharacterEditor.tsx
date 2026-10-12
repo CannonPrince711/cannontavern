@@ -18,6 +18,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { invoke, IpcError, on } from '@/lib/ipc'
 import { VoiceOptions } from '@/lib/speech'
 import { TagsDialog } from '@/components/images/TagsDialog'
+import { findRuleset, useRulesets } from '@/components/rulesets/Rulesets'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
@@ -366,6 +367,9 @@ export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOp
   const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
   const [gen, setGen] = useState({ concept: '', level: 1, race: '', cls: '', campaignPath: '', portrait: true })
   const campaignPath = gen.campaignPath || active || ''
+  const rulesetList = useRulesets()
+  const campaignInfo = campaigns.find((c) => c.path === campaignPath)
+  const ruleset = findRuleset(rulesetList, campaignInfo?.ruleset, campaignInfo?.edition)
 
   const done = (path: string): void => {
     onOpenChange(false)
@@ -445,11 +449,13 @@ export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOp
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Race (optional)" htmlFor="gen-race" className="py-0">
-                <Input id="gen-race" value={gen.race} onChange={(e) => setGen({ ...gen, race: e.target.value })} placeholder="Let the AI pick" />
+              <Field label={`${ruleset?.terms.race ?? 'Race'} (optional)`} htmlFor="gen-race" className="py-0">
+                <Input id="gen-race" list="gen-race-options" value={gen.race} onChange={(e) => setGen({ ...gen, race: e.target.value })} placeholder="Let the AI pick" />
+                <datalist id="gen-race-options">{ruleset?.ancestries.map((a) => <option key={a} value={a} />)}</datalist>
               </Field>
-              <Field label="Class (optional)" htmlFor="gen-class" className="py-0">
-                <Input id="gen-class" value={gen.cls} onChange={(e) => setGen({ ...gen, cls: e.target.value })} placeholder="e.g. Rogue, or Fighter 2 / Rogue 1" />
+              <Field label={`${ruleset?.terms.class ?? 'Class'} (optional)`} htmlFor="gen-class" className="py-0">
+                <Input id="gen-class" list="gen-class-options" value={gen.cls} onChange={(e) => setGen({ ...gen, cls: e.target.value })} placeholder={ruleset?.classes[0] ? `e.g. ${ruleset.classes[0]}` : 'e.g. Rogue, or Fighter 2 / Rogue 1'} />
+                <datalist id="gen-class-options">{ruleset?.classes.map((c) => <option key={c} value={c} />)}</datalist>
               </Field>
             </div>
             {hasImageBackend && (
@@ -458,7 +464,7 @@ export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOp
                 Paint a portrait too
               </label>
             )}
-            <p className="text-[11px] text-muted-foreground">Uses the campaign’s rules edition and setting. Hit points, base attack, saves and proficiency are recalculated from the class tables after the AI writes the sheet. It takes about a minute.</p>
+            <p className="text-[11px] text-muted-foreground">Uses the campaign’s ruleset{ruleset ? ` (${ruleset.name})` : ''} and setting.{ruleset?.math === false ? '' : ' Hit points, base attack, saves and proficiency are recalculated from the class tables after the AI writes the sheet.'} It takes about a minute.</p>
           </TabsContent>
           <TabsContent value="blank" className="py-3">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Aria Thornwood" aria-label="Character name" onKeyDown={(e) => e.key === 'Enter' && name.trim() && void create()} />

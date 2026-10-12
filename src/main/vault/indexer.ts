@@ -74,7 +74,9 @@ export class VaultIndexer {
           mtimeMs: ref.mtimeMs,
           displayName: str(data.name) || noteName(folder),
           sessionCount: 0,
-          world: worldFromFrontmatter(data)
+          world: worldFromFrontmatter(data),
+          ...(str(data.ruleset).trim() ? { ruleset: str(data.ruleset).trim() } : {}),
+          ...(str(data.edition).trim() ? { edition: str(data.edition).trim() } : {})
         })
         break
       }
