@@ -302,3 +302,25 @@ describe('Anthropic adapter (SDK against a mock server)', () => {
     ])
   })
 })
+
+describe('thinking models', () => {
+  it('asks self-hosted servers to skip hidden thinking unless it is on', () => {
+    const off = openAiAdapter.prepare(backend({}), prompt, false)
+    expect(off.body).toMatchObject({ chat_template_kwargs: { enable_thinking: false } })
+    const on = openAiAdapter.prepare(backend({ generation: { thinking: true } }), prompt, false)
+    expect(on.body).not.toHaveProperty('chat_template_kwargs')
+    const hosted = openAiAdapter.prepare(backend({ baseUrl: 'https://openrouter.ai/api/v1' }), prompt, false)
+    expect(hosted.body).not.toHaveProperty('chat_template_kwargs')
+  })
+
+  it('notices a reply that was all thinking', async () => {
+    handler = (_req, _body, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.write('data: {"choices":[{"delta":{"reasoning_content":"Hmm, the alley…"}}]}\n\n')
+      res.write('data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n')
+      res.end('data: [DONE]\n\n')
+    }
+    const r = await openAiAdapter.generate(backend({}), prompt, { stream: true })
+    expect(r).toMatchObject({ text: '', stopReason: 'length', reasoned: true })
+  })
+})

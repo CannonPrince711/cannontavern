@@ -35,6 +35,8 @@ export interface GenerateResult {
   firstTokenMs?: number
   /** Set when the model declined (e.g. Anthropic stop_reason "refusal"). */
   refusal?: { category?: string | null; explanation?: string | null }
+  /** The model wrote hidden reasoning (thinking) as well as, or instead of, a reply. */
+  reasoned?: boolean
 }
 
 /** The exact request an adapter would send, for the prompt inspector. */

@@ -89,6 +89,11 @@ export const TextGenerationSchema = z.object({
   minP: z.number().min(0).max(1).nullable().default(null),
   repetitionPenalty: z.number().min(0).max(3).nullable().default(null),
   maxTokens: z.number().int().min(1).max(200_000).default(800),
+  /**
+   * Let thinking models reason before replying. Off by default: hidden thinking can use up the
+   * whole reply budget (an empty reply) and roleplay rarely needs it.
+   */
+  thinking: z.boolean().default(false),
   contextSize: z.number().int().min(512).max(2_000_000).default(16_384),
   stop: z.array(z.string()).default([]),
   /** JSON object text merged into every request body. */

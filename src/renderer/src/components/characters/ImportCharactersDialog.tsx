@@ -67,9 +67,9 @@ export function ImportCharactersDialog({ open, onOpenChange }: { open: boolean; 
           <DialogDescription>Pick characters from your other campaigns.</DialogDescription>
         </DialogHeader>
         {groups.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No characters in other campaigns.</p>
+          <p className="px-6 py-6 text-center text-sm text-muted-foreground">No characters in other campaigns.</p>
         ) : (
-          <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-80 space-y-3 overflow-y-auto px-6">
             {groups.map((g) => (
               <section key={g.name}>
                 <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{g.name}</h3>
@@ -98,7 +98,7 @@ export function ImportCharactersDialog({ open, onOpenChange }: { open: boolean; 
             ))}
           </div>
         )}
-        <fieldset className="space-y-1.5 text-sm">
+        <fieldset className="space-y-1.5 px-6 text-sm">
           <legend className="mb-1 font-medium">How</legend>
           <label className="flex items-start gap-2">
             <input type="radio" name="import-mode" checked={mode === 'copy'} onChange={() => setMode('copy')} className="mt-1" />

@@ -22,7 +22,8 @@ import { backendChain, withModel } from './backends/chain'
 import { effectiveContext } from './backends/context'
 import { readMap } from './maps'
 import { partyLocation } from '@shared/map'
-import { editionOf, rulesLine } from '@shared/editions'
+import { rulesetPrompt } from '@shared/rulesets'
+import { campaignRuleset } from './rulesets'
 import { recapService } from './recap'
 import { campaignNpcs } from './npcs'
 import { mergeNpcLore, npcLoreEntry } from '@shared/npcs'
@@ -112,6 +113,7 @@ class ChatService {
     const character = self ?? partyNotes[0] ?? null
     const { campaign, party } = await readCampaign(vault, session.campaignPath)
     const map = await readMap(vault, session.campaignPath).catch(() => null)
+    const rules = campaign ? rulesetPrompt(await campaignRuleset(vault, campaign), campaign.sources ?? []) : null
     const preset = withWorldInstructions(s.general.defaultPreset ? await readPreset(vault, s.general.defaultPreset) : null, campaign.world?.dm_instructions)
 
     let messages = session.messages
@@ -182,7 +184,7 @@ class ChatService {
             summary: session.frontmatter.summary ?? null,
             recaps,
             location: partyLocation(map),
-            rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
+            rules,
             messages,
             order,
             budget,
@@ -208,7 +210,7 @@ class ChatService {
       summary: session.frontmatter.summary ?? null,
       recaps,
       location: partyLocation(map),
-      rules: campaign ? rulesLine(editionOf(campaign), campaign.sources ?? []) : null,
+      rules,
       messages,
       order,
       budget,
@@ -510,7 +512,14 @@ class ChatService {
       } else if (!text && !aborted && !result?.refusal) {
         send(win, 'chat:error', {
           requestId: job.requestId,
-          error: { code: 'EMPTY_REPLY', message: 'The model returned an empty reply.', detail: result?.stopReason ? `Stop reason: ${result.stopReason}` : undefined }
+          error:
+            result?.reasoned && result.stopReason === 'length'
+              ? {
+                  code: 'THOUGHT_TOO_LONG',
+                  message: `${used?.name ?? 'The model'} spent its whole reply thinking and ran out of tokens before answering.`,
+                  detail: 'Turn off “Let the model think first” for this backend in Settings → Text, or raise its Max reply tokens.'
+                }
+              : { code: 'EMPTY_REPLY', message: 'The model returned an empty reply.', detail: result?.stopReason ? `Stop reason: ${result.stopReason}` : undefined }
         })
       } else {
         send(win, 'chat:done', { requestId: job.requestId, session: session ?? (await readSession(vault, job.sessionPath)) })

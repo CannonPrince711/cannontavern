@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { CAMPAIGN_TONES, emptyDraft, MAX_TONES, SETTING_GROUPS, TONE_GROUPS, PREMISE_MAX, type CampaignConcept, type CampaignDraft, type DraftPiece } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
-import { EDITION_INFO, EDITIONS } from '@shared/editions'
+import { RulesetPicker } from '@/components/rulesets/Rulesets'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -203,13 +203,13 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
       </div>
       <div className="space-y-1.5">
         <Label>Rules</Label>
-        <div className="flex gap-1.5">
-          {EDITIONS.map((e) => (
-            <Chip key={e} active={concept.edition === e} onClick={() => set('edition', e)}>
-              {EDITION_INFO[e].label}
-            </Chip>
-          ))}
-        </div>
+        <RulesetPicker
+          value={concept.ruleset?.id ?? (concept.edition === '3.5e' ? 'dnd35' : 'dnd5e')}
+          onChange={(r) => {
+            set('edition', r.engine)
+            set('ruleset', r.sourcebooks ? undefined : { id: r.id, name: r.name, rules: r.rules })
+          }}
+        />
       </div>
       <div className="space-y-1.5">
         <Label>Who plays</Label>
@@ -443,7 +443,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
     }
     setBusy(true)
     try {
-      const r = await invoke('campaigns:build', draft, { mode, session, edition: concept.edition, ...(character ? { characterPath: character } : {}) })
+      const r = await invoke('campaigns:build', draft, { mode, session, edition: concept.edition, ...(concept.ruleset ? { ruleset: concept.ruleset.id } : {}), ...(character ? { characterPath: character } : {}) })
       const vault = useVault.getState()
       vault.setIndex(r.index)
       vault.setActiveCampaign(r.campaignPath)

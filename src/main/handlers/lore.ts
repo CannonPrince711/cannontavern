@@ -15,6 +15,8 @@ import { serializeNote, updateNote } from '../vault/frontmatter'
 import { vaultService } from '../vault/service'
 import { suggestGenerators } from '../world-suggest'
 import { generateWorldResources } from '../world-resources'
+import { generateRuleset, listRulesets, readRuleset, rulesetValue, saveRuleset } from '../rulesets'
+import { rulesetRef } from '@shared/rulesets'
 
 const path = z.string().min(1).max(1024)
 
@@ -82,8 +84,8 @@ export function registerLoreHandlers(): void {
     },
     z.tuple([
       CampaignDraftSchema,
-      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional(), edition: z.enum(EDITIONS).optional() })
-    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string; edition?: Edition }]>
+      z.object({ mode: z.enum(PLAY_MODES), session: z.boolean(), characterPath: path.optional(), edition: z.enum(EDITIONS).optional(), ruleset: z.string().max(1024).optional() })
+    ]) as unknown as z.ZodType<[CampaignDraft, { mode: PlayMode; session: boolean; characterPath?: string; edition?: Edition; ruleset?: string }]>
   )
 
   handle(
@@ -95,6 +97,13 @@ export function registerLoreHandlers(): void {
       if (patch.tone !== undefined) fields.tone = patch.tone.trim()
       if (patch.house_rules !== undefined) fields.house_rules = patch.house_rules.trim()
       if (patch.edition !== undefined) fields.edition = patch.edition
+      if (patch.ruleset !== undefined) {
+        // The ruleset picks the sheet engine too.
+        const r = patch.ruleset ? await readRuleset(vault, patch.ruleset) : null
+        if (patch.ruleset && !r) throw new AppError('NO_RULESET', 'That ruleset isn’t in the vault any more.')
+        fields.ruleset = r ? rulesetValue(r) : undefined
+        if (r) fields.edition = r.engine === '5e' ? undefined : r.engine
+      }
       if (patch.sources !== undefined) fields.sources = patch.sources.map((s) => s.trim()).filter(Boolean)
       if (patch.mode !== undefined) fields.mode = patch.mode === 'ai-dm' ? undefined : patch.mode
       // undefined deletes the key: a world without overrides leaves no trace in Campaign.md.
@@ -117,9 +126,57 @@ export function registerLoreHandlers(): void {
         edition: z.enum(EDITIONS).optional(),
         sources: z.array(z.string().max(200)).max(200).optional(),
         mode: z.enum(PLAY_MODES).optional(),
-        world: WorldOverridesSchema.nullable().optional()
+        world: WorldOverridesSchema.nullable().optional(),
+        ruleset: z.string().max(1024).nullable().optional()
       })
     ])
+  )
+
+  handle('rulesets:list', () => listRulesets(vaultService.require()))
+  handle(
+    'rulesets:save',
+    async (_e, r) => {
+      const vault = vaultService.require()
+      const saved = await saveRuleset(vault, r)
+      if (r.id) {
+        // Campaigns hold a link with the name as its text: keep it current.
+        for (const c of vaultService.getIndex()?.campaigns ?? []) {
+          const { campaign } = await readCampaign(vault, c.path).catch(() => ({ campaign: null }))
+          if (campaign?.ruleset && rulesetRef(campaign.ruleset, vault.rootFolder)?.toLowerCase() === r.id.toLowerCase()) {
+            await vault.mutate(joinVaultPath(c.path, CAMPAIGN_FILE), (cur) => (cur === null ? null : updateNote(cur, { ruleset: rulesetValue(saved) })))
+          }
+        }
+      }
+      return saved
+    },
+    z.tuple([
+      z.object({
+        id: z.string().max(1024).optional(),
+        name: z.string().min(1).max(80),
+        short: z.string().max(14),
+        engine: z.enum(EDITIONS),
+        math: z.boolean(),
+        sourcebooks: z.boolean(),
+        rules: z.string().max(12_000),
+        classes: z.array(z.string().max(60)).max(40),
+        ancestries: z.array(z.string().max(60)).max(40),
+        terms: z.object({ race: z.string().max(30), class: z.string().max(30), level: z.string().max(30), spells: z.string().max(30) }),
+        blurb: z.string().max(300),
+        custom: z.boolean().optional()
+      })
+    ])
+  )
+  handle('rulesets:generate', (_e, concept) => generateRuleset(concept), z.tuple([z.string().min(1).max(2000)]))
+  handle(
+    'rulesets:delete',
+    async (_e, id) => {
+      const vault = vaultService.require()
+      const r = await readRuleset(vault, id)
+      if (!r?.custom) throw new AppError('BUILTIN_RULESET', 'Only custom rulesets can be deleted.')
+      // To the Recycle Bin; campaigns using it fall back to their D&D edition.
+      await vault.delete(r.id)
+    },
+    z.tuple([z.string().min(1).max(1024)])
   )
 
   handle('campaigns:suggestGenerators', (_e, campaignPath) => suggestGenerators(campaignPath), z.tuple([path]))

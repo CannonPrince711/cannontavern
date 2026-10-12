@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
-import { EDITION_INFO, EDITIONS, SOURCEBOOKS, type Edition } from '@shared/editions'
+import { SOURCEBOOKS, type Edition } from '@shared/editions'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
 import { compactWorld, type WorldOverrides } from '@shared/world'
 import { Button } from '@/components/ui/button'
@@ -14,9 +14,12 @@ import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
 import { WorldSettings } from './WorldSettings'
+import { findRuleset, RulesetPicker, useRulesets } from '@/components/rulesets/Rulesets'
 
 interface Form {
   edition: Edition
+  /** Ruleset as stored in Campaign.md (id or link); '' for the D&D edition. */
+  ruleset: string
   sources: string[]
   other: string
   mode: PlayMode
@@ -36,6 +39,7 @@ export function CampaignSettings(): React.JSX.Element | null {
   const name = useVault((s) => s.index?.campaigns.find((c) => c.path === path)?.displayName)
   const [form, setForm] = useState<Form | null>(null)
   const [busy, setBusy] = useState(false)
+  const rulesets = useRulesets()
 
   useEffect(() => {
     if (!path) return setForm(null)
@@ -48,6 +52,7 @@ export function CampaignSettings(): React.JSX.Element | null {
         const sources = c.sources ?? []
         setForm({
           edition,
+          ruleset: c.ruleset ?? '',
           sources: sources.length ? sources.filter((s) => known.has(s)) : SOURCEBOOKS[edition].filter((b) => b.core).map((b) => b.name),
           other: sources.filter((s) => !known.has(s)).join(', '),
           mode: c.mode ?? 'ai-dm',
@@ -71,6 +76,7 @@ export function CampaignSettings(): React.JSX.Element | null {
   }, [form?.edition]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!path) return null
+  const current = form ? findRuleset(rulesets, form.ruleset || undefined, form.edition) : undefined
   const close = (): void => useUi.setState({ campaignSettings: null, campaignSettingsTab: 'campaign' })
   const set = <K extends keyof Form>(k: K, v: Form[K]): void => setForm((f) => (f ? { ...f, [k]: v } : f))
   const toggle = (book: string): void => setForm((f) => (f ? { ...f, sources: f.sources.includes(book) ? f.sources.filter((b) => b !== book) : [...f.sources, book] } : f))
@@ -84,6 +90,7 @@ export function CampaignSettings(): React.JSX.Element | null {
       const other = form.other.split(',').map((s) => s.trim()).filter(Boolean)
       await invoke('campaigns:update', path, {
         edition: form.edition,
+        ruleset: current && !current.sourcebooks ? current.id : null,
         sources: [...form.sources, ...other],
         mode: form.mode,
         setting: form.setting,
@@ -127,14 +134,17 @@ export function CampaignSettings(): React.JSX.Element | null {
             <TabsContent value="campaign" className="min-h-0 space-y-5 overflow-y-auto px-6 pb-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-edition">Rules</Label>
-                <NativeSelect id="cs-edition" value={form.edition} onChange={(e) => switchEdition(e.target.value as Edition)}>
-                  {EDITIONS.map((e) => (
-                    <option key={e} value={e}>
-                      {EDITION_INFO[e].label}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <Label>Rules</Label>
+                <RulesetPicker
+                  variant="select"
+                  value={current?.id ?? ''}
+                  onChange={(r) => {
+                    if (r.sourcebooks) {
+                      switchEdition(r.engine)
+                      set('ruleset', '')
+                    } else setForm((f) => (f ? { ...f, edition: r.engine, ruleset: r.id } : f))
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cs-mode">New sessions</Label>
@@ -148,6 +158,7 @@ export function CampaignSettings(): React.JSX.Element | null {
               </div>
             </div>
 
+            {(!current || current.sourcebooks) && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-sm font-semibold tracking-wide">Allowed sourcebooks</h3>
@@ -187,6 +198,7 @@ export function CampaignSettings(): React.JSX.Element | null {
                 <Input id="cs-other" value={form.other} onChange={(e) => set('other', e.target.value)} placeholder="e.g. Dragon Magazine, homebrew races" />
               </div>
             </section>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="cs-setting">Setting</Label>

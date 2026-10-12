@@ -5,7 +5,7 @@
  */
 import { adultRuleFrom, extractJson } from '@shared/builder'
 import { CHARGEN_SYSTEM, chargenPrompt, fixSheet, repairCharacterJson, sheetOnlyPrompt } from '@shared/chargen'
-import { editionOf, type Edition } from '@shared/editions'
+import type { Edition } from '@shared/editions'
 import { CAMPAIGN_FILE } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { defaultSheet, normalizeCard } from '@shared/notes'
@@ -14,6 +14,7 @@ import { backendChain } from './backends/chain'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
 import { campaignLink } from '@shared/membership'
+import { campaignRuleset } from './rulesets'
 import { createCharacterFromCard, readCampaign } from './library'
 import { settingsStore } from './settings-store'
 import { vaultService } from './vault/service'
@@ -33,7 +34,8 @@ export async function generateCharacter(opts: GenerateCharacterOpts): Promise<{ 
   const vault = vaultService.require()
   const s = opts.campaignPath ? settingsFor(opts.campaignPath) : settingsStore.get()
   const campaign = opts.campaignPath ? (await readCampaign(vault, opts.campaignPath).catch(() => null))?.campaign ?? null : null
-  const edition: Edition = opts.edition ?? (campaign ? editionOf(campaign) : '5e')
+  const ruleset = campaign && !opts.edition ? await campaignRuleset(vault, campaign) : null
+  const edition: Edition = opts.edition ?? ruleset?.engine ?? '5e'
   const index = vaultService.getIndex()
   const request = {
     concept: opts.concept,
@@ -41,6 +43,7 @@ export async function generateCharacter(opts: GenerateCharacterOpts): Promise<{ 
     race: opts.race?.trim() || undefined,
     cls: opts.cls?.trim() || undefined,
     edition,
+    ...(ruleset && !ruleset.sourcebooks ? { ruleset: { name: ruleset.name, rules: ruleset.rules, classes: ruleset.classes, ancestries: ruleset.ancestries, terms: ruleset.terms } } : {}),
     minAge: adultRuleFrom(settingsStore.get().extensions.settings['mature-mode']).minAge,
     campaign: campaign ? { name: campaign.name, setting: campaign.setting, tone: campaign.tone, houseRules: campaign.house_rules, sources: campaign.sources ?? [] } : undefined,
     avoidNames: [...(index?.characters ?? []), ...(index?.npcs ?? [])].map((c) => c.displayName)
@@ -92,7 +95,7 @@ export async function generateCharacter(opts: GenerateCharacterOpts): Promise<{ 
     }
   }
   const sheet = { ...(card.dnd ?? defaultSheet(edition)), edition }
-  const fixed = fixSheet(sheet)
+  const fixed = fixSheet(sheet, ruleset ? { math: ruleset.math, ...(ruleset.variant ? { variant: ruleset.variant } : {}) } : {})
   card.dnd = fixed.sheet
   if (campaign) card.tags = [...new Set([...card.tags, sanitizeFileName(campaign.name).toLowerCase().replace(/\s+/g, '-')])]
   if (campaign) card.campaigns = [campaignLink(campaign.path, campaign.name)]

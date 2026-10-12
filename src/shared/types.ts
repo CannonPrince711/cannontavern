@@ -298,6 +298,8 @@ export interface Campaign {
   /** Rules edition (missing means 5e) and the sourcebooks it allows. */
   edition?: Edition
   sources?: string[]
+  /** Ruleset: a built-in id ("pf2e") or a link to a note in Rulesets/; missing means the D&D edition above. */
+  ruleset?: string
   /** Per-world overrides of global settings (the `world:` frontmatter, see world.ts). */
   world?: WorldOverrides
   body: string
@@ -428,6 +430,9 @@ export interface CampaignSummary extends NoteRef {
   sessionCount: number
   /** Per-world overrides, so settings can be resolved without reading the note. */
   world?: WorldOverrides
+  /** The campaign's `ruleset` and `edition` values (see rulesets.ts). */
+  ruleset?: string
+  edition?: string
 }
 
 export interface LorebookSummary extends NoteRef {
