@@ -260,6 +260,10 @@ export interface InvokeMap {
         workflowId?: Id
         /** Regenerate: put the new picture into this image message instead of posting a new one. */
         replaceMessageId?: Id
+        /** Portrait in a session: also make it the character's picture (portrait history keeps the old one). */
+        setAvatar?: boolean
+        /** What happened, for the portrait history (e.g. "became lovers with Seraphine"). */
+        event?: string
         /** Use this purpose's generation options instead of the kind's (Regenerate keeps the original's). */
         purpose?: 'scene' | 'portrait' | 'map' | 'battlemap' | 'other'
       }

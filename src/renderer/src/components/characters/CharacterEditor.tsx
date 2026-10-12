@@ -21,7 +21,8 @@ import { TagsDialog } from '@/components/images/TagsDialog'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
-import { useVault } from '@/stores/vault'
+import { useVault, vaultUrl } from '@/stores/vault'
+import { cn } from '@/lib/utils'
 import { FOLDERS } from '@shared/layout'
 
 function avatarPath(rootFolder: string, avatar?: string): string | undefined {
@@ -285,6 +286,24 @@ export function CharacterEditor(): React.JSX.Element | null {
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
                 <TabsContent value="card" className="space-y-1">
+                  {(draft.card.portraits?.length ?? 0) > 1 && (
+                    <Field label="Portrait history" description="Earlier pictures and the events that changed them. Click one to use it again (then Save).">
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {[...(draft.card.portraits ?? [])].reverse().map((p) => (
+                          <button
+                            key={p.file}
+                            type="button"
+                            onClick={() => card('avatar', p.file)}
+                            className={cn('w-20 shrink-0 rounded-lg border p-1 text-left hover:border-primary', draft.card.avatar === p.file && 'border-primary ring-1 ring-primary')}
+                            title={[p.event, p.date].filter(Boolean).join(' · ')}
+                          >
+                            <img src={vaultUrl(avatarPath(rootFolder, p.file) ?? '')} alt={p.event ?? 'Portrait'} className="aspect-square w-full rounded object-cover" loading="lazy" />
+                            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{p.event ?? 'portrait'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                  )}
                   <TextField label="Description" rows={6} value={draft.card.description} onChange={(v) => card('description', v)} description="Who the character is: appearance, background, abilities. Use {{char}} and {{user}}." />
                   <TextField label="Personality" rows={2} value={draft.card.personality} onChange={(v) => card('personality', v)} />
                   <Field label="Voice" htmlFor="char-voice" description="Read-aloud voice on your speech server (Settings → Speech). Empty: the narrator’s voice.">

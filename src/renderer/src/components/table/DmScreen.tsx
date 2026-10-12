@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Dices, EyeOff } from 'lucide-react'
 import { roll } from '@shared/dice'
 import { editionOf, type Edition } from '@shared/editions'
-import type { Campaign, RollResult } from '@shared/types'
+import type { Campaign, Party, RollResult } from '@shared/types'
+import { BOND_STATUSES, bondIcon, type Bond } from '@shared/bonds'
+import { NativeSelect } from '@/components/ui/controls'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { invoke } from '@/lib/ipc'
@@ -63,7 +65,9 @@ function secretsOf(c: Campaign | null): string[] {
 export function DmScreen(): React.JSX.Element {
   const activeCampaign = useVault((s) => s.activeCampaign)
   const npcs = useVault((s) => s.index?.npcs)
+  const characters = useVault((s) => s.index?.characters)
   const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [party, setParty] = useState<Party | null>(null)
   const [expr, setExpr] = useState('1d20')
   const [rolls, setRolls] = useState<RollResult[]>([])
 
@@ -71,7 +75,11 @@ export function DmScreen(): React.JSX.Element {
     if (!activeCampaign) return setCampaign(null)
     let stale = false
     invoke('campaigns:get', activeCampaign)
-      .then((r) => !stale && setCampaign(r.campaign))
+      .then((r) => {
+        if (stale) return
+        setCampaign(r.campaign)
+        setParty(r.party)
+      })
       .catch(() => {})
     return () => {
       stale = true
@@ -127,6 +135,18 @@ export function DmScreen(): React.JSX.Element {
         <p className="text-[11px] text-muted-foreground">Only you see these; nothing is posted to the session.</p>
       </section>
 
+      {activeCampaign && party && (
+        <Relationships
+          bonds={party.bonds ?? []}
+          names={[...(characters ?? []), ...(npcs ?? [])].map((c) => c.displayName)}
+          onChange={(bonds) =>
+            void invoke('campaigns:saveParty', activeCampaign, { ...party, bonds })
+              .then(setParty)
+              .catch((err) => toast.error(err, 'Couldn’t save the relationships'))
+          }
+        />
+      )}
+
       {secrets.length > 0 && (
         <section className="space-y-1.5">
           <h3 className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Campaign secrets</h3>
@@ -177,5 +197,71 @@ export function DmScreen(): React.JSX.Element {
         </dl>
       </section>
     </div>
+  )
+}
+
+/** Who is what to whom in this campaign. The DM updates it with <bond> tags; edit it here any time. */
+function Relationships({ bonds, names, onChange }: { bonds: Bond[]; names: string[]; onChange: (bonds: Bond[]) => void }): React.JSX.Element {
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [status, setStatus] = useState<string>('friends')
+  const add = (): void => {
+    if (!a.trim() || !b.trim() || a.trim().toLowerCase() === b.trim().toLowerCase()) return
+    const key = (x: Bond): string => [x.a, x.b].map((n) => n.toLowerCase()).sort().join('|')
+    const next: Bond = { a: a.trim(), b: b.trim(), status }
+    onChange([...bonds.filter((x) => key(x) !== key(next)), next])
+    setA('')
+    setB('')
+  }
+  return (
+    <section className="space-y-1.5">
+      <h3 className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Relationships</h3>
+      {bonds.length === 0 && <p className="text-xs text-muted-foreground">None yet. The DM adds them at turning points, or add one below.</p>}
+      <ul className="space-y-1">
+        {bonds.map((x, i) => (
+          <li key={`${x.a}|${x.b}`} className="flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs">
+            <span aria-hidden>{bondIcon(x.status)}</span>
+            <span className="min-w-0 flex-1 truncate" title={x.since ? `Since ${x.since}` : undefined}>
+              {x.a} & {x.b}
+            </span>
+            <NativeSelect value={x.status} onChange={(e) => onChange(bonds.map((y, j) => (j === i ? { ...y, status: e.target.value } : y)))} className="h-6 w-28 text-xs" aria-label={`${x.a} and ${x.b}`}>
+              {[...new Set([x.status, ...BOND_STATUSES])].map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </NativeSelect>
+            <button type="button" aria-label={`Remove ${x.a} and ${x.b}`} onClick={() => onChange(bonds.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-crimson">
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="grid grid-cols-[1fr_1fr_6.5rem_auto] gap-1"
+        onSubmit={(e) => {
+          e.preventDefault()
+          add()
+        }}
+      >
+        <Input value={a} onChange={(e) => setA(e.target.value)} list="bond-names" placeholder="Character" className="h-7 text-xs" aria-label="First character" />
+        <Input value={b} onChange={(e) => setB(e.target.value)} list="bond-names" placeholder="Character" className="h-7 text-xs" aria-label="Second character" />
+        <NativeSelect value={status} onChange={(e) => setStatus(e.target.value)} className="h-7 text-xs" aria-label="Relationship">
+          {BOND_STATUSES.map((st) => (
+            <option key={st} value={st}>
+              {st}
+            </option>
+          ))}
+        </NativeSelect>
+        <Button type="submit" size="sm" variant="outline" className="h-7">
+          Add
+        </Button>
+        <datalist id="bond-names">
+          {names.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+      </form>
+    </section>
   )
 }

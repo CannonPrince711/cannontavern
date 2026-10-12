@@ -7,6 +7,7 @@
 import type { PlayMode } from './play'
 import type { Edition } from './editions'
 import type { WorldOverrides } from './world'
+import type { Bond } from './bonds'
 
 export type Id = string
 /** Path relative to the vault root, always with forward slashes. */
@@ -222,6 +223,14 @@ export interface DndSheet {
 }
 
 /** Character note frontmatter: a SillyTavern V2 card plus the D&D sheet. */
+/** One portrait in a character's history. */
+export interface PortraitEntry {
+  /** The avatar value: a file in Characters/avatars, or a vault path. */
+  file: string
+  event?: string
+  date?: string
+}
+
 export interface CharacterCard {
   name: string
   description: string
@@ -239,6 +248,8 @@ export interface CharacterCard {
   alternate_greetings?: string[]
   /** Read-aloud voice on the speech server (e.g. "rias"); empty: the narrator's. */
   voice?: string
+  /** Earlier and current portraits, newest last, with the event that changed them. */
+  portraits?: PortraitEntry[]
   dnd?: DndSheet
 }
 
@@ -300,6 +311,8 @@ export interface Party {
   gold: number
   inventory: InventoryItem[]
   quests: PartyQuest[]
+  /** Who is what to whom (friends, lovers, rivals…), kept up to date by the DM's <bond> tags. */
+  bonds?: Bond[]
   body: string
 }
 

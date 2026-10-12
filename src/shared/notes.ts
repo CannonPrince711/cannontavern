@@ -6,6 +6,7 @@
 import { isPlayMode } from './play'
 import { isEdition, type Edition } from './editions'
 import { worldFromFrontmatter } from './world'
+import { parseBonds } from './bonds'
 import type {
   AbilityKey,
   Campaign,
@@ -186,7 +187,15 @@ export function normalizeCard(data: Record<string, unknown>, fallbackName: strin
     ...(strList(data.aliases).length ? { aliases: strList(data.aliases) } : {}),
     ...(data.creator_notes ? { creator_notes: str(data.creator_notes) } : {}),
     ...(Array.isArray(data.alternate_greetings) ? { alternate_greetings: strList(data.alternate_greetings) } : {}),
-    ...(str(data.voice).trim() ? { voice: str(data.voice).trim() } : {})
+    ...(str(data.voice).trim() ? { voice: str(data.voice).trim() } : {}),
+    ...(Array.isArray(data.portraits)
+      ? {
+          portraits: data.portraits
+            .map((p) => obj(p))
+            .filter((p) => str(p.file))
+            .map((p) => ({ file: str(p.file), ...(str(p.event) ? { event: str(p.event) } : {}), ...(str(p.date) ? { date: str(p.date) } : {}) }))
+        }
+      : {})
   }
   if (data.dnd && typeof data.dnd === 'object') card.dnd = normalizeSheet(data.dnd)
   return card
@@ -208,6 +217,7 @@ export function cardToFrontmatter(card: CharacterCard): Record<string, unknown> 
     creator_notes: card.creator_notes || undefined,
     alternate_greetings: card.alternate_greetings?.length ? card.alternate_greetings : undefined,
     voice: card.voice?.trim() || undefined,
+    portraits: card.portraits?.length ? card.portraits : undefined,
     dnd: card.dnd
   }
 }
@@ -242,6 +252,7 @@ export function normalizeParty(data: Record<string, unknown>, body: string): Par
         return { title, status: status === 'done' || status === 'failed' ? status : 'active', ...(o.notes ? { notes: str(o.notes) } : {}) }
       })
       .filter((x): x is PartyQuest => !!x),
+    bonds: parseBonds(data.bonds),
     body
   }
 }

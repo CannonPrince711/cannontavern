@@ -241,9 +241,15 @@ class ImageService {
         })
         send(win, 'session:updated', updated)
         void vaultService.reindex(session.path)
-      } else if (character) {
-        // A portrait made outside a session becomes the avatar.
-        await vault.mutate(character.path, (cur) => (cur === null ? null : updateNote(cur, { avatar: file })))
+      }
+      // A portrait made outside a session, or one asked to (big events), becomes the character's picture.
+      if (character && (!session || opts.setAvatar)) {
+        const avatar = session ? path : file
+        const before = character.card.avatar
+        const history = [...(character.card.portraits ?? [])]
+        if (before && !history.some((h) => h.file === before)) history.push({ file: before, event: 'earlier portrait' })
+        history.push({ file: avatar, date, ...(opts.event ? { event: opts.event } : {}) })
+        await vault.mutate(character.path, (cur) => (cur === null ? null : updateNote(cur, { avatar, portraits: history.slice(-12) })))
         void vaultService.reindex(character.path)
         // An open character editor picks the new portrait up.
         send(win, 'vault:changed', { path: character.path, event: 'change' })
