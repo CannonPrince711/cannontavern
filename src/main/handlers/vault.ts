@@ -1,3 +1,4 @@
+import { dirname } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { z } from 'zod'
 import { IMAGE_EXTENSIONS } from '@shared/layout'
@@ -6,6 +7,7 @@ import { AppError } from '../errors'
 import { handle } from '../ipc'
 import { settingsStore } from '../settings-store'
 import { detectObsidianVaults, obsidianConfigFiles, obsidianUri, validateVault } from '../vault/obsidian'
+import { installFolderWarning, vaultInInstallFolder } from '../vault/location'
 import { vaultService } from '../vault/service'
 import { createSampleCampaign } from '../sample'
 import { buildVaultGraph } from '../graph'
@@ -33,6 +35,10 @@ export function registerVaultHandlers(): void {
   handle(
     'vault:configure',
     async (_e, { path, rootFolder }) => {
+      const installFolder = app.isPackaged ? dirname(app.getPath('exe')) : null
+      if (installFolder && vaultInInstallFolder(path, rootFolder, installFolder)) {
+        throw new AppError('VAULT_IN_INSTALL', installFolderWarning(installFolder))
+      }
       const index = await vaultService.open(path, rootFolder, { create: true })
       await settingsStore.patch({ vault: { path: index.vaultPath, rootFolder: index.rootFolder } })
       noteListCache = null
