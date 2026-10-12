@@ -12,6 +12,7 @@ import { chatService } from './chat'
 import { toErrorInfo } from './errors'
 import { imageService } from './images'
 import { send } from './ipc'
+import { forCampaign } from '@shared/membership'
 import { readCampaign, saveParty } from './library'
 import { postMessage, readSession } from './sessions'
 import { vaultService } from './vault/service'
@@ -19,10 +20,11 @@ import { getMainWindow } from './window'
 import { settingsForSession } from './world'
 
 /** A character or NPC note by name: the full name, else the first name. */
-function findCharacter(name: string): VaultPath | null {
+function findCharacter(name: string, campaignPath: VaultPath): VaultPath | null {
   const index = vaultService.getIndex()
   if (!index) return null
-  const all = [...index.characters, ...index.npcs]
+  // A character copied into several campaigns: this campaign's copy.
+  const all = [...forCampaign(index.characters, campaignPath), ...index.npcs]
   const want = name.trim().toLowerCase()
   const full = all.find((c) => c.displayName.trim().toLowerCase() === want)
   if (full) return full.path
@@ -75,7 +77,7 @@ export async function applyStory(sessionPath: VaultPath, story: { bonds: Bond[];
   if (!s.imageTriggers.milestonePortraits || !s.imageBackends.length) return
   const byPath = new Map<VaultPath, { event: string; look: string }>()
   for (const r of repaint) {
-    const path = findCharacter(r.who)
+    const path = findCharacter(r.who, session.campaignPath)
     if (path) byPath.set(path, { event: r.event, look: r.look })
   }
   for (const [characterPath, r] of byPath) {

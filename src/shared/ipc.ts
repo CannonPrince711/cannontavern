@@ -138,14 +138,16 @@ export interface InvokeMap {
   'characters:get': Invoke<[path: VaultPath], CharacterNote>
   /** `force` overwrites changes made on disk since the note was loaded. */
   'characters:save': Invoke<[note: CharacterNote, force?: boolean], CharacterNote>
-  'characters:create': Invoke<[name: string, npc?: boolean], CharacterNote>
+  'characters:create': Invoke<[name: string, npc?: boolean, campaignPath?: VaultPath], CharacterNote>
   /** AI character generator: writes a full character (card + sheet) from a concept; `changes` lists the rules fixes made to the model's sheet. */
   'characters:generate': Invoke<
     [opts: { concept: string; level: number; race?: string; cls?: string; campaignPath?: VaultPath; edition?: '5e' | '3.5e'; npc?: boolean }],
     { path: VaultPath; name: string; changes: string[] }
   >
   'characters:delete': Invoke<[path: VaultPath], void>
-  'characters:import': Invoke<[], CharacterNote[]>
+  'characters:import': Invoke<[campaignPath?: VaultPath], CharacterNote[]>
+  /** Brings characters from other campaigns in: as copies with their own sheet, or the same note shared. */
+  'characters:addToCampaign': Invoke<[paths: VaultPath[], campaignPath: VaultPath, mode: 'copy' | 'share'], VaultPath[]>
   'characters:export': Invoke<[path: VaultPath, format: 'json' | 'png'], { path: string } | null>
   'characters:setAvatar': Invoke<[path: VaultPath], CharacterNote | null>
   /** Merges sheet fields into the latest version of the note (null removes the sheet). */
@@ -386,6 +388,7 @@ const invokeChannels = {
   'characters:generate': 1,
   'characters:delete': 1,
   'characters:import': 1,
+  'characters:addToCampaign': 1,
   'characters:export': 1,
   'characters:setAvatar': 1,
   'characters:updateSheet': 1,

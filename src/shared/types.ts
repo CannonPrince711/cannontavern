@@ -248,6 +248,8 @@ export interface CharacterCard {
   alternate_greetings?: string[]
   /** Read-aloud voice on the speech server (e.g. "rias"); empty: the narrator's. */
   voice?: string
+  /** Wikilinks to the Campaign.md of each campaign the character belongs to (see shared/membership.ts). */
+  campaigns?: string[]
   /** Earlier and current portraits, newest last, with the event that changed them. */
   portraits?: PortraitEntry[]
   dnd?: DndSheet
@@ -407,6 +409,8 @@ export interface CharacterSummary extends NoteRef {
   level?: number
   hp?: number
   max_hp?: number
+  /** Campaign folders the character belongs to; empty or missing: any campaign. */
+  campaigns?: string[]
 }
 
 export interface SessionSummary extends NoteRef {
@@ -415,6 +419,8 @@ export interface SessionSummary extends NoteRef {
   campaignPath: VaultPath
   created: string
   messageCount: number
+  /** Link targets of the characters and companions in the session, lowercased. */
+  cast?: string[]
 }
 
 export interface CampaignSummary extends NoteRef {

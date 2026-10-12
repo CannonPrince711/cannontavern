@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, ScrollText, Sparkles, Wand2 } from 'lucide-react'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
+import { forCampaign } from '@shared/membership'
 import { EmptyState } from '@/components/EmptyState'
 import { BookArt, ScrollArt } from '@/components/illustrations'
 import { Button } from '@/components/ui/button'
@@ -74,7 +75,7 @@ export function NewSessionPanel(): React.JSX.Element {
   const index = useVault((s) => s.index)
   const selectedCharacter = useVault((s) => s.selectedCharacter)
   const selectSession = useVault((s) => s.selectSession)
-  const [character, setCharacter] = useState<string | null>(selectedCharacter ?? index?.characters[0]?.path ?? null)
+  const [character, setCharacter] = useState<string | null>(selectedCharacter ?? forCampaign(index?.characters ?? [], campaign?.path)[0]?.path ?? null)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const defaultMode = useApp((s) => s.settings?.play.defaultMode ?? 'ai-dm')
@@ -130,7 +131,7 @@ export function NewSessionPanel(): React.JSX.Element {
               <span className="grid size-8 place-items-center rounded-full bg-surface-2 text-xs text-muted-foreground">—</span>
               No character
             </button>
-            {index?.characters.map((c) => (
+            {forCampaign(index?.characters ?? [], campaign?.path).map((c) => (
               <button
                 key={c.path}
                 type="button"

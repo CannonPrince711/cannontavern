@@ -3,6 +3,7 @@ import { Check, ExternalLink, ImagePlus, Map as MapIcon, Pencil, ScanSearch, Use
 import { useMap } from '@/components/map/MapView'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
+import { inCampaign } from '@shared/membership'
 import { PARTY_LIMITS, PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { ImageModelSwitcher, TextModelSwitcher } from '@/components/ModelSwitcher'
@@ -137,7 +138,8 @@ function CompanionsMenu({ mode }: { mode: PlayMode }): React.JSX.Element {
     const k = path.replace(/\.md$/i, '').toLowerCase()
     return chosen.has(k) || [...chosen].some((c) => !c.includes('/') && k.endsWith(`/${c}`))
   }
-  const candidates = [...(index?.characters ?? []), ...(index?.npcs ?? [])].filter((c) => !own.has(c.path.replace(/\.md$/i, '').toLowerCase()))
+  // Characters from other campaigns stay out unless they're already along (import them first).
+  const candidates = [...(index?.characters ?? []).filter((c) => inCampaign(c, session.campaignPath) || isChosen(c.path)), ...(index?.npcs ?? [])].filter((c) => !own.has(c.path.replace(/\.md$/i, '').toLowerCase()))
   const selected = candidates.filter((c) => isChosen(c.path))
 
   const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
@@ -260,7 +262,7 @@ function PartyButton(): React.JSX.Element {
     <NativeSelect value={value} disabled={disabled} onChange={(e) => set(gi, slot, e.target.value)} aria-label={label} className="min-w-0 flex-1">
       <option value="">{slot === 'lead' ? 'No character' : 'No companion'}</option>
       {candidates
-        .filter((c) => c.path === value || !used.has(c.path))
+        .filter((c) => c.path === value || (!used.has(c.path) && (c.path.toLowerCase().includes('/npcs/') || inCampaign(c, session.campaignPath))))
         .map((c) => (
           <option key={c.path} value={c.path}>
             {c.displayName}

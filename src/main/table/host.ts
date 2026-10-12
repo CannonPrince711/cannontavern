@@ -13,6 +13,7 @@ import { networkInterfaces } from 'node:os'
 import { extname, join, normalize, sep } from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { newMessageId } from '@shared/callouts'
+import { forCampaign } from '@shared/membership'
 import { checkBonus, resolveTarget, rollCheck, skillsFor, ABILITIES } from '@shared/checks'
 import { DiceError, formatRoll, roll } from '@shared/dice'
 import { editionOf, SAVES_35 } from '@shared/editions'
@@ -550,7 +551,7 @@ class TableHost {
       messages: playerSafe(session.messages.slice(-200), (file) => this.mediaUrl(joinVaultPath(session.campaignPath, IMAGES_FOLDER, file))),
       party: notes.map((n) => this.character(n)),
       // Characters waiting for the host's approval can't be claimed yet.
-      available: (index?.characters ?? []).filter((c) => !claimed.has(c.path) && !this.heldBack().has(c.path)).map((c) => ({ path: c.path, name: c.displayName })),
+      available: forCampaign(index?.characters ?? [], session.campaignPath).filter((c) => !claimed.has(c.path) && !this.heldBack().has(c.path)).map((c) => ({ path: c.path, name: c.displayName })),
       players,
       busy: this.busy,
       requests
