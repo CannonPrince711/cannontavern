@@ -75,23 +75,40 @@ export async function suggestGenerators(campaignPath: VaultPath): Promise<{ worl
     .join('\n')
   const inventory = JSON.stringify({ imageBackends: images, textBackends: texts.map(({ id, name, models, current }) => ({ id, name, current, models })) })
 
-  let reply: string
-  try {
-    const r = await textAdapter(backend.type).generate(
-      resolveTextBackend(backend),
-      { system: SYSTEM, messages: [{ role: 'user', content: `${description}\n\nInstalled:\n${inventory}` }], maxTokens: 2000 },
-      { stream: false }
-    )
-    reply = r.text
-  } catch (err) {
-    throw new AppError('SUGGEST_FAILED', `Couldn’t ask ${backend.name} for suggestions: ${toErrorInfo(err).message}`)
+  const ask = `${description}\n\nInstalled:\n${inventory}`
+  const resolved = resolveTextBackend(backend)
+  const streaming = backend.generation.stream
+  // Streaming keeps slow remote servers alive; a reply that only arrives at the end gets 10 minutes.
+  const net = streaming ? resolved.net : { ...resolved.net, timeoutMs: Math.max(resolved.net.timeoutMs, 600_000) }
+  let raw: unknown = null
+  let lastReply = ''
+  // A reply that can't be read gets one stricter retry.
+  for (const retry of [false, true]) {
+    let reply: string
+    try {
+      const r = await textAdapter(backend.type).generate(
+        { ...resolved, net },
+        { system: SYSTEM, messages: [{ role: 'user', content: retry ? `${ask}\n\nReply with the JSON object only, nothing else.` : ask }], maxTokens: 2000 },
+        { stream: streaming }
+      )
+      reply = r.text
+    } catch (err) {
+      throw new AppError('SUGGEST_FAILED', `Couldn’t ask ${backend.name} for suggestions: ${toErrorInfo(err).message}`)
+    }
+    lastReply = reply
+    try {
+      const parsed = extractJson(reply)
+      if (parsed && typeof parsed === 'object') {
+        raw = parsed
+        break
+      }
+    } catch {
+      /* retry */
+    }
   }
-
-  let raw: unknown
-  try {
-    raw = extractJson(reply)
-  } catch {
-    throw new AppError('SUGGEST_FAILED', 'The model didn’t reply with a choice of models. Try again, or pick them yourself.')
+  if (!raw) {
+    const start = lastReply.trim().slice(0, 300) || '(an empty reply)'
+    throw new AppError('SUGGEST_FAILED', 'The model didn’t reply with a choice of models. Try again, or pick them yourself.', `${backend.name} replied: ${start}`)
   }
   const world = validateSuggestion(raw, images, texts)
   const n = (raw as Record<string, unknown> | null)?.notes
