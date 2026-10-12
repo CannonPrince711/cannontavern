@@ -93,6 +93,8 @@ export function registerImageHandlers(): void {
         backendId: z.string().optional(),
         workflowId: z.string().optional(),
         replaceMessageId: z.string().max(100).optional(),
+        setAvatar: z.boolean().optional(),
+        event: z.string().max(300).optional(),
         purpose: z.enum(['scene', 'portrait', 'map', 'battlemap', 'other']).optional()
       })
     ])

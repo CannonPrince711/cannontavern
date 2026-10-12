@@ -360,6 +360,13 @@ export function ImageBackendsSection(): React.JSX.Element {
         >
           <Switch aria-label="Paint portraits for new characters and NPCs" checked={t.autoPortraits} onCheckedChange={(v) => void updateSettings({ imageTriggers: { autoPortraits: v } })} />
         </Field>
+        <Field
+          inline
+          label="New portraits for big events"
+          description="When the DM marks an event that changes how someone looks (new armour, a transformation, a scar), or two characters become lovers, engaged or married, paint a new portrait and make it their picture. Earlier portraits stay in the character’s portrait history."
+        >
+          <Switch aria-label="New portraits for big events" checked={t.milestonePortraits} onCheckedChange={(v) => void updateSettings({ imageTriggers: { milestonePortraits: v } })} />
+        </Field>
       </SettingsGroup>
     </div>
   )

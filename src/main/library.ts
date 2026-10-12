@@ -107,7 +107,7 @@ export async function createCampaign(
 export async function saveParty(vault: Vault, folder: VaultPath, party: Party): Promise<Party> {
   const path = joinVaultPath(folder, PARTY_FILE)
   await vault.mutate(path, (cur) => {
-    const fm = { type: 'party', gold: party.gold, inventory: party.inventory, quests: party.quests }
+    const fm = { type: 'party', gold: party.gold, inventory: party.inventory, quests: party.quests, ...(party.bonds ? { bonds: party.bonds.length ? party.bonds : undefined } : {}) }
     return cur === null ? serializeNote(fm, party.body) : updateNote(cur, fm, party.body)
   })
   return (await readCampaign(vault, folder)).party

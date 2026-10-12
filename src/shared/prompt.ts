@@ -7,6 +7,7 @@
  * Every non-history block goes into the system prompt in order; "history"
  * becomes the chat messages, trimmed newest-first to fit the context budget.
  */
+import { renderBonds, STORY_TAGS_INSTRUCTION } from './bonds'
 import type {
   CharacterCard,
   ChatTurn,
@@ -88,6 +89,8 @@ export interface PromptInput {
   maxReplyTokens: number
   tokenizer: 'chars4' | 'chars3.5'
   autoState: boolean
+  /** Ask the DM for <bond> and <milestone> tags at turning points. */
+  storyTags?: boolean
   extensionBlocks?: PromptBlock[]
 }
 
@@ -150,6 +153,7 @@ export function renderCampaign(c: Campaign | null, p: Party | null, forPlayer = 
     const party = [`Party gold: ${p.gold}`]
     if (items) party.push(`Shared inventory: ${items}`)
     if (quests.length) party.push(`Active quests: ${quests.join('; ')}`)
+    if (p.bonds?.length) party.push(renderBonds(p.bonds))
     parts.push(party.join('\n'))
   }
   return parts.join('\n\n')
@@ -335,7 +339,7 @@ export function buildPrompt(input: PromptInput): BuiltPrompt {
           break
         }
         const base = input.preset?.system_prompt.trim() || DEFAULT_DM_PROMPT
-        add('preset', input.preset?.name ?? 'DM preset', input.autoState ? `${base}\n\n${AUTO_STATE_INSTRUCTION}` : base)
+        add('preset', input.preset?.name ?? 'DM preset', [base, input.autoState ? AUTO_STATE_INSTRUCTION : '', input.storyTags ? STORY_TAGS_INSTRUCTION : ''].filter(Boolean).join('\n\n'))
         break
       }
       case 'character':
@@ -518,7 +522,7 @@ export function buildPartyPrompt(input: PartyPromptInput): BuiltPrompt {
     ].filter(Boolean)
     tail = [
       'You are the Dungeon Master.',
-      applyMacros(input.autoState ? `${base}\n\n${AUTO_STATE_INSTRUCTION}` : base, { user: names.join(', '), char: names.join(', ') }),
+      applyMacros([base, input.autoState ? AUTO_STATE_INSTRUCTION : '', input.storyTags ? STORY_TAGS_INSTRUCTION : ''].filter(Boolean).join('\n\n'), { user: names.join(', '), char: names.join(', ') }),
       secrets.length ? `DM-only notes (use them, never reveal them outright):\n${secrets.join('\n\n')}` : '',
       `Write the DM's next message, answering the party. Reply with the message only, without a "DM:" label.`
     ]

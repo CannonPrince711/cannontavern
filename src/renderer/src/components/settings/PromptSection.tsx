@@ -210,6 +210,13 @@ export function PromptSection(): React.JSX.Element {
         </Field>
         <Field
           inline
+          label="Relationships and big events"
+          description="Asks the DM to add hidden <bond> and <milestone> lines at turning points: who becomes friends, lovers, engaged, married or enemies, and events that change how someone looks. Relationships are kept per campaign (DM screen) and each turn is noted in the chat."
+        >
+          <Switch aria-label="Relationships and big events" checked={prompt.storyTags} onCheckedChange={(v) => set({ storyTags: v })} />
+        </Field>
+        <Field
+          inline
           label="Compress finished sessions"
           description="When you leave a session (switch away, start a new one or close the app), the chat is compressed into a short recap saved in the session note. Later sessions in the campaign get those recaps instead of the full transcripts."
         >

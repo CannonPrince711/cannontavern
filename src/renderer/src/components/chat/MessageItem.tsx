@@ -133,7 +133,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
   const rootRef = useRef<HTMLElement>(null)
   const ttsOn = useApp((s) => s.settings?.tts.enabled ?? false)
   // Hidden machine lines (<state>, <stats>…) are stripped when the reply is saved; hide them while it streams too.
-  const text = streamingText !== undefined ? streamingText.replace(/<(state|stats)>[\s\S]*?(?:<\/\1>|$)/gi, '').trimEnd() : m.text
+  const text = streamingText !== undefined ? streamingText.replace(/<(state|stats|bond|milestone)>[\s\S]*?(?:<\/\1>|$)/gi, '').trimEnd() : m.text
   const copy = (): void => void navigator.clipboard.writeText(m.text)
   // Right-click on simple rows (notes, rolls, images): copy or delete.
   const simpleMenu = (e: React.MouseEvent): void => {

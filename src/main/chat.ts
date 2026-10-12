@@ -5,6 +5,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { newMessageId } from '@shared/callouts'
+import { extractStory, type Bond, type Milestone } from '@shared/bonds'
 import { aiSpeakers, lastAiMessage, linkLabel, nextPartyTurn, nextSpeaker, playModeOf, userRole, type Speaker } from '@shared/play'
 import { buildPartyPrompt, buildPrompt, COMPANION_PROMPT, estimateTokens, messageToTurn, normalizeBlockOrder, selectLore, shouldCompress, stripSpeakerLabel, type BuiltPrompt } from '@shared/prompt'
 import type { TextBackend } from '@shared/settings'
@@ -187,7 +188,8 @@ class ChatService {
             budget,
             maxReplyTokens: backend?.generation.maxTokens ?? 800,
             tokenizer,
-            autoState: speaker === 'dm' && s.prompt.autoState && !!players[0]?.card.dnd
+            autoState: speaker === 'dm' && s.prompt.autoState && !!players[0]?.card.dnd,
+            storyTags: speaker === 'dm' && s.prompt.storyTags
           })
         })()
       : buildPrompt({
@@ -212,7 +214,8 @@ class ChatService {
       budget,
       maxReplyTokens: backend?.generation.maxTokens ?? 800,
       tokenizer,
-      autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd && !self
+      autoState: speaker === 'dm' && s.prompt.autoState && !!character?.card.dnd && !self,
+      storyTags: speaker === 'dm' && s.prompt.storyTags && !self
     })
     // Extensions may add or change blocks (only when the "extensions" block is on; not in the shared party prompt).
     if (!partyMode && s.prompt.blocks.some((b) => b.id === 'extensions' && b.enabled)) {
@@ -472,7 +475,9 @@ class ChatService {
     let raw = result?.text ?? streamed
     if (raw && !aborted) raw = await extensionHost.applyResponse(raw, job.sessionPath)
     const { text: stated, changes } = extractState(raw)
-    const text = stripSpeakerLabel(stated, speakerName || 'DM')
+    // Relationship turns and big events (hidden <bond> / <milestone> tags).
+    const story = extractStory(stated)
+    const text = stripSpeakerLabel(story.text, speakerName || 'DM')
 
     try {
       let session: Session | null = null
@@ -488,8 +493,9 @@ class ChatService {
           hidden: true
         })
       }
-      // Only the DM may change the character's sheet.
+      // Only the DM may change the character's sheet, relationships or looks.
       if (changes.length && session && job.speaker === 'dm') this.onStateChanges?.(job.sessionPath, job.messageId, changes)
+      if ((story.bonds.length || story.milestones.length) && session && job.speaker === 'dm') this.onStory?.(job.sessionPath, story)
       if (session) this.publish(session)
       if (session && !aborted) void this.maybeCompress(job.sessionPath).then((done) => (done ? undefined : this.maybeSummarize(job.sessionPath)))
       if (session && text && !aborted && job.kind !== 'continue') this.onReply?.(job.sessionPath, text)
@@ -599,6 +605,8 @@ class ChatService {
 
   /** Hook for auto-state (character sheet changes); wired by the sheet module. */
   onStateChanges: ((sessionPath: VaultPath, messageId: string, changes: Record<string, unknown>[]) => void) | null = null
+  /** The DM's <bond> and <milestone> tags from a reply (see story.ts). */
+  onStory: ((sessionPath: VaultPath, story: { bonds: Bond[]; milestones: Milestone[] }) => void) | null = null
 
   private async write(job: Job, text: string, backend: TextBackend | null, model?: string, speakerName?: string): Promise<Session> {
     const vault = vaultService.require()

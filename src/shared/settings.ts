@@ -286,7 +286,9 @@ export const PromptSettingsSchema = z.object({
   autoRecap: z.boolean().default(true),
   /** How many earlier sessions' recaps a session's prompt includes. */
   recapCount: z.number().int().min(0).max(20).default(3),
-  autoState: z.boolean().default(false)
+  autoState: z.boolean().default(false),
+  /** The DM marks relationship turns and big events with hidden tags (relationships, new portraits). */
+  storyTags: z.boolean().default(true)
 })
 
 /** What an image is for; each can use its own backend, model and size. */
@@ -353,6 +355,8 @@ export const SettingsSchema = z.object({
       onLocationChange: z.boolean().default(false),
       /** Paint a portrait for each new character or NPC note that has none. */
       autoPortraits: z.boolean().default(false),
+      /** Paint a new portrait when a big event changes how someone looks (or they become lovers, engaged, married). */
+      milestonePortraits: z.boolean().default(true),
       sceneContextMessages: z.number().int().min(1).max(50).default(8)
     })
     .prefault({}),
