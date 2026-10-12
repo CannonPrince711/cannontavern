@@ -31,7 +31,7 @@ export function registerTableHandlers(): void {
   handle(
     'table:start',
     (_e, opts) => tableHost.start(opts),
-    z.tuple([z.object({ scope: z.enum(['local', 'network']), port: z.number().int().min(1024).max(65535), sessionPath: z.string().max(1024).nullable() })])
+    z.tuple([z.object({ scope: z.enum(['local', 'network']), port: z.number().int().min(1024).max(65535), sessionPath: z.string().max(1024).nullable(), funnel: z.boolean().optional() })])
   )
   handle('table:stop', async () => {
     screen?.close()
@@ -45,5 +45,7 @@ export function registerTableHandlers(): void {
 }
 
 export async function stopTable(): Promise<void> {
+  // Funnel first and synchronously: the app may be gone before async work finishes.
+  tableHost.stopFunnelNow()
   if (tableHost.hosting) await tableHost.stop()
 }

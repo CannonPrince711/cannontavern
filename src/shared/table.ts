@@ -97,6 +97,8 @@ export interface TableStatus {
   code: string
   /** Join links (one per network address). */
   urls: string[]
+  /** Public join link through Tailscale Funnel, while it's on. */
+  publicUrl?: string
   sessionPath: string | null
   autoRespond: AutoRespond
   players: TablePlayer[]
