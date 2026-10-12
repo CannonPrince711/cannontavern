@@ -158,7 +158,7 @@ export function ChatPane(): React.JSX.Element {
       onEdit: (id, text) => void chat().edit(id, { text }),
       onDelete: (id) => void chat().remove(id),
       onFork: (id) => void chat().fork(id).then((s) => s && selectSession(s.path)),
-      onCheck: (ability, dc) => void rollCheckFor(ability, dc, { continueAfter: true }).catch((e) => toast.error(e)),
+      onCheck: (ability, dc, who) => void rollCheckFor(ability, dc, { continueAfter: true, ...(who ? { who } : {}) }).catch((e) => toast.error(e)),
       onImage: hasImage
         ? (m) => {
             const session = useChat.getState().session

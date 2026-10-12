@@ -76,7 +76,8 @@ export async function loadActiveSheet(): Promise<{ path: string; note: Character
   const index = useVault.getState().index
   let path: string | null = useVault.getState().selectedCharacter
   if (session) {
-    const link = session.frontmatter.characters[0]
+    // AI only with a party: the first lead stands in.
+    const link = session.frontmatter.characters[0] ?? session.frontmatter.party?.[0]?.lead
     path = null
     if (link && index) {
       const target = link.replace(/^\[\[|\]\]$/g, '').split('|')[0]!.replace(/\.md$/i, '').toLowerCase()
