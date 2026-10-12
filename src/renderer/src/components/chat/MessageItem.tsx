@@ -41,7 +41,8 @@ export interface MessageActions {
   onEdit: (id: string, text: string) => void
   onDelete: (id: string) => void
   onFork: (id: string) => void
-  onCheck?: (ability: string, dc: number) => void
+  /** `who`: the character whose message asked for the check (else the active character). */
+  onCheck?: (ability: string, dc: number, who?: string) => void
   onImage?: (message: Message) => void
 }
 
@@ -314,7 +315,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
     />
   ) : (
     <div className={cn('chat-prose', isDm && props.dropCap && 'drop-cap')}>
-      <Markdown text={text || (streaming ? '' : '*(empty)*')} campaignPath={props.campaignPath} onCheck={isDm ? props.onCheck : undefined} />
+      <Markdown text={text || (streaming ? '' : '*(empty)*')} campaignPath={props.campaignPath} onCheck={isDm ? props.onCheck : m.role === 'player' && props.onCheck ? (ability, dc) => props.onCheck?.(ability, dc, m.name) : undefined} />
       {streaming && <span className="streaming-caret" aria-hidden />}
     </div>
   )

@@ -6,6 +6,8 @@ import { loadActiveSheet } from '@/hooks/useActiveCharacter'
 import { useChat } from '@/stores/chat'
 import { useDiceFx } from '@/stores/dice'
 import { useApp } from '@/stores/app'
+import { invoke } from '@/lib/ipc'
+import { useVault } from '@/stores/vault'
 
 /** Posts a roll as a [!roll] callout (after the dice animation). */
 export async function postRoll(result: RollResult, who?: string): Promise<void> {
@@ -14,7 +16,19 @@ export async function postRoll(result: RollResult, who?: string): Promise<void> 
   await useChat.getState().post({ role: 'roll', name, text: formatRoll(result), roll: result, swipes: [], swipeIndex: 0 })
 }
 
-async function speaker(): Promise<{ name: string; sheet: Awaited<ReturnType<typeof loadActiveSheet>> }> {
+/** The roller: a character by name (a party member's own check), else the active character. */
+async function speaker(who?: string): Promise<{ name: string; sheet: Awaited<ReturnType<typeof loadActiveSheet>> }> {
+  if (who?.trim()) {
+    const index = useVault.getState().index
+    const want = who.trim().toLowerCase()
+    const all = (index?.characters ?? []).concat(index?.npcs ?? [])
+    const hit = all.find((c) => c.displayName.trim().toLowerCase() === want) ?? all.find((c) => c.displayName.trim().toLowerCase().split(/\s+/)[0] === want.split(/\s+/)[0])
+    if (hit) {
+      const note = await invoke('characters:get', hit.path)
+      return { name: note.card.name, sheet: { path: hit.path, note } }
+    }
+    return { name: who.trim(), sheet: null }
+  }
   const active = await loadActiveSheet()
   const s = useChat.getState().session
   const name = active?.note.card.name ?? s?.frontmatter.persona ?? useApp.getState().settings?.general.playerName ?? 'Player'
@@ -32,8 +46,8 @@ export async function rollExpression(expr: string): Promise<void> {
  * `continueAfter`, the DM narrates the outcome right away (used by the
  * "Roll it" buttons on [CHECK …] requests).
  */
-export async function rollCheckFor(targetRaw: string, dc: number | undefined, opts: { save?: boolean; mode?: RollMode; continueAfter?: boolean } = {}): Promise<void> {
-  const { name, sheet } = await speaker()
+export async function rollCheckFor(targetRaw: string, dc: number | undefined, opts: { save?: boolean; mode?: RollMode; continueAfter?: boolean; who?: string } = {}): Promise<void> {
+  const { name, sheet } = await speaker(opts.who)
   const edition = editionOf(sheet?.note.card.dnd)
   const target = resolveTarget(targetRaw, opts.save, edition) ?? (opts.save ? null : resolveTarget(targetRaw, true, edition))
   if (!target) throw new Error(`“${targetRaw}” isn’t an ability${opts.save ? '' : ' or skill'}. Try ${edition === '3.5e' ? 'dex, spot, move silently, reflex' : 'dex, wisdom, stealth, perception'}…`)
