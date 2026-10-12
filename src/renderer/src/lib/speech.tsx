@@ -1,6 +1,7 @@
 import { invoke } from '@/lib/ipc'
 import { useEffect, useState } from 'react'
 import { useApp } from '@/stores/app'
+import { splitForSpeech } from '@shared/speech'
 
 let voiceList: Promise<string[]> | null = null
 
@@ -30,14 +31,21 @@ export function VoiceOptions({ id }: { id: string }): React.JSX.Element {
 
 let audio: HTMLAudioElement | null = null
 let audioUrl: string | null = null
+/** Bumped by every new reading and by stop, so an old reading's pieces stop playing. */
+let reading = 0
 
 /** Stops anything being read aloud. */
 export function stopSpeaking(): void {
+  reading++
+  endAudio()
+  window.speechSynthesis?.cancel()
+}
+
+function endAudio(): void {
   audio?.pause()
   audio = null
   if (audioUrl) URL.revokeObjectURL(audioUrl)
   audioUrl = null
-  window.speechSynthesis?.cancel()
 }
 
 /** Markdown and stage directions don't read well aloud. */
@@ -45,15 +53,33 @@ function spoken(text: string): string {
   return text.replace(/[*_#>`~|]/g, '').replace(/\s+/g, ' ').trim()
 }
 
+/** Plays one piece; resolves when it ends, or at once if the reading was stopped. */
+function play(bytes: Uint8Array, id: number): Promise<void> {
+  if (id !== reading) return Promise.resolve()
+  endAudio()
+  audioUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' }))
+  const a = new Audio(audioUrl)
+  audio = a
+  return new Promise((resolve, reject) => {
+    a.onended = () => resolve()
+    a.onpause = () => resolve()
+    a.onerror = () => reject(new Error('The speech audio couldn’t be played.'))
+    a.play().catch(reject)
+  })
+}
+
 /**
  * Reads a message aloud with the Speech settings: the computer's voices, or an
- * OpenAI-compatible speech server, which the main process calls for us.
+ * OpenAI-compatible speech server, which the main process calls for us. Long
+ * text goes to the server in sentence-sized pieces: the first plays while the
+ * next is made, so reading starts in seconds and never hits a server timeout.
  */
 export async function speak(text: string, who?: { sessionPath?: string; role?: string; name?: string }): Promise<void> {
   const tts = useApp.getState().settings?.tts
   const input = spoken(text)
   if (!input) return
   stopSpeaking()
+  const id = reading
 
   if (!tts || tts.mode === 'system') {
     if (!('speechSynthesis' in window)) throw new Error('This computer has no speech voices.')
@@ -65,9 +91,19 @@ export async function speak(text: string, who?: { sessionPath?: string; role?: s
     return
   }
 
-  const bytes = await invoke('speech:synthesize', input, who)
-  audioUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'audio/mpeg' }))
-  audio = new Audio(audioUrl)
-  audio.onended = () => stopSpeaking()
-  await audio.play()
+  const pieces = splitForSpeech(input)
+  const make = (i: number): Promise<Uint8Array> => invoke('speech:synthesize', pieces[i]!, who)
+  let next = make(0)
+  for (let i = 0; i < pieces.length; i++) {
+    const bytes = await next
+    if (id !== reading) return
+    if (i + 1 < pieces.length) {
+      next = make(i + 1)
+      // Stopped before it's needed: nobody awaits it, so don't let it reject unhandled.
+      next.catch(() => {})
+    }
+    await play(bytes, id)
+    if (id !== reading) return
+  }
+  if (id === reading) endAudio()
 }
