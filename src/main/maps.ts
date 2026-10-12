@@ -10,6 +10,7 @@ import { AppError } from './errors'
 import { parseNote, serializeNote, updateNote } from './vault/frontmatter'
 import type { Vault } from './vault/vault'
 import { getMainWindow } from './window'
+import { resourceImages } from './resources'
 
 /** The campaign's map note: the first "type: map" note in its folder, or where a new one would go. */
 async function findMapNote(vault: Vault, campaignPath: VaultPath): Promise<{ path: VaultPath; content: string | null }> {
@@ -107,9 +108,12 @@ export async function pickSketch(): Promise<{ data: Buffer; filename: string } |
   return { data: await fs.readFile(file), filename: basename(file) }
 }
 
-/** Images already in the campaign's Images folder. */
+const isImage = (name: string): boolean => IMAGE_EXTENSIONS.includes(name.split('.').pop()?.toLowerCase() ?? '')
+
+/** Images in the campaign's Images folder, then the shared ones in Resources/Images. */
 export async function campaignImages(vault: Vault, campaignPath: VaultPath): Promise<string[]> {
   const dir = joinVaultPath(campaignPath, IMAGES_FOLDER)
   const entries = await vault.list(dir).catch(() => [])
-  return entries.filter((e) => !e.isDir && IMAGE_EXTENSIONS.includes(e.name.split('.').pop()?.toLowerCase() ?? '')).map((e) => e.path)
+  const own = entries.filter((e) => !e.isDir && isImage(e.name)).map((e) => e.path)
+  return [...own, ...(await resourceImages(vault, isImage))]
 }

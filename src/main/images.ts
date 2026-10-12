@@ -4,7 +4,7 @@ import type { InvokeArgs } from '@shared/ipc'
 import { FOLDERS, IMAGES_FOLDER } from '@shared/layout'
 import { formatDate, joinVaultPath, sanitizeFileName } from '@shared/names'
 import { messageToTurn } from '@shared/prompt'
-import type { ImageBackend, ImagePurpose } from '@shared/settings'
+import type { ImageBackend, ImagePurpose, Settings } from '@shared/settings'
 import type { CharacterNote, Message, MessageImage, Session, VaultPath } from '@shared/types'
 import { buildImageRequest, imageAdapter, resolveImageBackend } from './backends/image'
 import type { ImageRequest } from './backends/image/types'
@@ -14,25 +14,18 @@ import { resolveTextBackend, textAdapter } from './backends/text'
 import { backendChain, chatService } from './chat'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCampaign, readCampaignModelMap, readCharacter, resolveCharacterLink } from './library'
+import { readCampaign, readCharacter, resolveCharacterLink } from './library'
 import { readMap } from './maps'
 import { postMessage, readSession } from './sessions'
 import { settingsStore } from './settings-store'
 import { updateNote } from './vault/frontmatter'
 import { vaultService } from './vault/service'
 import { getMainWindow } from './window'
+import { campaignOfSession, settingsFor, settingsForSession } from './world'
 
 type GenerateOpts = InvokeArgs<'images:generate'>[0]
 
 const purposeOf = (kind: GenerateOpts['kind']): ImagePurpose => (kind === 'prompt' ? 'other' : kind)
-
-/** The purpose's profile, with the campaign's own model swapped in when its Campaign.md names one. */
-async function profileFor(vault: Parameters<typeof readCampaignModelMap>[0], campaignPath: VaultPath | undefined, purpose: ImagePurpose) {
-  const profile = settingsStore.get().imageProfiles[purpose]
-  if (!campaignPath) return profile
-  const model = (await readCampaignModelMap(vault, campaignPath, 'image_models'))[purpose]
-  return model ? { ...profile, model } : profile
-}
 
 const PROMPT_WRITER = `You write prompts for a text-to-image model. Describe one image as a single line of comma-separated visual details: subject, setting, lighting, mood, colours, composition, art style. Fantasy illustration. No story, no dialogue, no text in the image, no real artist names. At most 70 words. Reply with the prompt only.`
 
@@ -49,8 +42,13 @@ function slug(text: string, max = 40): string {
 class ImageService {
   private jobs = new Map<string, AbortController>()
 
+  /** Settings for a request: the global ones with its campaign's world overrides. */
+  private settingsOf(opts: GenerateOpts): Settings {
+    return settingsFor(opts.campaignPath ?? campaignOfSession(opts.sessionPath))
+  }
+
   generate(opts: GenerateOpts): { requestId: string } {
-    const backend = backendFor(settingsStore.get(), purposeOf(opts.kind), opts.backendId)
+    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
     const requestId = randomUUID()
     const controller = new AbortController()
@@ -150,7 +148,7 @@ class ImageService {
 
   /** Generates without the event plumbing, for extensions: resolves with the saved image. */
   async generateNow(opts: GenerateOpts): Promise<MessageImage> {
-    const backend = backendFor(settingsStore.get(), purposeOf(opts.kind), opts.backendId)
+    const backend = backendFor(this.settingsOf(opts), purposeOf(opts.kind), opts.backendId)
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'No image backend is configured.')
     return (await this.produce(backend, opts, undefined, () => {})).image
   }
@@ -185,8 +183,8 @@ class ImageService {
       }
       if (!prompt) throw new AppError('NO_PROMPT', 'Describe what to draw, e.g. /image a misty harbour at dusk.')
 
-      // This purpose's generation options: model, workflow, size, steps, style (Settings → Image backends).
-      const profile = await profileFor(vault, session?.campaignPath, purpose)
+      // This purpose's generation options: model, workflow, size, steps, style (Settings → Image backends, or the world's).
+      const profile = this.settingsOf(opts).imageProfiles[purpose]
       const workflowId = workflowFor(backend, purpose, profile, opts.workflowId)
       const applied = applyImageProfile(backend, purpose, profile, workflowId)
       const over: Partial<ImageRequest> = { ...applied.over }
@@ -250,7 +248,7 @@ class ImageService {
 
   /** Paints a top-down map of a campaign into its Images folder; returns the image path. */
   async generateMap(campaignPath: VaultPath, extra?: string, sketch?: { data: Buffer; filename: string }): Promise<string> {
-    const s = settingsStore.get()
+    const s = settingsFor(campaignPath)
     const backend = backendFor(s, 'map')
     if (!backend) throw new AppError('NO_IMAGE_BACKEND', 'Add an image backend in Settings → Image backends first.')
     const vault = vaultService.require()
@@ -261,7 +259,7 @@ class ImageService {
       `A top-down fantasy map of ${campaign.name}, drawn as cartography: parchment, ink and watercolour, coastlines, roads and terrain, no text or labels.${campaign.setting ? ` Setting: ${campaign.setting}` : ''}${places ? ` It includes: ${places}.` : ''}${extra ? ` ${extra}` : ''}`,
       `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
     )
-    const profile = await profileFor(vault, campaignPath, 'map')
+    const profile = s.imageProfiles.map
     let workflowId = workflowFor(backend, 'map', profile)
     if (sketch && backend.type === 'comfyui') {
       // A sketch needs a workflow that takes an image: the chosen one if it does, else a Maps one that does, else any.
@@ -295,7 +293,7 @@ class ImageService {
 
   /** Automatic images after DM replies (every N turns, or on an apparent location change). */
   maybeAuto(sessionPath: VaultPath, dmText: string): void {
-    const s = settingsStore.get()
+    const s = settingsForSession(sessionPath)
     const t = s.imageTriggers
     if (!s.imageBackends.length || (!t.everyNDmTurns && !t.onLocationChange)) return
     void (async () => {

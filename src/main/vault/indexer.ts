@@ -1,5 +1,6 @@
-import { FOLDERS, classifyPath, type NoteKind } from '@shared/layout'
+import { FOLDERS, classifyPath, isSharedLorebook, type NoteKind } from '@shared/layout'
 import { joinVaultPath, noteName, wikilinkTarget } from '@shared/names'
+import { worldFromFrontmatter } from '@shared/world'
 import type {
   CampaignSummary,
   CharacterSummary,
@@ -59,7 +60,7 @@ export class VaultIndexer {
         ;(cls.kind === 'character' ? this.characters : this.npcs).set(k, this.characterSummary(ref, data))
         break
       case 'lorebook':
-        this.lorebooks.set(k, { ...ref, entryCount: (body.match(/^## /gm) ?? []).length })
+        this.lorebooks.set(k, { ...ref, entryCount: (body.match(/^## /gm) ?? []).length, ...(isSharedLorebook(this.vault.rootFolder, path) ? { shared: true } : {}) })
         break
       case 'preset':
         this.presets.set(k, ref)
@@ -71,7 +72,8 @@ export class VaultIndexer {
           name: noteName(folder),
           mtimeMs: ref.mtimeMs,
           displayName: str(data.name) || noteName(folder),
-          sessionCount: 0
+          sessionCount: 0,
+          world: worldFromFrontmatter(data)
         })
         break
       }

@@ -207,7 +207,12 @@ function imageBackendSchema<S extends SecretSchema>(secret: S) {
         workflows: z.array(ComfyWorkflowSchema).default([]),
         defaultWorkflowId: z.string().nullable().default(null),
         /** Checkpoint for the built-in workflow (used when no workflow is imported); '' = the server's first. */
-        checkpoint: z.string().default('')
+        checkpoint: z.string().default(''),
+        /**
+         * Leave nothing on the server: SaveImage nodes become PreviewImage (ComfyUI's temp folder, which it
+         * empties when it restarts) and the job is cleared from the server's history once the image is downloaded.
+         */
+        deleteAfterDownload: z.boolean().default(false)
       })
       .prefault({}),
     openai: z

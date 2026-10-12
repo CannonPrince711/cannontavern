@@ -128,6 +128,16 @@ function ImageBackendEditor({ initial, isNew, onSaved, onDone }: { initial: Imag
             <ComfyWorkflows workflows={draft.comfy.workflows} defaultId={draft.comfy.defaultWorkflowId} onChange={(workflows, defaultWorkflowId) => set('comfy', { ...draft.comfy, workflows, defaultWorkflowId })} />
           </Disclosure>
         )}
+        {draft.type === 'comfyui' && (
+          <Field
+            inline
+            label="Don’t keep images on the server"
+            htmlFor="ib-comfy-cleanup"
+            description="Images go to ComfyUI’s temp folder (emptied when it restarts) instead of output/, and each job is cleared from its history once the image is saved in your vault. Useful for a rented or shared GPU."
+          >
+            <Switch id="ib-comfy-cleanup" checked={draft.comfy.deleteAfterDownload} onCheckedChange={(v) => set('comfy', { ...draft.comfy, deleteAfterDownload: v })} />
+          </Field>
+        )}
 
         {draft.type === 'openai' && (
           <Disclosure title="OpenAI options" defaultOpen={isNew}>

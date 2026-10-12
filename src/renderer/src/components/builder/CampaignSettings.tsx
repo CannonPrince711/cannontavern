@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import { EDITION_INFO, EDITIONS, SOURCEBOOKS, type Edition } from '@shared/editions'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
+import { compactWorld, type WorldOverrides } from '@shared/world'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/controls'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input, Label, Textarea } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
+import { WorldSettings } from './WorldSettings'
 
 interface Form {
   edition: Edition
@@ -20,11 +23,16 @@ interface Form {
   setting: string
   tone: string
   house_rules: string
+  world: WorldOverrides
 }
 
-/** Campaign settings: rules edition and sourcebooks, default play mode, setting, tone and house rules. */
+/**
+ * Campaign settings: rules edition and sourcebooks, default play mode, setting, tone and house rules,
+ * and (This world tab) overrides of the global text, prompt and image settings.
+ */
 export function CampaignSettings(): React.JSX.Element | null {
   const path = useUi((s) => s.campaignSettings)
+  const tab = useUi((s) => s.campaignSettingsTab)
   const name = useVault((s) => s.index?.campaigns.find((c) => c.path === path)?.displayName)
   const [form, setForm] = useState<Form | null>(null)
   const [busy, setBusy] = useState(false)
@@ -45,7 +53,8 @@ export function CampaignSettings(): React.JSX.Element | null {
           mode: c.mode ?? 'ai-dm',
           setting: c.setting,
           tone: c.tone,
-          house_rules: c.house_rules
+          house_rules: c.house_rules,
+          world: c.world ?? {}
         })
       })
       .catch((err) => toast.error(err, 'Could not read the campaign'))
@@ -62,7 +71,7 @@ export function CampaignSettings(): React.JSX.Element | null {
   }, [form?.edition]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!path) return null
-  const close = (): void => useUi.setState({ campaignSettings: null })
+  const close = (): void => useUi.setState({ campaignSettings: null, campaignSettingsTab: 'campaign' })
   const set = <K extends keyof Form>(k: K, v: Form[K]): void => setForm((f) => (f ? { ...f, [k]: v } : f))
   const toggle = (book: string): void => setForm((f) => (f ? { ...f, sources: f.sources.includes(book) ? f.sources.filter((b) => b !== book) : [...f.sources, book] } : f))
   const switchEdition = (e: Edition): void =>
@@ -79,7 +88,8 @@ export function CampaignSettings(): React.JSX.Element | null {
         mode: form.mode,
         setting: form.setting,
         tone: form.tone,
-        house_rules: form.house_rules
+        house_rules: form.house_rules,
+        world: compactWorld(form.world) ?? null
       })
       toast.success('Campaign settings saved', 'They’re in Campaign.md and used from the next reply.')
       close()
@@ -102,7 +112,19 @@ export function CampaignSettings(): React.JSX.Element | null {
             <Loader2 className="size-5 animate-spin" />
           </div>
         ) : (
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-4">
+          <Tabs value={tab} onValueChange={(v) => useUi.setState({ campaignSettingsTab: v as 'campaign' | 'world' })} className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="mx-6 mb-3 self-start">
+              <TabsTrigger value="campaign" className="px-4">
+                Campaign
+              </TabsTrigger>
+              <TabsTrigger value="world" className="px-4">
+                This world{Object.keys(compactWorld(form.world) ?? {}).length ? ' •' : ''}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="world" className="min-h-0 overflow-y-auto px-6 pb-4">
+              <WorldSettings campaignPath={path} world={form.world} onChange={(w) => set('world', w)} />
+            </TabsContent>
+            <TabsContent value="campaign" className="min-h-0 space-y-5 overflow-y-auto px-6 pb-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="cs-edition">Rules</Label>
@@ -180,7 +202,8 @@ export function CampaignSettings(): React.JSX.Element | null {
                 <Textarea id="cs-rules" rows={2} value={form.house_rules} onChange={(e) => set('house_rules', e.target.value)} />
               </div>
             </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={close}>

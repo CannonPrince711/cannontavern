@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { TextBackendSchema } from '../src/shared/settings'
 import { withModel } from '../src/main/backends/chain'
-import { readCampaignModelMap } from '../src/main/library'
+import { parseNote } from '../src/main/vault/frontmatter'
+import { worldFromFrontmatter } from '../src/shared/world'
 
 const backend = (id: string, model: string) =>
   TextBackendSchema.parse({ id, name: id, type: 'openai', baseUrl: 'http://127.0.0.1:8080/v1', model })
 
-/** A vault whose only file is the campaign note. */
-const vaultWith = (content: string | null) =>
-  ({ readIfExists: async () => (content === null ? null : { content }) }) as unknown as Parameters<typeof readCampaignModelMap>[0]
+/** A campaign's overrides, read from its Campaign.md text. */
+const worldOfNote = (lines: string[]) => worldFromFrontmatter(parseNote(lines.join('\n')).data)
 
 describe('campaign models', () => {
   it('swaps the model into the first backend and keeps the fallbacks as they are', () => {
@@ -26,7 +26,7 @@ describe('campaign models', () => {
     expect(withModel([], 'anything')).toEqual([])
   })
 
-  it('reads image and text model overrides from Campaign.md', async () => {
+  it('reads image_models and text_models from Campaign.md into the world overrides', () => {
     const note = [
       '---',
       'type: campaign',
@@ -38,14 +38,17 @@ describe('campaign models', () => {
       '---',
       'Body.',
       ''
-    ].join('\n')
-    const vault = vaultWith(note)
-    expect(await readCampaignModelMap(vault, 'Campaigns/X' as never, 'image_models')).toEqual({ portrait: 'FLUX1/flux1-dev-fp8.safetensors' })
-    expect(await readCampaignModelMap(vault, 'Campaigns/X' as never, 'text_models')).toEqual({ chat: 'Gemsicle-31B-Q4_K_M.gguf' })
+    ]
+    expect(worldOfNote(note)).toEqual({ text_model: 'Gemsicle-31B-Q4_K_M.gguf', images: { portrait: { model: 'FLUX1/flux1-dev-fp8.safetensors' } } })
   })
 
-  it('returns nothing when the campaign has no note or no overrides', async () => {
-    expect(await readCampaignModelMap(vaultWith(null), 'Campaigns/X' as never, 'text_models')).toEqual({})
-    expect(await readCampaignModelMap(vaultWith('---\ntype: campaign\n---\n'), 'Campaigns/X' as never, 'image_models')).toEqual({})
+  it('lets the world block win over the older keys', () => {
+    const note = ['---', 'image_models:', '  portrait: old', 'text_models:', '  summary: old-sum', 'world:', '  images:', '    portrait:', '      model: new', '  summary_model: new-sum', '---', '']
+    expect(worldOfNote(note)).toEqual({ summary_model: 'new-sum', images: { portrait: { model: 'new' } } })
+  })
+
+  it('returns nothing when the campaign has no overrides', () => {
+    expect(worldOfNote(['---', 'type: campaign', '---', ''])).toBeUndefined()
+    expect(worldOfNote(['No frontmatter.'])).toBeUndefined()
   })
 })

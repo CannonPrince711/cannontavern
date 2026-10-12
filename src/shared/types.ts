@@ -6,6 +6,7 @@
  */
 import type { PlayMode } from './play'
 import type { Edition } from './editions'
+import type { WorldOverrides } from './world'
 
 export type Id = string
 /** Path relative to the vault root, always with forward slashes. */
@@ -269,6 +270,8 @@ export interface Campaign {
   /** Rules edition (missing means 5e) and the sourcebooks it allows. */
   edition?: Edition
   sources?: string[]
+  /** Per-world overrides of global settings (the `world:` frontmatter, see world.ts). */
+  world?: WorldOverrides
   body: string
 }
 
@@ -367,10 +370,14 @@ export interface SessionSummary extends NoteRef {
 export interface CampaignSummary extends NoteRef {
   displayName: string
   sessionCount: number
+  /** Per-world overrides, so settings can be resolved without reading the note. */
+  world?: WorldOverrides
 }
 
 export interface LorebookSummary extends NoteRef {
   entryCount: number
+  /** In Resources/Lore: every world sees it. */
+  shared?: boolean
 }
 
 export interface VaultIndex {

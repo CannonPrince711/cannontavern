@@ -6,12 +6,15 @@ import { z } from 'zod'
 import { CAMPAIGN_FILE, FOLDERS } from '@shared/layout'
 import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
 import { DEFAULT_DM_PROMPT } from '@shared/prompt'
+import { compactWorld, LEGACY_MODEL_KEYS, WORLD_RESOURCE_KINDS, WorldOverridesSchema } from '@shared/world'
 import type { Lorebook } from '@shared/types'
 import { AppError } from '../errors'
 import { handle } from '../ipc'
 import { readCampaign, readLorebook, readPreset, saveLorebook } from '../library'
 import { serializeNote, updateNote } from '../vault/frontmatter'
 import { vaultService } from '../vault/service'
+import { suggestGenerators } from '../world-suggest'
+import { generateWorldResources } from '../world-resources'
 
 const path = z.string().min(1).max(1024)
 
@@ -94,8 +97,15 @@ export function registerLoreHandlers(): void {
       if (patch.edition !== undefined) fields.edition = patch.edition
       if (patch.sources !== undefined) fields.sources = patch.sources.map((s) => s.trim()).filter(Boolean)
       if (patch.mode !== undefined) fields.mode = patch.mode === 'ai-dm' ? undefined : patch.mode
+      // undefined deletes the key: a world without overrides leaves no trace in Campaign.md.
+      if (patch.world !== undefined) {
+        fields.world = patch.world ? compactWorld(patch.world) : undefined
+        // The older image_models / text_models keys were read into the world block; it replaces them now.
+        for (const k of LEGACY_MODEL_KEYS) fields[k] = undefined
+      }
       await vault.mutate(joinVaultPath(campaignPath, CAMPAIGN_FILE), (cur) => (cur === null ? serializeNote({ type: 'campaign', ...fields }, '\n') : updateNote(cur, fields)))
-      void vaultService.reindex(joinVaultPath(campaignPath, CAMPAIGN_FILE))
+      // Awaited so world settings apply to the very next reply or image.
+      await vaultService.reindex(joinVaultPath(campaignPath, CAMPAIGN_FILE))
       return (await readCampaign(vault, campaignPath)).campaign
     },
     z.tuple([
@@ -106,9 +116,17 @@ export function registerLoreHandlers(): void {
         house_rules: z.string().max(10_000).optional(),
         edition: z.enum(EDITIONS).optional(),
         sources: z.array(z.string().max(200)).max(200).optional(),
-        mode: z.enum(PLAY_MODES).optional()
+        mode: z.enum(PLAY_MODES).optional(),
+        world: WorldOverridesSchema.nullable().optional()
       })
     ])
+  )
+
+  handle('campaigns:suggestGenerators', (_e, campaignPath) => suggestGenerators(campaignPath), z.tuple([path]))
+  handle(
+    'campaigns:generateResources',
+    (_e, campaignPath, opts) => generateWorldResources(campaignPath, opts),
+    z.tuple([path, z.object({ kinds: z.array(z.enum(WORLD_RESOURCE_KINDS)).min(1).max(WORLD_RESOURCE_KINDS.length), count: z.number().int().min(1).max(20) })])
   )
 
   handle(

@@ -13,6 +13,7 @@ import type { VaultGraph } from './graph'
 import type { CampaignMap, MapPin, MapScale, PartyMarker } from './map'
 import type { CampaignConcept, CampaignDraft } from './builder'
 import type { Edition } from './editions'
+import type { WorldOverrides, WorldResourceKind } from './world'
 import type { AutoRespond, TableStatus } from './table'
 import type { PlayMode, Speaker } from './play'
 import type {
@@ -161,11 +162,20 @@ export interface InvokeMap {
   'maps:images': Invoke<[campaignPath: VaultPath], string[]>
   /** With fromSketch, asks for a sketch to paint over (img2img); null when that was cancelled. */
   'maps:generate': Invoke<[campaignPath: VaultPath, extra?: string, opts?: { fromSketch?: boolean }], string | null>
-  /** Campaign settings (Campaign.md frontmatter): rules edition, sourcebooks, default mode, setting, tone, house rules. */
+  /**
+   * Campaign settings (Campaign.md frontmatter): rules edition, sourcebooks, default mode, setting, tone, house rules,
+   * and the world's overrides of global settings (null clears them).
+   */
   'campaigns:update': Invoke<
-    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode }],
+    [path: VaultPath, patch: { setting?: string; tone?: string; house_rules?: string; edition?: Edition; sources?: string[]; mode?: PlayMode; world?: WorldOverrides | null }],
     Campaign
   >
+  /** Asks the AI to pick the best installed text and image models for a campaign; nothing is saved. */
+  'campaigns:suggestGenerators': Invoke<[path: VaultPath], { world: WorldOverrides; notes: string }>
+  /** Writes items, creatures and more that fit the campaign into its "<name> Resources" lorebook (attached to it). */
+  'campaigns:generateResources': Invoke<[path: VaultPath, opts: { kinds: WorldResourceKind[]; count: number }], { lorebookPath: VaultPath; added: number }>
+  /** Adds the shared Resources folder's starter notes again (only the missing ones). */
+  'vault:createResources': Invoke<[], VaultIndex>
   /** Multiplayer hosting (see shared/table.ts). */
   'table:start': Invoke<[opts: { scope: 'local' | 'network'; port: number; sessionPath: VaultPath | null }], TableStatus>
   'table:stop': Invoke<[], TableStatus>
@@ -224,6 +234,8 @@ export interface InvokeMap {
     [
       opts: {
         sessionPath?: VaultPath
+        /** Use this campaign's world settings (defaults to the session's campaign). */
+        campaignPath?: VaultPath
         kind: 'prompt' | 'scene' | 'portrait' | 'battlemap'
         prompt?: string
         characterPath?: VaultPath
@@ -357,6 +369,9 @@ const invokeChannels = {
   'table:setSession': 1,
   'table:openScreen': 1,
   'campaigns:update': 1,
+  'campaigns:suggestGenerators': 1,
+  'campaigns:generateResources': 1,
+  'vault:createResources': 1,
   'maps:get': 1,
   'maps:save': 1,
   'maps:importImage': 1,

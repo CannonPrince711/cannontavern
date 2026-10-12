@@ -10,6 +10,7 @@ import { ImageBackendsSection } from './ImageBackendsSection'
 import { PromptSection } from './PromptSection'
 import { TtsSection } from './TtsSection'
 import { TextBackendsSection } from './TextBackendsSection'
+import { WorldOverridesNotice } from './WorldOverridesNotice'
 import { UpdatesSettings, useUpdates } from '@/components/Updates'
 import { useApp } from '@/stores/app'
 
@@ -89,6 +90,9 @@ export function SettingsOverlay(): React.JSX.Element {
               <X />
             </Button>
           </header>
+          {section === 'text' && <WorldOverridesNotice groups={['text']} />}
+          {section === 'images' && <WorldOverridesNotice groups={['images', 'triggers']} />}
+          {section === 'prompt' && <WorldOverridesNotice groups={['prompt']} />}
           {section === 'general' && <GeneralSection />}
           {section === 'updates' && <UpdatesSettings />}
           {section === 'appearance' && <AppearanceSection />}

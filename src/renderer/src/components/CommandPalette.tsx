@@ -98,6 +98,31 @@ function useItems(query: string): Item[] {
           if (c) useUi.setState({ campaignSettings: c })
         }
       },
+      {
+        id: 'world-settings',
+        group: 'Actions',
+        label: 'This world’s settings',
+        icon: Settings,
+        keywords: 'per world override model image portrait style generate resources items',
+        run: () => {
+          const c = useVault.getState().activeCampaign
+          if (c) useUi.setState({ campaignSettings: c, campaignSettingsTab: 'world' })
+        }
+      },
+      {
+        id: 'resources',
+        group: 'Actions',
+        label: 'Restore shared Resources',
+        icon: FolderOpen,
+        keywords: 'resources lore items creatures shared generic starter',
+        run: () =>
+          void invoke('vault:createResources')
+            .then((index) => {
+              useVault.getState().setIndex(index)
+              toast.success('Shared Resources restored', 'Missing starter lorebooks were added to Resources/Lore.')
+            })
+            .catch((err) => toast.error(err, 'Couldn’t restore Resources'))
+      },
       { id: 'builder', group: 'Actions', label: 'Campaign builder', icon: Wand2, keywords: 'create generate ai world npc', run: () => useUi.setState({ buildingCampaign: true }) },
       { id: 'dice', group: 'Actions', label: 'Dice tray', icon: Dices, keywords: 'roll', run: () => useDiceFx.getState().setTrayOpen(!useDiceFx.getState().trayOpen) },
       { id: 'inspector', group: 'Actions', label: 'Prompt inspector', icon: SquareTerminal, keywords: 'tokens context debug', run: () => useUi.setState({ inspectorOpen: true }) },

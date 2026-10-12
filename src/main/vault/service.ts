@@ -5,6 +5,7 @@ import { watch, type FSWatcher } from 'chokidar'
 import { FOLDERS, normalizeRootFolder, type NoteKind } from '@shared/layout'
 import type { VaultIndex, VaultPath } from '@shared/types'
 import { AppError } from '../errors'
+import { ensureResources } from '../resources'
 import { VaultIndexer } from './indexer'
 import { validateVault } from './obsidian'
 import { Vault } from './vault'
@@ -53,6 +54,8 @@ class VaultService extends EventEmitter<ServiceEvents> {
     } else if (!(await vault.exists(rootFolder))) {
       await vault.mkdir(rootFolder)
     }
+    // Shared Resources, once per vault (before indexing so its lorebooks are in the first index).
+    await ensureResources(vault).catch(() => {})
     const indexer = new VaultIndexer(vault, { vaultName: check.name, isObsidianVault: check.isObsidianVault })
     await indexer.build()
     this.vault = vault

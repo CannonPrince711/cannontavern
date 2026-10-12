@@ -1,7 +1,7 @@
 import { dirname } from 'node:path'
 import { app, dialog, shell } from 'electron'
 import { z } from 'zod'
-import { IMAGE_EXTENSIONS } from '@shared/layout'
+import { IMAGE_EXTENSIONS, RESOURCE_FOLDERS } from '@shared/layout'
 import { noteName } from '@shared/names'
 import { AppError } from '../errors'
 import { handle } from '../ipc'
@@ -10,6 +10,7 @@ import { detectObsidianVaults, obsidianConfigFiles, obsidianUri, validateVault }
 import { installFolderWarning, vaultInInstallFolder } from '../vault/location'
 import { vaultService } from '../vault/service'
 import { createSampleCampaign } from '../sample'
+import { createResources } from '../resources'
 import { buildVaultGraph } from '../graph'
 import { getMainWindow } from '../window'
 
@@ -57,6 +58,13 @@ export function registerVaultHandlers(): void {
     // Index everything that was written.
     for (const p of await vault.walk(vault.rootFolder, (x) => x.endsWith('.md'))) await vaultService.reindex(p)
     return { index: vaultService.getIndex()!, ...r }
+  })
+
+  handle('vault:createResources', async () => {
+    const vault = vaultService.require()
+    await createResources(vault)
+    for (const p of await vault.walk(vault.rootPath(RESOURCE_FOLDERS.root), (x) => x.endsWith('.md'))) await vaultService.reindex(p)
+    return vaultService.getIndex()!
   })
 
   // Any note in the vault can be read (for /note), but never .obsidian/.

@@ -85,6 +85,7 @@ export function registerImageHandlers(): void {
     z.tuple([
       z.object({
         sessionPath: z.string().optional(),
+        campaignPath: z.string().optional(),
         kind: z.enum(['prompt', 'scene', 'portrait', 'battlemap']),
         prompt: z.string().max(4000).optional(),
         characterPath: z.string().optional(),

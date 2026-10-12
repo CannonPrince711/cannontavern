@@ -13,6 +13,19 @@ export const FOLDERS = {
   npcs: 'NPCs'
 } as const
 
+/**
+ * Shared material for every campaign. Not in FOLDERS on purpose: those are
+ * recreated whenever a vault opens, while Resources is set up once and stays
+ * deleted if the user deletes it.
+ */
+export const RESOURCE_FOLDERS = {
+  root: 'Resources',
+  lore: 'Resources/Lore',
+  images: 'Resources/Images'
+} as const
+/** Hidden file in the root folder: Resources was already set up in this vault. */
+export const RESOURCES_MARKER = '.resources-created'
+
 export const CAMPAIGN_FILE = 'Campaign.md'
 export const PARTY_FILE = 'Party.md'
 export const SESSIONS_FOLDER = 'Sessions'
@@ -45,6 +58,8 @@ export function classifyPath(rootFolder: string, path: string): Classified | nul
     if (eq(folder, FOLDERS.lorebooks)) return { kind: 'lorebook' }
     if (eq(folder, FOLDERS.presets)) return { kind: 'preset' }
   }
+  // Shared lorebooks: Resources/Lore/<name>.md
+  if (parts.length === 3 && eq(parts[0], RESOURCE_FOLDERS.root) && eq(parts[1], 'Lore')) return { kind: 'lorebook' }
   if (eq(parts[0], FOLDERS.campaigns)) {
     const campaignPath = joinVaultPath(root, FOLDERS.campaigns, parts[1] ?? '')
     if (parts.length === 3 && eq(parts[2], CAMPAIGN_FILE)) return { kind: 'campaign', campaignPath }
@@ -73,3 +88,9 @@ export function normalizeRootFolder(input: string): string | null {
 }
 
 export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'bmp']
+
+/** Whether a lorebook is a shared one in Resources/Lore (every world sees it). */
+export function isSharedLorebook(rootFolder: string, path: string): boolean {
+  const lore = `${joinVaultPath(rootFolder, RESOURCE_FOLDERS.lore)}/`.toLowerCase()
+  return path.toLowerCase().startsWith(lore)
+}
