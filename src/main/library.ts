@@ -38,18 +38,18 @@ export async function saveCharacter(vault: Vault, note: CharacterNote, force = f
   return readCharacter(vault, note.path)
 }
 
-export async function createCharacter(vault: Vault, name: string, npc = false): Promise<CharacterNote> {
+export async function createCharacter(vault: Vault, name: string, npc = false, campaigns?: string[]): Promise<CharacterNote> {
   const folder = vault.rootPath(npc ? FOLDERS.npcs : FOLDERS.characters)
   const path = await vault.uniquePath(folder, sanitizeFileName(name), '.md')
-  const card = { ...defaultCard(name.trim() || 'New character') }
+  const card = { ...defaultCard(name.trim() || 'New character'), ...(campaigns?.length ? { campaigns } : {}) }
   await vault.write(path, serializeNote({ type: npc ? 'npc' : 'character', ...cardToFrontmatter(card) }, '\n'), { baseHash: null })
   return readCharacter(vault, path)
 }
 
 /** Writes a new character note from a full card (used by import). */
-export async function createCharacterFromCard(vault: Vault, card: CharacterNote['card'], body = '\n', npc = false): Promise<CharacterNote> {
+export async function createCharacterFromCard(vault: Vault, card: CharacterNote['card'], body = '\n', npc = false, fileName?: string): Promise<CharacterNote> {
   const folder = vault.rootPath(npc ? FOLDERS.npcs : FOLDERS.characters)
-  const path = await vault.uniquePath(folder, sanitizeFileName(card.name), '.md')
+  const path = await vault.uniquePath(folder, sanitizeFileName(fileName ?? card.name), '.md')
   await vault.write(path, serializeNote({ type: npc ? 'npc' : 'character', ...cardToFrontmatter(card) }, body), { baseHash: null })
   return readCharacter(vault, path)
 }

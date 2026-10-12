@@ -376,7 +376,7 @@ export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOp
   const create = async (): Promise<void> => {
     setBusy(true)
     try {
-      done((await invoke('characters:create', name.trim())).path)
+      done((await invoke('characters:create', name.trim(), false, ...(campaignPath ? [campaignPath] : []))).path)
     } catch (err) {
       toast.error(err)
     } finally {

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Wand2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Users, Wand2 } from 'lucide-react'
 import type { SessionSummary } from '@shared/types'
 import { NewCharacterDialog } from '@/components/characters/CharacterEditor'
+import { ImportCharactersDialog } from '@/components/characters/ImportCharactersDialog'
+import { forCampaign, fromOtherCampaigns } from '@shared/membership'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { EmptyState } from '@/components/EmptyState'
 import { HoodArt, ScrollArt } from '@/components/illustrations'
@@ -70,9 +72,9 @@ function EditButton({ path }: { path: string }): React.JSX.Element {
   )
 }
 
-async function importCards(): Promise<void> {
+async function importCards(campaignPath: string | null): Promise<void> {
   try {
-    const notes = await invoke('characters:import')
+    const notes = await invoke('characters:import', ...(campaignPath ? [campaignPath] : []))
     if (notes.length) {
       toast.success(`Imported ${notes.length} character${notes.length > 1 ? 's' : ''}`, notes.map((n) => n.card.name).join(', '))
       useVault.getState().selectCharacter(notes[0]!.path)
@@ -193,6 +195,7 @@ export function LeftSidebar(): React.JSX.Element {
   const selectSession = useVault((s) => s.selectSession)
   const [query, setQuery] = useState('')
   const [newCharacter, setNewCharacter] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   // Opening a session also makes its campaign the active one.
@@ -203,8 +206,8 @@ export function LeftSidebar(): React.JSX.Element {
 
   const q = query.trim().toLowerCase()
   const characters = useMemo(
-    () => (index?.characters ?? []).filter((c) => !q || c.displayName.toLowerCase().includes(q)),
-    [index, q]
+    () => forCampaign(index?.characters ?? [], activeCampaign).filter((c) => !q || c.displayName.toLowerCase().includes(q)),
+    [index, q, activeCampaign]
   )
   const groups = useMemo(() => {
     const sessions = (index?.sessions ?? []).filter((s) => !q || s.title.toLowerCase().includes(q))
@@ -250,7 +253,10 @@ export function LeftSidebar(): React.JSX.Element {
                 <DropdownMenuItem onSelect={() => setNewCharacter(true)}>
                   <UserPlus /> New character…
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void importCards()}>
+                <DropdownMenuItem disabled={!activeCampaign || !fromOtherCampaigns(index?.characters ?? [], activeCampaign).length} onSelect={() => setImporting(true)}>
+                  <Users /> Import from another campaign…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void importCards(activeCampaign)}>
                   <FileUp /> Import SillyTavern cards…
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -258,6 +264,7 @@ export function LeftSidebar(): React.JSX.Element {
           }
         />
         <NewCharacterDialog open={newCharacter} onOpenChange={setNewCharacter} />
+        <ImportCharactersDialog open={importing} onOpenChange={setImporting} />
         {!loaded ? (
           <ListSkeleton rows={3} avatar />
         ) : characters.length === 0 ? (
@@ -265,7 +272,7 @@ export function LeftSidebar(): React.JSX.Element {
             illustration={<HoodArt />}
             title={q ? 'No matches' : 'No characters yet'}
             description={
-              q ? undefined : index ? 'Create a character or import a SillyTavern card.' : 'Connect a vault to see your characters.'
+              q ? undefined : index ? (activeCampaign ? 'Create a character for this campaign, or import one from another campaign or a SillyTavern card.' : 'Create a character or import a SillyTavern card.') : 'Connect a vault to see your characters.'
             }
           />
         ) : (

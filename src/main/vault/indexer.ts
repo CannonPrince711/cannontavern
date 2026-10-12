@@ -1,4 +1,5 @@
 import { FOLDERS, classifyPath, isSharedLorebook, type NoteKind } from '@shared/layout'
+import { campaignFolderFromLink } from '@shared/membership'
 import { joinVaultPath, noteName, wikilinkTarget } from '@shared/names'
 import { worldFromFrontmatter } from '@shared/world'
 import type {
@@ -84,7 +85,8 @@ export class VaultIndexer {
           title: str(data.title) || ref.name,
           campaignPath: cls.campaignPath!,
           created: str(data.created),
-          messageCount: (body.match(CALLOUT_RE) ?? []).length
+          messageCount: (body.match(CALLOUT_RE) ?? []).length,
+          cast: [...strs(data.characters), ...strs(data.companions)].map((l) => wikilinkTarget(l).replace(/\.md$/i, '').toLowerCase())
         })
         break
       case 'party':
@@ -133,7 +135,7 @@ export class VaultIndexer {
       rootFolder: this.vault.rootFolder,
       isObsidianVault: this.meta.isObsidianVault,
       builtAt: this.builtAt,
-      characters: [...this.characters.values()].sort(byName),
+      characters: this.withCampaigns([...this.characters.values()]).sort(byName),
       npcs: [...this.npcs.values()].sort(byName),
       campaigns: [...campaigns.entries()]
         .map(([k, c]) => ({ ...c, sessionCount: counts.get(k) ?? 0 }))
@@ -156,8 +158,23 @@ export class VaultIndexer {
       class: str(dnd.class) || undefined,
       level: num(dnd.level),
       hp: num(dnd.hp),
-      max_hp: num(dnd.max_hp)
+      max_hp: num(dnd.max_hp),
+      campaigns: [...new Set(strs(data.campaigns).map((l) => campaignFolderFromLink(l, this.vault.rootFolder)).filter((f): f is string => !!f))]
     }
+  }
+
+  /** A character with no `campaigns` of its own belongs to the campaigns it has played in. */
+  private withCampaigns(list: CharacterSummary[]): CharacterSummary[] {
+    const played = new Map<string, Set<string>>()
+    for (const s of this.sessions.values()) {
+      for (const who of s.cast ?? []) played.set(who, (played.get(who) ?? new Set()).add(s.campaignPath))
+    }
+    return list.map((c) => {
+      if (c.campaigns?.length) return c
+      const key = c.path.replace(/\.md$/i, '').toLowerCase()
+      const found = played.get(key) ?? played.get(c.name.toLowerCase())
+      return found ? { ...c, campaigns: [...found] } : c
+    })
   }
 
   /** "aria.png", "[[aria.png]]" or a full vault path → vault path. */
@@ -174,6 +191,10 @@ export class VaultIndexer {
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : ''
+}
+
+function strs(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
 }
 
 function num(v: unknown): number | undefined {

@@ -3,8 +3,9 @@ import { promises as fs } from 'node:fs'
 import { basename, extname } from 'node:path'
 import { z } from 'zod'
 import { FOLDERS, IMAGE_EXTENSIONS } from '@shared/layout'
-import { joinVaultPath, sanitizeFileName } from '@shared/names'
-import type { CharacterNote } from '@shared/types'
+import { campaignLink } from '@shared/membership'
+import { joinVaultPath, sanitizeFileName, toWikilink } from '@shared/names'
+import type { CharacterNote, VaultPath } from '@shared/types'
 import { AppError, toErrorInfo } from '../errors'
 import { handle, send } from '../ipc'
 import { createCharacterFromCard, readCharacter, saveLorebook } from '../library'
@@ -39,8 +40,9 @@ async function setAvatarField(vault: Vault, path: string, file: string): Promise
 }
 
 export function registerCharacterHandlers(): void {
-  handle('characters:import', async () => {
+  handle('characters:import', async (_e, campaignPath) => {
     const vault = vaultService.require()
+    const campaign = campaignPath ? vaultService.getIndex()?.campaigns.find((c) => c.path === campaignPath) : undefined
     const files = await openDialog({
       title: 'Import SillyTavern character cards',
       properties: ['openFile', 'multiSelections'],
@@ -56,6 +58,7 @@ export function registerCharacterHandlers(): void {
         const bytes = await fs.readFile(file)
         const { card, book } = parseCard(extractCardJson(bytes))
         if (isPng(bytes)) card.avatar = await storeAvatar(vault, card.name, bytes, 'png')
+        if (campaign) card.campaigns = [campaignLink(campaign.path, campaign.displayName)]
         if (book) {
           const bookPath = await vault.uniquePath(vault.rootPath(FOLDERS.lorebooks), sanitizeFileName(book.name), '.md')
           await saveLorebook(vault, { path: bookPath, name: book.name, entries: book.entries, mtimeMs: 0, hash: '', intro: `Imported from the card “${card.name}”.` })
@@ -74,6 +77,39 @@ export function registerCharacterHandlers(): void {
     }
     return imported
   })
+
+  handle(
+    'characters:addToCampaign',
+    async (_e, paths, campaignPath, mode) => {
+      const vault = vaultService.require()
+      const index = vaultService.getIndex()
+      const campaign = index?.campaigns.find((c) => c.path === campaignPath)
+      if (!campaign) throw new AppError('NO_CAMPAIGN', 'That campaign isn’t in the vault.')
+      const nameOf = (folder: string): string | undefined => index?.campaigns.find((c) => c.path === folder)?.displayName
+      const out: VaultPath[] = []
+      for (const p of paths) {
+        const summary = index?.characters.find((c) => c.path === p)
+        if (!summary) continue
+        if (mode === 'share') {
+          // The same note: whatever happens to it shows up in every campaign it's in.
+          const links = [...new Set([...(summary.campaigns ?? []), campaign.path])].map((f) => campaignLink(f, nameOf(f)))
+          await vault.mutate(p, (cur) => (cur === null ? null : updateNote(cur, { campaigns: links })))
+          await vaultService.reindex(p)
+          out.push(p)
+        } else {
+          // A copy with its own sheet, so levels and loot stay in this campaign.
+          const note = await readCharacter(vault, p)
+          const card = { ...structuredClone(note.card), campaigns: [campaignLink(campaign.path, campaign.displayName)] }
+          const body = `${note.body.trimEnd()}\n\nCopied from ${toWikilink(p, { full: true, alias: note.card.name })}.\n`
+          const copy = await createCharacterFromCard(vault, card, body, false, `${note.card.name} (${campaign.displayName})`)
+          await vaultService.reindex(copy.path)
+          out.push(copy.path)
+        }
+      }
+      return out
+    },
+    z.tuple([z.array(z.string().min(1).max(1024)).min(1).max(50), z.string().min(1).max(1024), z.enum(['copy', 'share'])])
+  )
 
   handle(
     'characters:export',

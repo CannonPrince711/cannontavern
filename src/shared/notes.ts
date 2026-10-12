@@ -188,6 +188,7 @@ export function normalizeCard(data: Record<string, unknown>, fallbackName: strin
     ...(data.creator_notes ? { creator_notes: str(data.creator_notes) } : {}),
     ...(Array.isArray(data.alternate_greetings) ? { alternate_greetings: strList(data.alternate_greetings) } : {}),
     ...(str(data.voice).trim() ? { voice: str(data.voice).trim() } : {}),
+    ...(strList(data.campaigns).length ? { campaigns: strList(data.campaigns) } : {}),
     ...(Array.isArray(data.portraits)
       ? {
           portraits: data.portraits
@@ -217,6 +218,7 @@ export function cardToFrontmatter(card: CharacterCard): Record<string, unknown> 
     creator_notes: card.creator_notes || undefined,
     alternate_greetings: card.alternate_greetings?.length ? card.alternate_greetings : undefined,
     voice: card.voice?.trim() || undefined,
+    campaigns: card.campaigns?.length ? card.campaigns : undefined,
     portraits: card.portraits?.length ? card.portraits : undefined,
     dnd: card.dnd
   }

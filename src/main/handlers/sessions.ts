@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { newMessageId } from '@shared/callouts'
+import { campaignLink } from '@shared/membership'
 import { toWikilink } from '@shared/names'
 import { normalizeCard } from '@shared/notes'
 import { PARTY_LIMITS, PLAY_MODES } from '@shared/play'
@@ -201,12 +202,14 @@ export function registerSessionHandlers(): void {
   )
   handle(
     'characters:create',
-    async (_e, name, npc) => {
-      const note = await createCharacter(vaultService.require(), name, npc)
+    async (_e, name, npc, campaignPath) => {
+      const vault = vaultService.require()
+      const campaign = campaignPath ? vaultService.getIndex()?.campaigns.find((c) => c.path === campaignPath) : undefined
+      const note = await createCharacter(vault, name, npc, campaign ? [campaignLink(campaign.path, campaign.displayName)] : undefined)
       await vaultService.reindex(note.path)
       return note
     },
-    z.tuple([z.string().min(1).max(120), z.boolean().optional()])
+    z.tuple([z.string().min(1).max(120), z.boolean().optional(), path.optional()])
   )
 
   handle(

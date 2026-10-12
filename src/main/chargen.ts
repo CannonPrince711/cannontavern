@@ -13,6 +13,7 @@ import type { VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
 import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
+import { campaignLink } from '@shared/membership'
 import { createCharacterFromCard, readCampaign } from './library'
 import { settingsStore } from './settings-store'
 import { vaultService } from './vault/service'
@@ -94,6 +95,7 @@ export async function generateCharacter(opts: GenerateCharacterOpts): Promise<{ 
   const fixed = fixSheet(sheet)
   card.dnd = fixed.sheet
   if (campaign) card.tags = [...new Set([...card.tags, sanitizeFileName(campaign.name).toLowerCase().replace(/\s+/g, '-')])]
+  if (campaign) card.campaigns = [campaignLink(campaign.path, campaign.name)]
 
   const link = campaign ? ` for ${toWikilink(joinVaultPath(campaign.path, CAMPAIGN_FILE), { full: true, alias: campaign.name })}` : ''
   const body = `\n# ${card.name}\n\nMade with the character generator${link}.${opts.concept.trim() ? `\n\n> Concept: ${opts.concept.trim()}` : ''}\n`
