@@ -252,6 +252,10 @@ export interface InvokeMap {
         messageId?: Id
         backendId?: Id
         workflowId?: Id
+        /** Regenerate: put the new picture into this image message instead of posting a new one. */
+        replaceMessageId?: Id
+        /** Use this purpose's generation options instead of the kind's (Regenerate keeps the original's). */
+        purpose?: 'scene' | 'portrait' | 'map' | 'battlemap' | 'other'
       }
     ],
     { requestId: Id }

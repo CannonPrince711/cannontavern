@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { askConfirm } from '@/components/AskDialog'
-import { AlertTriangle, Camera, Download, ExternalLink, Loader2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, Download, ExternalLink, ImagePlus, Loader2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { CharacterCard, CharacterNote } from '@shared/types'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tip } from '@/components/ui/tooltip'
 import { invoke, IpcError, on } from '@/lib/ipc'
 import { VoiceOptions } from '@/lib/speech'
+import { TagsDialog } from '@/components/images/TagsDialog'
+import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
@@ -59,6 +61,8 @@ export function CharacterEditor(): React.JSX.Element | null {
   const [tags, setTags] = useState('')
   const [aliases, setAliases] = useState('')
   const [saving, setSaving] = useState(false)
+  const [painting, setPainting] = useState(false)
+  const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
   const [conflict, setConflict] = useState(false)
   const [externalChange, setExternalChange] = useState(false)
 
@@ -203,6 +207,13 @@ export function CharacterEditor(): React.JSX.Element | null {
                 )}
               </div>
               <div className="flex items-center gap-1">
+                {hasImageBackend && (
+                  <Tip label="New portrait: paint a fresh one, with your own tags">
+                    <Button variant="ghost" size="icon" aria-label="New portrait" onClick={() => setPainting(true)}>
+                      <ImagePlus />
+                    </Button>
+                  </Tip>
+                )}
                 <DropdownMenu>
                   <Tip label="Export card">
                     <DropdownMenuTrigger asChild>
@@ -216,6 +227,19 @@ export function CharacterEditor(): React.JSX.Element | null {
                     <DropdownMenuItem onSelect={() => void exportCard('json')}>SillyTavern JSON (V2)</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {painting && (
+                  <TagsDialog
+                    title={`New portrait of ${draft.card.name}`}
+                    description="The portrait is written from their description. Add tags to steer it (pose, expression, outfit, background); remove any you don’t want. It replaces their current picture."
+                    initial=""
+                    submitLabel="Paint portrait"
+                    onSubmit={(extra) => {
+                      toast.info(`Painting ${draft.card.name}…`, 'The new portrait appears here when it’s done.')
+                      void invoke('images:generate', { kind: 'portrait', characterPath: path, ...(extra.trim() ? { prompt: extra } : {}) }).catch((err) => toast.error(err, 'Couldn’t paint the portrait'))
+                    }}
+                    onClose={() => setPainting(false)}
+                  />
+                )}
                 <Tip label="Open in Obsidian">
                   <Button variant="ghost" size="icon" aria-label="Open in Obsidian" onClick={() => void invoke('vault:openInObsidian', path)}>
                     <ExternalLink />
