@@ -8,8 +8,28 @@ import type { LoreEntry } from './types'
 import { PLAY_MODES } from './play'
 import { EDITIONS } from './editions'
 
-export const CAMPAIGN_TONES = ['Heroic', 'Grim', 'Horror', 'Mystery', 'Comedic', 'Political intrigue', 'Exploration', 'Swashbuckling', 'Romantic', 'Epic', 'Action', 'Anime', 'Slice of life'] as const
-export const CAMPAIGN_SETTINGS = ['Classic high fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange', 'Modern day', 'Urban fantasy', 'School / academy', 'Sci-fi', 'Post-apocalyptic', 'Your own idea'] as const
+/** Tone chips, grouped for the builder. Players can add their own as well. */
+export const TONE_GROUPS = [
+  { label: 'Mood', items: ['Heroic', 'Epic', 'Hopeful', 'Grim', 'Dark fantasy', 'Tragic', 'Horror', 'Mystery'] },
+  { label: 'Play style', items: ['Action', 'Swashbuckling', 'Exploration', 'Survival', 'Political intrigue', 'Heist', 'War', 'Sandbox'] },
+  { label: 'Feel', items: ['Comedic', 'Cozy', 'Slice of life', 'Anime', 'Romantic', 'Romantic comedy', 'Harem', 'Fanservice', 'Spicy (18+)'] }
+] as const
+export const CAMPAIGN_TONES = TONE_GROUPS.flatMap((g) => g.items)
+export const MAX_TONES = 8
+
+/** Setting chips, grouped for the builder. A campaign can mix several, plus the player's own idea. */
+export const SETTING_GROUPS = [
+  {
+    label: 'Fantasy',
+    items: ['Classic high fantasy', 'Low fantasy', 'Coastal & seafaring', 'Frozen north', 'Desert kingdoms', 'Deep jungle', 'Mountain holds', 'Fey wilds', 'City of intrigue', 'The Underdark', 'Gothic lands', 'Planar & strange']
+  },
+  { label: 'Myth & legend', items: ['Heaven & hell', 'Feudal Japan', 'Mythic Greece', 'Norse saga', 'Ancient empire', 'Isekai (another world)'] },
+  { label: 'Modern & beyond', items: ['Modern day', 'Urban fantasy', 'Supernatural underworld', 'Academy / university', 'Wild west', 'Steampunk', 'Cyberpunk', 'Sci-fi', 'Space opera', 'Post-apocalyptic'] }
+] as const
+export const CAMPAIGN_SETTINGS = SETTING_GROUPS.flatMap((g) => g.items)
+
+/** Tones that bring romance or sexual content: the drafts must keep every character an adult. */
+const ADULT_TONES = /spicy|harem|fanservice|romantic|romance|nsfw|18\+/i
 
 /** Long enough for a full pasted campaign prompt. */
 export const PREMISE_MAX = 12_000
@@ -17,7 +37,7 @@ export const PREMISE_MAX = 12_000
 export const CampaignConceptSchema = z.object({
   name: z.string().max(120).default(''),
   premise: z.string().max(PREMISE_MAX).default(''),
-  tones: z.array(z.string().max(40)).max(6).default([]),
+  tones: z.array(z.string().max(40)).max(MAX_TONES).default([]),
   /** Picked setting chips; a campaign can mix several (Modern day + Urban fantasy). */
   settings: z.array(z.string().max(60)).max(CAMPAIGN_SETTINGS.length).default([]),
   /** The player's own setting idea, alongside or instead of the chips. */
@@ -399,6 +419,7 @@ export function piecePrompt(c: CampaignConcept, d: CampaignDraft, piece: DraftPi
     c.name.trim() ? `Name: ${c.name.trim()}` : 'Name: invent a fitting one',
     `Premise: ${c.premise.trim() || 'surprise me'}`,
     c.tones.length ? `Tone: ${c.tones.join(', ')}` : '',
+    c.tones.some((t) => ADULT_TONES.test(t)) ? 'Every character is an adult (21 or older); no school settings for romance.' : '',
     conceptSetting(c) ? `Setting: ${conceptSetting(c)}` : '',
     `Rules: ${c.edition === '3.5e' ? 'D&D 3.5 edition (use 3.5 classes, prestige classes, monsters and skills)' : 'D&D 5th edition'}`,
     `Character levels: ${c.levels || '1–5'}`,

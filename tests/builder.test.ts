@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { CampaignConceptSchema, conceptSetting, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX, salvageLists } from '../src/shared/builder'
+import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, CampaignConceptSchema, conceptSetting, MAX_TONES, draftCampaignBody, draftLore, emptyDraft, escapeStrayQuotes, mergePiece, parseDraft, parseSections, piecePrompt, PREMISE_MAX, salvageLists } from '../src/shared/builder'
 import { describeIssues, fieldLabel } from '../src/shared/validation'
 
 const SAMPLE = {
@@ -184,6 +184,21 @@ describe('campaign builder: drafting in pieces', () => {
     expect(conceptSetting(CampaignConceptSchema.parse({ settings: ['Sci-fi'] }))).toBe('Sci-fi')
     expect(conceptSetting(CampaignConceptSchema.parse({ setting: 'Own idea' }))).toBe('Own idea')
     expect(piecePrompt(CampaignConceptSchema.parse({}), emptyDraft(), 'overview')).not.toContain('Setting:')
+  })
+
+  it('keeps every character an adult when a romance or spicy tone is picked', () => {
+    const rule = 'Every character is an adult (21 or older)'
+    expect(piecePrompt(CampaignConceptSchema.parse({ tones: ['Heroic', 'Spicy (18+)'] }), emptyDraft(), 'npcs')).toContain(rule)
+    expect(piecePrompt(CampaignConceptSchema.parse({ tones: ['Romantic comedy'] }), emptyDraft(), 'overview')).toContain(rule)
+    expect(piecePrompt(CampaignConceptSchema.parse({ tones: ['Heroic', 'Mystery'] }), emptyDraft(), 'overview')).not.toContain(rule)
+  })
+
+  it('offers each tone and setting chip once, and allows up to MAX_TONES tones', () => {
+    expect(new Set(CAMPAIGN_TONES).size).toBe(CAMPAIGN_TONES.length)
+    expect(new Set(CAMPAIGN_SETTINGS).size).toBe(CAMPAIGN_SETTINGS.length)
+    const tones = CAMPAIGN_TONES.slice(0, MAX_TONES)
+    expect(CampaignConceptSchema.parse({ tones }).tones).toEqual(tones)
+    expect(() => CampaignConceptSchema.parse({ tones: CAMPAIGN_TONES.slice(0, MAX_TONES + 1) })).toThrow()
   })
 
   it('tells later pieces what exists so names stay consistent', () => {
