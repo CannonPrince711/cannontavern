@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { askConfirm } from '@/components/AskDialog'
-import { AlertTriangle, Camera, Download, ExternalLink, ImagePlus, Loader2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, Download, ExternalLink, ImagePlus, Loader2, Plus, RefreshCw, Save, Sparkles, Trash2, X } from 'lucide-react'
 import type { CharacterCard, CharacterNote } from '@shared/types'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { Button } from '@/components/ui/button'
-import { Callout, Field } from '@/components/ui/controls'
+import { Callout, Field, NativeSelect } from '@/components/ui/controls'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -338,45 +338,125 @@ export function CharacterEditor(): React.JSX.Element | null {
 export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }): React.JSX.Element {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [tab, setTab] = useState<'blank' | 'ai'>('ai')
+  const campaigns = useVault((s) => s.index?.campaigns ?? [])
+  const active = useVault((s) => s.activeCampaign)
+  const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
+  const [gen, setGen] = useState({ concept: '', level: 1, race: '', cls: '', campaignPath: '', portrait: true })
+  const campaignPath = gen.campaignPath || active || ''
+
+  const done = (path: string): void => {
+    onOpenChange(false)
+    setName('')
+    useVault.getState().selectCharacter(path)
+    useUi.setState({ editingCharacter: path })
+  }
   const create = async (): Promise<void> => {
     setBusy(true)
     try {
-      const note = await invoke('characters:create', name.trim())
-      onOpenChange(false)
-      setName('')
-      useVault.getState().selectCharacter(note.path)
-      useUi.setState({ editingCharacter: note.path })
+      done((await invoke('characters:create', name.trim())).path)
     } catch (err) {
       toast.error(err)
     } finally {
       setBusy(false)
     }
   }
+  const generate = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const r = await invoke('characters:generate', {
+        concept: gen.concept,
+        level: gen.level,
+        ...(gen.race.trim() ? { race: gen.race.trim() } : {}),
+        ...(gen.cls.trim() ? { cls: gen.cls.trim() } : {}),
+        ...(campaignPath ? { campaignPath } : {})
+      })
+      toast.success(`${r.name} is ready`, r.changes.length ? `Rules fixed on the sheet: ${r.changes.join('; ')}.` : 'Check the sheet and change anything you like.')
+      if (gen.portrait && hasImageBackend) {
+        void invoke('images:generate', { kind: 'portrait', characterPath: r.path, ...(campaignPath ? { campaignPath } : {}) }).catch((err) => toast.error(err, 'Couldn’t paint the portrait'))
+      }
+      setGen((g) => ({ ...g, concept: '', race: '', cls: '' }))
+      done(r.path)
+    } catch (err) {
+      toast.error(err, 'Couldn’t generate the character')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[420px]">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (name.trim()) void create()
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>New character</DialogTitle>
-            <DialogDescription>Creates a note in Characters/. You can add a portrait, card and D&D sheet next.</DialogDescription>
-          </DialogHeader>
-          <div className="px-6 pb-5">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Aria Thornwood" autoFocus aria-label="Character name" />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+    <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
+      <DialogContent className="w-[520px]">
+        <DialogHeader>
+          <DialogTitle>New character</DialogTitle>
+          <DialogDescription>Creates a note in Characters/. Write one yourself, or describe a concept and let the AI build the whole character and sheet.</DialogDescription>
+        </DialogHeader>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'blank' | 'ai')} className="px-6">
+          <TabsList>
+            <TabsTrigger value="ai" className="px-4">Generate with AI</TabsTrigger>
+            <TabsTrigger value="blank" className="px-4">Blank</TabsTrigger>
+          </TabsList>
+          <TabsContent value="ai" className="space-y-3 py-3">
+            <Field label="Concept" htmlFor="gen-concept" description="Who are they? A sentence or two is plenty.">
+              <Textarea
+                id="gen-concept"
+                rows={3}
+                value={gen.concept}
+                onChange={(e) => setGen({ ...gen, concept: e.target.value })}
+                placeholder="A cocky gnome airship mechanic with a clockwork owl, who owes money to the wrong people"
+                autoFocus
+              />
+            </Field>
+            <div className="grid grid-cols-[1fr_6rem] gap-3">
+              <Field label="Campaign" htmlFor="gen-campaign" className="py-0">
+                <NativeSelect id="gen-campaign" value={campaignPath} onChange={(e) => setGen({ ...gen, campaignPath: e.target.value })}>
+                  <option value="">None (classic fantasy, 5e)</option>
+                  {campaigns.map((c) => (
+                    <option key={c.path} value={c.path}>
+                      {c.displayName}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field label="Level" htmlFor="gen-level" className="py-0">
+                <Input id="gen-level" type="number" min={1} max={20} value={gen.level} onChange={(e) => setGen({ ...gen, level: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Race (optional)" htmlFor="gen-race" className="py-0">
+                <Input id="gen-race" value={gen.race} onChange={(e) => setGen({ ...gen, race: e.target.value })} placeholder="Let the AI pick" />
+              </Field>
+              <Field label="Class (optional)" htmlFor="gen-class" className="py-0">
+                <Input id="gen-class" value={gen.cls} onChange={(e) => setGen({ ...gen, cls: e.target.value })} placeholder="e.g. Rogue, or Fighter 2 / Rogue 1" />
+              </Field>
+            </div>
+            {hasImageBackend && (
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={gen.portrait} onChange={(e) => setGen({ ...gen, portrait: e.target.checked })} />
+                Paint a portrait too
+              </label>
+            )}
+            <p className="text-[11px] text-muted-foreground">Uses the campaign’s rules edition and setting. Hit points, base attack, saves and proficiency are recalculated from the class tables after the AI writes the sheet. It takes about a minute.</p>
+          </TabsContent>
+          <TabsContent value="blank" className="py-3">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Aria Thornwood" aria-label="Character name" onKeyDown={(e) => e.key === 'Enter' && name.trim() && void create()} />
+            <p className="mt-2 text-[11px] text-muted-foreground">You can add a portrait, card and D&D sheet next.</p>
+          </TabsContent>
+        </Tabs>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          {tab === 'ai' ? (
+            <Button onClick={() => void generate()} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ? 'Writing the character…' : 'Generate'}
             </Button>
-            <Button type="submit" disabled={!name.trim() || busy}>
+          ) : (
+            <Button onClick={() => void create()} disabled={!name.trim() || busy}>
               {busy && <Loader2 className="animate-spin" />} Create
             </Button>
-          </DialogFooter>
-        </form>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

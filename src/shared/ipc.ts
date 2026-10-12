@@ -139,6 +139,11 @@ export interface InvokeMap {
   /** `force` overwrites changes made on disk since the note was loaded. */
   'characters:save': Invoke<[note: CharacterNote, force?: boolean], CharacterNote>
   'characters:create': Invoke<[name: string, npc?: boolean], CharacterNote>
+  /** AI character generator: writes a full character (card + sheet) from a concept; `changes` lists the rules fixes made to the model's sheet. */
+  'characters:generate': Invoke<
+    [opts: { concept: string; level: number; race?: string; cls?: string; campaignPath?: VaultPath; edition?: '5e' | '3.5e'; npc?: boolean }],
+    { path: VaultPath; name: string; changes: string[] }
+  >
   'characters:delete': Invoke<[path: VaultPath], void>
   'characters:import': Invoke<[], CharacterNote[]>
   'characters:export': Invoke<[path: VaultPath, format: 'json' | 'png'], { path: string } | null>
@@ -368,6 +373,7 @@ const invokeChannels = {
   'characters:get': 1,
   'characters:save': 1,
   'characters:create': 1,
+  'characters:generate': 1,
   'characters:delete': 1,
   'characters:import': 1,
   'characters:export': 1,
