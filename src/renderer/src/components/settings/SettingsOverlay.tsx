@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowDownCircle, BookOpenText, Cpu, ImageIcon, Palette, Puzzle, Settings2, Shield, Volume2, X } from 'lucide-react'
+import { ArrowDownCircle, BookOpenText, Cpu, Download, ImageIcon, Palette, Puzzle, Settings2, Shield, Upload, Volume2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { openSettingsFile, saveSettingsFile } from '@/lib/settings-file'
 import { cn } from '@/lib/utils'
 import { useUi, type SettingsSection } from '@/stores/ui'
 import { AppearanceSection, GeneralSection, SecuritySection } from './sections'
@@ -22,7 +23,7 @@ const NAV: { id: SettingsSection; label: string; icon: React.ElementType; descri
   { id: 'images', label: 'Image backends', icon: ImageIcon, description: 'ComfyUI, Automatic1111 and more' },
   { id: 'prompt', label: 'Prompt', icon: BookOpenText, description: 'Block order, context and memory' },
   { id: 'tts', label: 'Speech', icon: Volume2, description: 'Read replies aloud' },
-  { id: 'security', label: 'Security', icon: Shield, description: 'Connections, keys, export' },
+  { id: 'security', label: 'Security', icon: Shield, description: 'Connections, keys, saving and opening settings' },
   { id: 'extensions', label: 'Extensions', icon: Puzzle, description: 'Optional add-ons' }
 ]
 
@@ -74,7 +75,15 @@ export function SettingsOverlay(): React.JSX.Element {
             </li>
           ))}
         </ul>
-        <p className="mt-auto px-2 text-[11px] leading-relaxed text-muted-foreground">
+        <div className="mt-auto space-y-1 px-1 pb-3">
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => void saveSettingsFile()}>
+            <Download /> Save settings…
+          </Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => void openSettingsFile()}>
+            <Upload /> Open settings…
+          </Button>
+        </div>
+        <p className="px-2 text-[11px] leading-relaxed text-muted-foreground">
           Settings are stored in <span className="selectable break-all">{userDataPath}</span>, outside your vault.
         </p>
       </nav>
