@@ -82,3 +82,20 @@ export async function validateVault(path: string): Promise<VaultValidation> {
 export function obsidianUri(vaultName: string, path: string): string {
   return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(path.replace(/\.md$/i, ''))}`
 }
+
+/** obsidian://open?path=<absolute file> opens the file in whichever registered vault holds it, whatever the vault is called. */
+export function obsidianPathUri(absFile: string): string {
+  return `obsidian://open?path=${encodeURIComponent(absFile)}`
+}
+
+/** The registered Obsidian vault that contains a file, if any (Windows paths compare case-insensitively). */
+export function obsidianVaultFor(absFile: string, vaults: DetectedVault[], platform: NodeJS.Platform = process.platform): DetectedVault | null {
+  const norm = (p: string): string => {
+    const n = p.replace(/\\/g, '/').replace(/\/+$/, '')
+    return platform === 'win32' ? n.toLowerCase() : n
+  }
+  const file = norm(absFile)
+  // The deepest match wins when vaults are nested.
+  const hits = vaults.filter((v) => file.startsWith(`${norm(v.path)}/`)).sort((a, b) => b.path.length - a.path.length)
+  return hits[0] ?? null
+}

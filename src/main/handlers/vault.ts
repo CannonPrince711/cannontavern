@@ -4,9 +4,9 @@ import { z } from 'zod'
 import { IMAGE_EXTENSIONS, RESOURCE_FOLDERS } from '@shared/layout'
 import { noteName } from '@shared/names'
 import { AppError } from '../errors'
-import { handle } from '../ipc'
+import { handle, send } from '../ipc'
 import { settingsStore } from '../settings-store'
-import { detectObsidianVaults, obsidianConfigFiles, obsidianUri, validateVault } from '../vault/obsidian'
+import { detectObsidianVaults, obsidianConfigFiles, obsidianPathUri, obsidianVaultFor, validateVault } from '../vault/obsidian'
 import { installFolderWarning, vaultInInstallFolder } from '../vault/location'
 import { vaultService } from '../vault/service'
 import { createSampleCampaign } from '../sample'
@@ -100,8 +100,21 @@ export function registerVaultHandlers(): void {
     async (_e, path) => {
       const index = vaultService.getIndex()
       if (!index) throw new AppError('VAULT_NOT_CONFIGURED', 'No vault is open.')
-      vaultService.require().resolve(path) // validates the path
-      await shell.openExternal(obsidianUri(index.vaultName, path))
+      const abs = vaultService.require().resolve(path) // validates the path
+      const vaults = await detectObsidianVaults(obsidianConfigFiles(app.getPath('appData'), app.getPath('home')))
+      if (obsidianVaultFor(abs, vaults)) {
+        // By path: works whatever Obsidian calls the vault.
+        await shell.openExternal(obsidianPathUri(abs))
+        return
+      }
+      // Obsidian doesn't know this folder: open the note in the default app, and say how to add it.
+      const failed = await shell.openPath(abs)
+      if (failed) throw new AppError('OPEN_FAILED', `Couldn’t open the note: ${failed}`)
+      send(getMainWindow(), 'toast', {
+        level: 'info',
+        title: 'Your vault isn’t in Obsidian yet',
+        detail: `Opened the note in your default app instead. To open notes in Obsidian, choose “Open folder as vault” in Obsidian and pick ${settingsStore.get().vault.path}.`
+      })
     },
     pathArg
   )
