@@ -1,6 +1,9 @@
 import { Globe2 } from 'lucide-react'
 import { worldGroups, type WorldGroup } from '@shared/world'
 import { useUi } from '@/stores/ui'
+
+// A stable empty list: a fresh [] from a store selector would re-render forever.
+const NO_CAMPAIGNS: never[] = []
 import { useVault } from '@/stores/vault'
 
 const GROUP_LABEL: Record<WorldGroup, string> = { text: 'text model', prompt: 'DM prompt', images: 'images', triggers: 'automatic images' }
@@ -10,7 +13,7 @@ const GROUP_LABEL: Record<WorldGroup, string> = { text: 'text model', prompt: 'D
  * worlds that override them, each opening that campaign's This world tab.
  */
 export function WorldOverridesNotice({ groups }: { groups: WorldGroup[] }): React.JSX.Element {
-  const campaigns = useVault((s) => s.index?.campaigns ?? [])
+  const campaigns = useVault((s) => s.index?.campaigns ?? NO_CAMPAIGNS)
   const overriding = campaigns
     .map((c) => ({ c, which: worldGroups(c.world).filter((g) => groups.includes(g)) }))
     .filter((x) => x.which.length)
