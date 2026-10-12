@@ -197,6 +197,7 @@ export function PromptSection(): React.JSX.Element {
         <div className="grid grid-cols-2 gap-4 py-3">
           <NumberInput label="Context budget (0 = backend’s context size)" value={prompt.contextBudget} min={0} step={512} onChange={(v) => set({ contextBudget: v })} suffix="tok" />
           <NumberInput label="Update session summary every N messages (0 = off)" value={prompt.summaryEvery} min={0} max={500} onChange={(v) => set({ summaryEvery: v })} />
+          <NumberInput label="Auto-compress when the prompt reaches % of context (0 = off)" value={prompt.autoCompressAt} min={0} max={100} onChange={(v) => set({ autoCompressAt: v })} suffix="%" />
           <NumberInput label="Messages scanned for lorebook keywords" value={prompt.lorebookScanDepth} min={1} max={100} onChange={(v) => set({ lorebookScanDepth: v })} />
           <NumberInput label="Lorebook token budget (0 = unlimited)" value={prompt.lorebookTokenBudget} min={0} step={128} onChange={(v) => set({ lorebookTokenBudget: v })} suffix="tok" />
         </div>

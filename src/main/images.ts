@@ -14,7 +14,7 @@ import { resolveTextBackend, textAdapter } from './backends/text'
 import { backendChain, chatService } from './chat'
 import { AppError, toErrorInfo } from './errors'
 import { send } from './ipc'
-import { readCampaign, readCharacter, resolveCharacterLink } from './library'
+import { readCampaign, readCampaignModelMap, readCharacter, resolveCharacterLink } from './library'
 import { readMap } from './maps'
 import { postMessage, readSession } from './sessions'
 import { settingsStore } from './settings-store'
@@ -25,6 +25,14 @@ import { getMainWindow } from './window'
 type GenerateOpts = InvokeArgs<'images:generate'>[0]
 
 const purposeOf = (kind: GenerateOpts['kind']): ImagePurpose => (kind === 'prompt' ? 'other' : kind)
+
+/** The purpose's profile, with the campaign's own model swapped in when its Campaign.md names one. */
+async function profileFor(vault: Parameters<typeof readCampaignModelMap>[0], campaignPath: VaultPath | undefined, purpose: ImagePurpose) {
+  const profile = settingsStore.get().imageProfiles[purpose]
+  if (!campaignPath) return profile
+  const model = (await readCampaignModelMap(vault, campaignPath, 'image_models'))[purpose]
+  return model ? { ...profile, model } : profile
+}
 
 const PROMPT_WRITER = `You write prompts for a text-to-image model. Describe one image as a single line of comma-separated visual details: subject, setting, lighting, mood, colours, composition, art style. Fantasy illustration. No story, no dialogue, no text in the image, no real artist names. At most 70 words. Reply with the prompt only.`
 
@@ -178,7 +186,7 @@ class ImageService {
       if (!prompt) throw new AppError('NO_PROMPT', 'Describe what to draw, e.g. /image a misty harbour at dusk.')
 
       // This purpose's generation options: model, workflow, size, steps, style (Settings → Image backends).
-      const profile = settingsStore.get().imageProfiles[purpose]
+      const profile = await profileFor(vault, session?.campaignPath, purpose)
       const workflowId = workflowFor(backend, purpose, profile, opts.workflowId)
       const applied = applyImageProfile(backend, purpose, profile, workflowId)
       const over: Partial<ImageRequest> = { ...applied.over }
@@ -253,7 +261,7 @@ class ImageService {
       `A top-down fantasy map of ${campaign.name}, drawn as cartography: parchment, ink and watercolour, coastlines, roads and terrain, no text or labels.${campaign.setting ? ` Setting: ${campaign.setting}` : ''}${places ? ` It includes: ${places}.` : ''}${extra ? ` ${extra}` : ''}`,
       `top-down fantasy map of ${campaign.name}, ${campaign.setting.slice(0, 200)}, parchment, ink and watercolour cartography, terrain, roads, no text`
     )
-    const profile = s.imageProfiles.map
+    const profile = await profileFor(vault, campaignPath, 'map')
     let workflowId = workflowFor(backend, 'map', profile)
     if (sketch && backend.type === 'comfyui') {
       // A sketch needs a workflow that takes an image: the chosen one if it does, else a Maps one that does, else any.

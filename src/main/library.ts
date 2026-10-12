@@ -76,6 +76,26 @@ export async function readCampaign(vault: Vault, folder: VaultPath): Promise<{ c
   return { campaign: normalizeCampaign(folder, name, c.data, c.body), party: normalizeParty(p.data, p.body) }
 }
 
+/**
+ * A campaign's own models, from its Campaign.md frontmatter, under image_models or text_models:
+ *   image_models:
+ *     portrait: FLUX1/flux1-dev-fp8.safetensors
+ *   text_models:
+ *     chat: Gemsicle-31B-Q4_K_M.gguf
+ * Anything the note doesn't name uses the app's global settings.
+ */
+export async function readCampaignModelMap(vault: Vault, folder: VaultPath, key: 'image_models' | 'text_models'): Promise<Record<string, string>> {
+  const cFile = await vault.readIfExists(joinVaultPath(folder, CAMPAIGN_FILE))
+  if (!cFile) return {}
+  const raw = parseNote(cFile.content).data[key]
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  const models: Record<string, string> = {}
+  for (const [purpose, model] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof model === "string" && model.trim()) models[purpose] = model.trim()
+  }
+  return models
+}
+
 export async function createCampaign(
   vault: Vault,
   name: string,

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, protocol, shell } from 'electron'
+import { dirname } from 'node:path'
+import { app, BrowserWindow, dialog, protocol, shell } from 'electron'
 import { registerAppHandlers } from './handlers/app'
 import { registerBackendHandlers } from './handlers/backends'
 import { registerModelHandlers } from './handlers/models'
@@ -7,6 +8,7 @@ import { registerTableHandlers, stopTable } from './handlers/table'
 import { registerCharacterHandlers } from './handlers/characters'
 import { registerImageHandlers } from './handlers/images'
 import { registerLoreHandlers } from './handlers/lore'
+import { registerSpeechHandlers } from './handlers/speech'
 import { registerSheetHandlers } from './handlers/sheet'
 import { registerSessionHandlers, watchExternalSessionEdits } from './handlers/sessions'
 import { registerSettingsHandlers } from './handlers/settings'
@@ -18,6 +20,7 @@ import { handleVaultProtocol, vaultSchemeConfig } from './vault/protocol'
 import { handleExtensionProtocol, registerExtensionScheme } from './extensions/protocol'
 import { extensionHost } from './extensions/host'
 import { registerExtensionHandlers } from './handlers/extensions'
+import { installFolderWarning, vaultInInstallFolder } from './vault/location'
 import { vaultService } from './vault/service'
 import { syncTray, attachTrayBehaviour } from './tray'
 import { updater } from './updater'
@@ -62,6 +65,7 @@ if (!app.requestSingleInstanceLock()) {
     registerSessionHandlers()
     registerCharacterHandlers()
     registerLoreHandlers()
+    registerSpeechHandlers()
     registerSheetHandlers()
     registerImageHandlers()
     registerExtensionHandlers()
@@ -95,6 +99,17 @@ if (!app.requestSingleInstanceLock()) {
     await extensionHost.reload().catch((err) => console.warn('[extensions] load failed:', err))
 
     const win = await createMainWindow(settingsStore.get().appearance)
+
+    // A vault inside the install folder is wiped by the next update; say so before that happens.
+    const installFolder = app.isPackaged ? dirname(app.getPath('exe')) : null
+    if (installFolder && vault.path && vaultInInstallFolder(vault.path, vault.rootFolder, installFolder)) {
+      void dialog.showMessageBox(win, {
+        type: 'warning',
+        title: 'Move your vault',
+        message: 'Your vault is inside DND Tavern’s install folder.',
+        detail: `${installFolderWarning(installFolder)} Open Settings → General → Vault to move it.`
+      })
+    }
     attachTrayBehaviour(win)
     syncTray()
     updater.checkOnStartup()

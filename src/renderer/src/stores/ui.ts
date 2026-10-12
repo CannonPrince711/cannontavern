@@ -7,6 +7,7 @@ export type SettingsSection =
   | 'text'
   | 'images'
   | 'prompt'
+  | 'tts'
   | 'security'
   | 'extensions'
 

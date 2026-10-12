@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowDownCircle, BookOpenText, Cpu, ImageIcon, Palette, Puzzle, Settings2, Shield, X } from 'lucide-react'
+import { ArrowDownCircle, BookOpenText, Cpu, ImageIcon, Palette, Puzzle, Settings2, Shield, Volume2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useUi, type SettingsSection } from '@/stores/ui'
@@ -8,6 +8,7 @@ import { AppearanceSection, GeneralSection, SecuritySection } from './sections'
 import { ExtensionsSection } from '@/components/extensions/ExtensionsUi'
 import { ImageBackendsSection } from './ImageBackendsSection'
 import { PromptSection } from './PromptSection'
+import { TtsSection } from './TtsSection'
 import { TextBackendsSection } from './TextBackendsSection'
 import { UpdatesSettings, useUpdates } from '@/components/Updates'
 import { useApp } from '@/stores/app'
@@ -19,6 +20,7 @@ const NAV: { id: SettingsSection; label: string; icon: React.ElementType; descri
   { id: 'text', label: 'Text backends', icon: Cpu, description: 'LLMs for the DM, summaries and prompts' },
   { id: 'images', label: 'Image backends', icon: ImageIcon, description: 'ComfyUI, Automatic1111 and more' },
   { id: 'prompt', label: 'Prompt', icon: BookOpenText, description: 'Block order, context and memory' },
+  { id: 'tts', label: 'Speech', icon: Volume2, description: 'Read replies aloud' },
   { id: 'security', label: 'Security', icon: Shield, description: 'Connections, keys, export' },
   { id: 'extensions', label: 'Extensions', icon: Puzzle, description: 'Optional add-ons' }
 ]
@@ -93,6 +95,7 @@ export function SettingsOverlay(): React.JSX.Element {
           {section === 'text' && <TextBackendsSection />}
           {section === 'images' && <ImageBackendsSection />}
           {section === 'prompt' && <PromptSection />}
+          {section === 'tts' && <TtsSection />}
           {section === 'security' && <SecuritySection />}
           {section === 'extensions' && <ExtensionsSection />}
         </div>
