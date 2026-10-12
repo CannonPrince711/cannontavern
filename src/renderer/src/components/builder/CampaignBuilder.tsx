@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
-import { CAMPAIGN_SETTINGS, CAMPAIGN_TONES, emptyDraft, PREMISE_MAX, type CampaignConcept, type CampaignDraft, type DraftPiece } from '@shared/builder'
+import { CAMPAIGN_TONES, emptyDraft, MAX_TONES, SETTING_GROUPS, TONE_GROUPS, PREMISE_MAX, type CampaignConcept, type CampaignDraft, type DraftPiece } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
 import { EDITION_INFO, EDITIONS } from '@shared/editions'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,27 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     >
       {children}
     </button>
+  )
+}
+
+/** Chips under small group headings; `children` go at the end of the last group. */
+function ChipGroups({ groups, picked, onToggle, children }: { groups: readonly { label: string; items: readonly string[] }[]; picked: string[]; onToggle: (item: string) => void; children?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      {groups.map((g, i) => (
+        <div key={g.label} className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{g.label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {g.items.map((t) => (
+              <Chip key={t} active={picked.includes(t)} onClick={() => onToggle(t)}>
+                {t}
+              </Chip>
+            ))}
+            {i === groups.length - 1 && children}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -78,6 +99,20 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
   const set = <K extends keyof CampaignConcept>(k: K, v: CampaignConcept[K]): void => setConcept({ ...concept, [k]: v })
   // The own-idea box is open while it holds anything (a lone space just opened it).
   const custom = concept.setting !== ''
+  const [toneDraft, setToneDraft] = useState('')
+  const ownTones = concept.tones.filter((t) => !(CAMPAIGN_TONES as readonly string[]).includes(t))
+  const toggleTone = (t: string): void => {
+    if (concept.tones.includes(t)) set('tones', concept.tones.filter((x) => x !== t))
+    else if (concept.tones.length < MAX_TONES) set('tones', [...concept.tones, t])
+    else toast.info(`Up to ${MAX_TONES} tones`, 'Remove one to pick another.')
+  }
+  const addOwnTone = (): void => {
+    const t = toneDraft.trim()
+    if (!t) return
+    const known = concept.tones.find((x) => x.toLowerCase() === t.toLowerCase())
+    if (!known && concept.tones.length < MAX_TONES) set('tones', [...concept.tones, t])
+    setToneDraft('')
+  }
   const tooLong = concept.premise.length > PREMISE_MAX
   return (
     <div className="space-y-5">
@@ -109,35 +144,45 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
         </p>
       </div>
       <div className="space-y-1.5">
-        <Label>Tone</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {CAMPAIGN_TONES.map((t) => (
-            <Chip key={t} active={concept.tones.includes(t)} onClick={() => set('tones', concept.tones.includes(t) ? concept.tones.filter((x) => x !== t) : [...concept.tones, t].slice(-4))}>
-              {t}
-            </Chip>
-          ))}
+        <div className="flex items-baseline gap-2">
+          <Label>Tone</Label>
+          <span className={cn('ml-auto text-[11px] tabular-nums', concept.tones.length >= MAX_TONES ? 'text-crimson' : 'text-muted-foreground')}>
+            {concept.tones.length} / {MAX_TONES}
+          </span>
         </div>
+        <ChipGroups groups={TONE_GROUPS} picked={concept.tones} onToggle={toggleTone} />
+        {ownTones.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {ownTones.map((t) => (
+              <Chip key={t} active onClick={() => toggleTone(t)}>
+                {t} ×
+              </Chip>
+            ))}
+          </div>
+        )}
+        <Input
+          value={toneDraft}
+          onChange={(e) => setToneDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            addOwnTone()
+          }}
+          onBlur={addOwnTone}
+          maxLength={40}
+          disabled={concept.tones.length >= MAX_TONES}
+          placeholder={concept.tones.length >= MAX_TONES ? `Up to ${MAX_TONES} tones: remove one to add another` : 'Your own tone, then Enter (e.g. Gothic romance, Monster-of-the-week)'}
+          aria-label="Add your own tone"
+        />
       </div>
       <div className="space-y-1.5">
         <Label>Setting</Label>
         <p className="text-[11px] text-muted-foreground">Pick as many as you like: the AI blends them.</p>
-        <div className="flex flex-wrap gap-1.5">
-          {CAMPAIGN_SETTINGS.map((t) => {
-            const isCustom = t === 'Your own idea'
-            const active = isCustom ? custom : concept.settings.includes(t)
-            return (
-              <Chip
-                key={t}
-                active={active}
-                onClick={() =>
-                  isCustom ? set('setting', custom ? '' : ' ') : set('settings', active ? concept.settings.filter((x) => x !== t) : [...concept.settings, t])
-                }
-              >
-                {t}
-              </Chip>
-            )
-          })}
-        </div>
+        <ChipGroups groups={SETTING_GROUPS} picked={concept.settings} onToggle={(t) => set('settings', concept.settings.includes(t) ? concept.settings.filter((x) => x !== t) : [...concept.settings, t])}>
+          <Chip active={custom} onClick={() => set('setting', custom ? '' : ' ')}>
+            Your own idea
+          </Chip>
+        </ChipGroups>
         {custom && <Input value={concept.setting.trimStart()} onChange={(e) => set('setting', e.target.value || ' ')} placeholder={concept.settings.length ? 'Add your own details, e.g. the Underworld and Heaven’s gate' : 'Describe your setting'} aria-label="Your setting" maxLength={500} autoFocus />}
       </div>
       <div className="grid grid-cols-2 gap-4">
