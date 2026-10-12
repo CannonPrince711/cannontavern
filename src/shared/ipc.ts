@@ -221,6 +221,8 @@ export interface InvokeMap {
   'sessions:post': Invoke<[path: VaultPath, message: Omit<Message, 'id' | 'createdAt'>], Session>
   'sessions:updateMessage': Invoke<[path: VaultPath, id: Id, patch: MessagePatch], Session>
   'sessions:deleteMessage': Invoke<[path: VaultPath, id: Id], Session>
+  /** Moves a session note to the system trash (Recycle Bin), after stopping its replies. */
+  'sessions:delete': Invoke<[path: VaultPath], void>
   'sessions:saveCombat': Invoke<[path: VaultPath, combat: CombatState | null], Session>
   'sessions:updateMeta': Invoke<
     [path: VaultPath, patch: { title?: string; persona?: string; characterPath?: VaultPath | null; summary?: string; mode?: PlayMode; companions?: VaultPath[]
@@ -424,6 +426,7 @@ const invokeChannels = {
   'sessions:post': 1,
   'sessions:updateMessage': 1,
   'sessions:deleteMessage': 1,
+  'sessions:delete': 1,
   'sessions:saveCombat': 1,
   'sessions:updateMeta': 1,
   'sessions:undoState': 1,
