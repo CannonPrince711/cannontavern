@@ -39,6 +39,8 @@ export function registerTableHandlers(): void {
   })
   handle('table:status', () => tableHost.status())
   handle('table:kick', (_e, id) => tableHost.kick(id), z.tuple([z.string().max(40)]))
+  handle('table:approveCharacter', (_e, id) => tableHost.approveCharacter(id), z.tuple([z.string().max(40)]))
+  handle('table:declineCharacter', (_e, id) => tableHost.declineCharacter(id), z.tuple([z.string().max(40)]))
   handle('table:setAutoRespond', (_e, mode) => tableHost.setAutoRespond(mode), z.tuple([z.enum(['each', 'all', 'manual'])]))
   handle('table:setSession', (_e, path) => tableHost.setSession(path), z.tuple([z.string().max(1024).nullable()]))
   handle('table:openScreen', () => openPlayerScreen())

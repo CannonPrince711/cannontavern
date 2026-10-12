@@ -57,6 +57,23 @@ export interface TablePlayer {
   connected: boolean
 }
 
+/** A player's "create my character" request. The host approves the finished character before anyone can play it. */
+export interface CharacterRequest {
+  id: string
+  playerId: string
+  playerName: string
+  status: 'writing' | 'ready' | 'approved' | 'declined' | 'failed'
+  concept: string
+  /** Once written: the character's name, a "Race · Class level" line and its note. */
+  name?: string
+  summary?: string
+  characterPath?: string
+  error?: string
+}
+
+/** Limits on player-made characters. */
+export const CREATE_LIMITS = { concept: 1000, perPlayer: 1, active: 3 } as const
+
 export interface TableState {
   sessionTitle: string | null
   campaignName: string | null
@@ -68,6 +85,8 @@ export interface TableState {
   players: TablePlayer[]
   /** The DM is writing (for a typing indicator). */
   busy: boolean
+  /** Character requests and where they are (no concepts or notes for other players). */
+  requests: Omit<CharacterRequest, 'concept' | 'characterPath'>[]
 }
 
 // ── Wire messages ───────────────────────────────────────────────────────────
@@ -78,6 +97,7 @@ export type ClientMessage =
   | { type: 'say'; text: string }
   | { type: 'check'; target: string; dc?: number }
   | { type: 'roll'; expr: string }
+  | { type: 'create'; concept: string; level: number; race?: string; cls?: string }
   | { type: 'ping' }
 
 export type ServerMessage =
@@ -102,6 +122,8 @@ export interface TableStatus {
   sessionPath: string | null
   autoRespond: AutoRespond
   players: TablePlayer[]
+  /** Player character requests, for the host to review. */
+  requests: CharacterRequest[]
 }
 
 /** Messages players can see: no hidden notes and no sheet-change details. */

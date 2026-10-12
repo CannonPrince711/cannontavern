@@ -31,7 +31,9 @@ import {
   type TableCharacter,
   type TablePlayer,
   type TableState,
-  type TableStatus
+  type TableStatus,
+  type CharacterRequest,
+  CREATE_LIMITS
 } from '@shared/table'
 import type { CharacterNote, Message, Session, VaultPath } from '@shared/types'
 import { chatService } from '../chat'
@@ -42,6 +44,9 @@ import { postMessage, readSession, updateFrontmatter } from '../sessions'
 import { vaultService } from '../vault/service'
 import { openExternalSafe } from '../security'
 import { startFunnel, stopFunnel, stopFunnelSync } from './funnel'
+import { generateCharacter } from '../chargen'
+import { imageService } from '../images'
+import { settingsStore } from '../settings-store'
 import { getMainWindow } from '../window'
 
 interface Player extends TablePlayer {
@@ -95,6 +100,8 @@ class TableHost {
   private stream: { requestId: string; text: string; speaker: 'dm' | 'player'; speakerName?: string; at: number } | null = null
   private broadcastTimer: ReturnType<typeof setTimeout> | undefined
   private busy = false
+  /** Players' "create my character" requests, by id. */
+  private requests = new Map<string, CharacterRequest>()
   /** Tailscale Funnel address while the table is shared online. */
   private funnel = ''
   private readonly onEvent = (channel: string, payload: unknown): void => this.event(channel, payload)
@@ -115,7 +122,8 @@ class TableHost {
       ...(this.server && this.funnel ? { publicUrl: `${this.funnel}${query}` } : {}),
       sessionPath: this.sessionPath,
       autoRespond: this.autoRespond,
-      players: [...this.players.values()].map(({ id, name, characterPath, connected }) => ({ id, name, characterPath, connected }))
+      players: [...this.players.values()].map(({ id, name, characterPath, connected }) => ({ id, name, characterPath, connected })),
+      requests: [...this.requests.values()]
     }
   }
 
@@ -166,6 +174,7 @@ class TableHost {
     for (const p of this.players.values()) for (const ws of p.sockets) ws.close()
     this.players.clear()
     this.banned.clear()
+    this.requests.clear()
     this.wss?.close()
     await new Promise<void>((r) => (this.server ? this.server.close(() => r()) : r()))
     this.server = null
@@ -364,6 +373,11 @@ class TableHost {
       player.lastAction = now
     }
 
+    if (msg.type === 'create') {
+      await this.createRequest(player, msg)
+      return
+    }
+
     if (msg.type === 'claim') {
       if (msg.characterPath === null) {
         player.characterPath = undefined
@@ -519,7 +533,8 @@ class TableHost {
   private async state(): Promise<TableState> {
     const players = [...this.players.values()].filter((p) => p.view === 'player').map(({ id, name, characterPath, connected }) => ({ id, name, characterPath, connected }))
     const vault = vaultService.vault
-    const empty: TableState = { sessionTitle: null, campaignName: null, mode: 'ai-dm', messages: [], party: [], available: [], players, busy: false }
+    const requests = [...this.requests.values()].map(({ concept: _c, characterPath: _p, ...r }) => r)
+    const empty: TableState = { sessionTitle: null, campaignName: null, mode: 'ai-dm', messages: [], party: [], available: [], players, busy: false, requests }
     if (!vault || !this.sessionPath) return empty
     const session = await readSession(vault, this.sessionPath).catch(() => null)
     if (!session) return empty
@@ -534,9 +549,11 @@ class TableHost {
       mode: playModeOf(session.frontmatter),
       messages: playerSafe(session.messages.slice(-200), (file) => this.mediaUrl(joinVaultPath(session.campaignPath, IMAGES_FOLDER, file))),
       party: notes.map((n) => this.character(n)),
-      available: (index?.characters ?? []).filter((c) => !claimed.has(c.path)).map((c) => ({ path: c.path, name: c.displayName })),
+      // Characters waiting for the host's approval can't be claimed yet.
+      available: (index?.characters ?? []).filter((c) => !claimed.has(c.path) && !this.heldBack().has(c.path)).map((c) => ({ path: c.path, name: c.displayName })),
       players,
-      busy: this.busy
+      busy: this.busy,
+      requests
     }
   }
 
@@ -548,6 +565,82 @@ class TableHost {
         .then((state) => this.broadcast({ type: 'state', state }))
         .catch(() => {})
     }, 120)
+  }
+
+  // ── Player-made characters ──────────────────────────────────────────────
+
+  /** Notes written for requests the host hasn't approved yet. */
+  private heldBack(): Set<string> {
+    return new Set([...this.requests.values()].filter((r) => r.status === 'ready' && r.characterPath).map((r) => r.characterPath!))
+  }
+
+  private async createRequest(player: Player, msg: Extract<ClientMessage, { type: 'create' }>): Promise<void> {
+    const concept = clean(msg.concept, CREATE_LIMITS.concept)
+    if (!concept) throw new AppError('NO_CONCEPT', 'Describe your character first.')
+    const active = [...this.requests.values()].filter((r) => r.status === 'writing' || r.status === 'ready')
+    if (active.filter((r) => r.playerId === player.id).length >= CREATE_LIMITS.perPlayer) throw new AppError('ONE_AT_A_TIME', 'Your character is already being made. Wait for the host.')
+    if (active.length >= CREATE_LIMITS.active) throw new AppError('BUSY', 'Several characters are already being made. Try again in a minute.')
+    const vault = vaultService.require()
+    const session = await readSession(vault, this.sessionPath!)
+    const req: CharacterRequest = { id: randomBytes(6).toString('hex'), playerId: player.id, playerName: player.name, status: 'writing', concept }
+    this.requests.set(req.id, req)
+    this.changed()
+    send(getMainWindow(), 'toast', { level: 'info', title: `${player.name} is making a character`, detail: 'You’ll be asked to approve it when it’s written.' })
+    try {
+      const r = await generateCharacter({
+        concept,
+        level: Math.min(20, Math.max(1, Math.round(Number(msg.level)) || 1)),
+        ...(msg.race ? { race: clean(msg.race, 60) } : {}),
+        ...(msg.cls ? { cls: clean(msg.cls, 100) } : {}),
+        campaignPath: session.campaignPath
+      })
+      const note = await readCharacter(vault, r.path).catch(() => null)
+      const d = note?.card.dnd
+      Object.assign(req, { status: 'ready', name: r.name, characterPath: r.path, summary: d ? [d.race, `${d.class}${/\d/.test(d.class) ? '' : ` ${d.level}`}`].filter(Boolean).join(' · ') : '' })
+      send(getMainWindow(), 'toast', { level: 'success', title: `${player.name}’s character is ready: ${r.name}`, detail: 'Approve or decline it in the Table panel.' })
+    } catch (err) {
+      Object.assign(req, { status: 'failed', error: toErrorInfo(err).message })
+    }
+    this.changed()
+  }
+
+  /** Host: the character joins the party, the player gets it, and its portrait is painted. */
+  async approveCharacter(id: string): Promise<TableStatus> {
+    const req = this.requests.get(id)
+    if (!req || req.status !== 'ready' || !req.characterPath) throw new AppError('NOT_READY', 'That character isn’t waiting for approval.')
+    req.status = 'approved'
+    const vault = vaultService.require()
+    const player = this.players.get(req.playerId)
+    if (player && this.sessionPath) {
+      player.characterPath = req.characterPath
+      const session = await readSession(vault, this.sessionPath)
+      const paths = await Promise.all(session.frontmatter.characters.map((l) => resolveCharacterLink(vault, l).catch(() => null)))
+      if (!paths.includes(req.characterPath)) {
+        const updated = await updateFrontmatter(vault, this.sessionPath, { characters: [...session.frontmatter.characters, toWikilink(req.characterPath, { full: true, alias: req.name })] })
+        this.publish(updated)
+      }
+    }
+    if (settingsStore.get().imageBackends.length) imageService.generate({ kind: 'portrait', characterPath: req.characterPath })
+    this.changed()
+    return this.status()
+  }
+
+  /** Host: the note goes to the Recycle Bin and the player is told. */
+  async declineCharacter(id: string): Promise<TableStatus> {
+    const req = this.requests.get(id)
+    if (!req || (req.status !== 'ready' && req.status !== 'failed')) throw new AppError('NOT_READY', 'That character isn’t waiting for approval.')
+    if (req.characterPath) {
+      await vaultService.require().delete(req.characterPath).catch(() => {})
+      vaultService.removeFromIndex(req.characterPath)
+    }
+    req.status = 'declined'
+    this.changed()
+    return this.status()
+  }
+
+  private changed(): void {
+    this.scheduleBroadcast()
+    this.notifyHost()
   }
 
   // ── Events from the app ───────────────────────────────────────────────────
@@ -571,7 +664,7 @@ class TableHost {
           const now = Date.now()
           if (now - this.stream.at > 80) {
             this.stream.at = now
-            const visible = this.stream.text.replace(/<(state|stats)>[\s\S]*?(?:<\/\1>|$)/gi, '')
+            const visible = this.stream.text.replace(/<(state|stats|bond|milestone)>[\s\S]*?(?:<\/\1>|$)/gi, '')
             this.broadcast({ type: 'stream', text: visible, speaker: this.stream.speaker, speakerName: this.stream.speakerName })
           }
         }

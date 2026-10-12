@@ -75,3 +75,12 @@ describe('character generator skill names', () => {
     expect(sheet.base_saves).toEqual({ fort: 1, ref: 3, will: 1 })
   })
 })
+
+describe('character generator feat check', () => {
+  it('flags more feats than the build allows', () => {
+    const { changes } = fixSheet(sheet35({ race: 'Dwarf (Mountain)', class: 'Fighter', level: 2, con: 14, feats: ['Weapon Focus', 'Exotic Weapon Proficiency (firearms)', 'Diehard', 'Iron Will'] }))
+    expect(changes).toContain('check feats: 4 listed, 3 expected for this build')
+    expect(fixSheet(sheet35({ race: 'Human', class: 'Fighter 1', level: 1, feats: ['A', 'B', 'C'] })).changes.join(' ')).not.toMatch(/check feats/)
+    expect(fixSheet(sheet35({ race: 'Wood Elf', class: 'Ranger 1', level: 1, feats: ['Exotic Weapon Proficiency', 'Track (ranger class feature)'] })).changes.join(' ')).not.toMatch(/check feats/)
+  })
+})

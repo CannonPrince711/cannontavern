@@ -142,6 +142,11 @@ export function fixSheet(sheet: DndSheet): { sheet: DndSheet; changes: string[] 
       s.base_saves = saves
       s.max_hp = hp
       s.hp = hp
+      // Feats: 1 + one per 3 levels, +1 for humans, plus fighter bonus feats (1st and every even level). Flag too many.
+      const fighter = known.find((k) => k.name === 'fighter')?.level ?? 0
+      const expected = 1 + Math.floor(s.level / 3) + (/\bhuman\b/i.test(s.race) && !/half/i.test(s.race) ? 1 : 0) + (fighter ? 1 + Math.floor(fighter / 2) : 0)
+      const listed = (s.feats ?? []).filter((f) => !/\((class|.*class feature|planned)/i.test(f)).length
+      if (listed > expected) changes.push(`check feats: ${listed} listed, ${expected} expected for this build`)
     }
     // Other systems' skill names → 3.5e, and no more ranks than level + 3.
     const ranks: Record<string, number> = {}
