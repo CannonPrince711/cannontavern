@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { newMessageId } from '@shared/callouts'
 import { toWikilink } from '@shared/names'
 import { normalizeCard } from '@shared/notes'
-import { PLAY_MODES } from '@shared/play'
+import { PARTY_LIMITS, PLAY_MODES } from '@shared/play'
 import type { CharacterNote, CombatState, Message } from '@shared/types'
 import { chatService } from '../chat'
 import { AppError } from '../errors'
@@ -141,6 +141,17 @@ export function registerSessionHandlers(): void {
         const notes = await Promise.all(patch.companions.map((cp) => readCharacter(vault, cp)))
         fm.companions = notes.length ? notes.map((c) => toWikilink(c.path, { full: true, alias: c.card.name })) : undefined
       }
+      if (patch.party !== undefined) {
+        // The party sets the lead characters and the companions too (in turn order), so everything else keeps working.
+        const link = async (cp: string): Promise<string> => {
+          const c = await readCharacter(vault, cp)
+          return toWikilink(c.path, { full: true, alias: c.card.name })
+        }
+        const groups = await Promise.all(patch.party.map(async (g) => ({ lead: await link(g.lead), companions: await Promise.all(g.companions.map(link)) })))
+        fm.party = groups.length ? groups : undefined
+        fm.characters = groups.map((g) => g.lead)
+        fm.companions = groups.flatMap((g) => g.companions).length ? groups.flatMap((g) => g.companions) : undefined
+      }
       if (patch.characterPath !== undefined) {
         if (patch.characterPath) {
           const c = await readCharacter(vault, patch.characterPath)
@@ -151,7 +162,10 @@ export function registerSessionHandlers(): void {
     },
     z.tuple([
       path,
-      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional(), mode: z.enum(PLAY_MODES).optional(), companions: z.array(path).max(8).optional() })
+      z.object({ title: z.string().max(200).optional(), persona: z.string().max(200).optional(), characterPath: path.nullable().optional(), summary: z.string().max(100_000).optional(), mode: z.enum(PLAY_MODES).optional(),
+        companions: z.array(path).max(8).optional(),
+        party: z.array(z.object({ lead: path, companions: z.array(path).max(PARTY_LIMITS.companions) })).max(PARTY_LIMITS.leads).optional()
+      })
     ])
   )
 

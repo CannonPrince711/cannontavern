@@ -3,10 +3,11 @@ import { Check, ExternalLink, ImagePlus, Map as MapIcon, Pencil, ScanSearch, Use
 import { useMap } from '@/components/map/MapView'
 import type { InvokeArgs } from '@shared/ipc'
 import type { CharacterSummary } from '@shared/types'
-import { PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
+import { PARTY_LIMITS, PLAY_MODE_INFO, PLAY_MODES, playModeOf, type PlayMode } from '@shared/play'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { ImageModelSwitcher, TextModelSwitcher } from '@/components/ModelSwitcher'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { NativeSelect } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
@@ -94,7 +95,7 @@ export function ChatHeader({ character, onInspect }: { character: CharacterSumma
         </label>
       )}
 
-      {mode !== 'user-dm' && <CompanionsMenu mode={mode} />}
+      {mode === 'ai-only' ? <PartyButton /> : mode === 'ai-dm' && <CompanionsMenu mode={mode} />}
 
       <TextModelSwitcher className="w-32 @min-[760px]:w-48" />
       <ImageModelSwitcher compact className="w-28 @min-[760px]:w-40" />
@@ -208,5 +209,117 @@ function CompanionsMenu({ mode }: { mode: PlayMode }): React.JSX.Element {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+interface GroupDraft {
+  lead: string
+  companions: string[]
+}
+
+/** AI only: up to 3 lead characters, each with up to 2 companions who follow them. */
+function PartyButton(): React.JSX.Element {
+  const session = useChat((s) => s.session)!
+  const index = useVault((s) => s.index)
+  const [open, setOpen] = useState(false)
+  const [groups, setGroups] = useState<GroupDraft[]>([])
+  const [saving, setSaving] = useState(false)
+  const candidates = [...(index?.characters ?? []), ...(index?.npcs ?? [])]
+  const pathOf = (link: string): string => {
+    const k = linkKey(link)
+    return candidates.find((c) => c.path.replace(/\.md$/i, '').toLowerCase() === k || c.path.replace(/\.md$/i, '').toLowerCase().endsWith(`/${k}`))?.path ?? ''
+  }
+  const fm = session.frontmatter
+  const count = fm.party?.length ? fm.party.reduce((n, g) => n + 1 + g.companions.length, 0) : fm.characters.length + (fm.companions?.length ?? 0)
+
+  const start = (): void => {
+    const from: GroupDraft[] = fm.party?.length
+      ? fm.party.map((g) => ({ lead: pathOf(g.lead), companions: g.companions.map(pathOf) }))
+      : fm.characters.map((l, i) => ({ lead: pathOf(l), companions: i === 0 ? (fm.companions ?? []).slice(0, PARTY_LIMITS.companions).map(pathOf) : [] }))
+    const filled = Array.from({ length: PARTY_LIMITS.leads }, (_, i) => ({ lead: from[i]?.lead ?? '', companions: Array.from({ length: PARTY_LIMITS.companions }, (_, j) => from[i]?.companions[j] ?? '') }))
+    setGroups(filled)
+    setOpen(true)
+  }
+  const used = new Set(groups.flatMap((g) => [g.lead, ...g.companions]).filter(Boolean))
+  const set = (gi: number, slot: 'lead' | number, value: string): void =>
+    setGroups((cur) => cur.map((g, i) => (i !== gi ? g : slot === 'lead' ? { lead: value, companions: value ? g.companions : g.companions.map(() => '') } : { ...g, companions: g.companions.map((c, j) => (j === slot ? value : c)) })))
+  const save = async (): Promise<void> => {
+    const party = groups.filter((g) => g.lead).map((g) => ({ lead: g.lead, companions: g.companions.filter(Boolean) }))
+    if (!party.length) return toast.info('Pick at least one lead character')
+    setSaving(true)
+    try {
+      useChat.setState({ session: await invoke('sessions:updateMeta', session.path, { party }) })
+      setOpen(false)
+    } catch (err) {
+      toast.error(err, 'Couldn’t save the party')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const picker = (gi: number, slot: 'lead' | number, value: string, label: string, disabled = false): React.JSX.Element => (
+    <NativeSelect value={value} disabled={disabled} onChange={(e) => set(gi, slot, e.target.value)} aria-label={label} className="min-w-0 flex-1">
+      <option value="">{slot === 'lead' ? 'No character' : 'No companion'}</option>
+      {candidates
+        .filter((c) => c.path === value || !used.has(c.path))
+        .map((c) => (
+          <option key={c.path} value={c.path}>
+            {c.displayName}
+            {c.path.toLowerCase().includes('/npcs/') ? ' (NPC)' : ''}
+          </option>
+        ))}
+    </NativeSelect>
+  )
+  const members = groups.reduce((n, g) => n + (g.lead ? 1 + g.companions.filter(Boolean).length : 0), 0)
+
+  return (
+    <>
+      <Tip label="Party: the characters the AI plays, each with their companions">
+        <Button variant="ghost" size="sm" aria-label="Party" className="gap-1.5 px-2" onClick={start}>
+          <Users />
+          {count > 0 && <span className="text-xs tabular-nums">{count}</span>}
+        </Button>
+      </Tip>
+      {open && (
+        <Dialog open onOpenChange={(o) => !o && setOpen(false)}>
+          <DialogContent className="w-[min(620px,calc(100vw-48px))]">
+            <DialogHeader>
+              <DialogTitle>Party</DialogTitle>
+              <DialogDescription>
+                The AI plays up to {PARTY_LIMITS.leads} lead characters, each with up to {PARTY_LIMITS.companions} companions who follow them. Each round, every leader acts, then their companions, then the DM answers.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 px-6 py-2">
+              {groups.map((g, gi) => (
+                <div key={gi} className="space-y-1.5 rounded-lg border bg-card/60 p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Group {gi + 1}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 text-xs">Leader</span>
+                    {picker(gi, 'lead', g.lead, `Group ${gi + 1} leader`)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Companions</span>
+                    {g.companions.map((c, ci) => (
+                      <span key={ci} className="flex min-w-0 flex-1">
+                        {picker(gi, ci, c, `Group ${gi + 1} companion ${ci + 1}`, !g.lead)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {members > 5 && <p className="text-xs text-gold">{members} party members means long rounds: every one of them writes before the DM answers.</p>}
+              {candidates.length === 0 && <p className="text-xs text-muted-foreground">Create characters or NPCs first.</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void save()} disabled={saving}>
+                Save party
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   )
 }

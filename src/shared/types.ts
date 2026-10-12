@@ -107,6 +107,12 @@ export interface CombatState {
   combatants: Combatant[]
 }
 
+/** One lead character and the companions who follow them (wikilinks). */
+export interface PartyGroup {
+  lead: string
+  companions: string[]
+}
+
 /** Frontmatter of a session note. */
 export interface SessionFrontmatter {
   type: 'session'
@@ -117,6 +123,11 @@ export interface SessionFrontmatter {
   characters: string[]
   /** Wikilinks to characters or NPCs the AI plays as party members (AI is DM mode). */
   companions?: string[]
+  /**
+   * AI only: up to 3 lead characters, each with up to 2 companions who follow them
+   * (wikilinks). characters and companions are kept in step with it.
+   */
+  party?: PartyGroup[]
   persona?: string
   /** Who plays which side (see shared/play.ts); missing means ai-dm. */
   mode?: PlayMode

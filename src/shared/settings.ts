@@ -328,7 +328,10 @@ export const SettingsSchema = z.object({
   fallbackChain: z.boolean().default(true),
   roles: z
     .object({
+      /** The DM (and every reply when Characters is empty). */
       chat: z.string().nullable().default(null),
+      /** The characters when the AI writes as them (AI only, You are the DM, companions); null: same as chat. */
+      character: z.string().nullable().default(null),
       summary: z.string().nullable().default(null),
       imagePrompt: z.string().nullable().default(null)
     })
