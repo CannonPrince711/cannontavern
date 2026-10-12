@@ -34,6 +34,8 @@ const WorldFieldSchemas = {
   summary_model: z.string().max(300),
   /** Vault path of a preset note; '' means the built-in DM prompt. */
   preset: z.string().max(500),
+  /** Read-aloud voice for the DM and narration in this world; empty: Settings → Speech. */
+  narrator_voice: z.string().max(100),
   /** Added to the DM prompt in this world only. */
   dm_instructions: z.string().max(10_000),
   /** System prompt when the AI plays the character in this world. */
@@ -137,7 +139,7 @@ export function worldGroups(w: WorldOverrides | undefined): WorldGroup[] {
   const has = (...keys: (keyof WorldOverrides)[]): boolean => keys.some((k) => w[k] !== undefined)
   const groups: WorldGroup[] = []
   if (has('text_backend', 'text_model', 'character_backend', 'temperature', 'summary_model')) groups.push('text')
-  if (has('preset', 'dm_instructions', 'player_prompt', 'shared_resources')) groups.push('prompt')
+  if (has('preset', 'dm_instructions', 'player_prompt', 'shared_resources', 'narrator_voice')) groups.push('prompt')
   if (w.images && Object.values(w.images).some((o) => o && Object.keys(o).length)) groups.push('images')
   if (has('auto_portraits', 'scene_every', 'scene_on_location_change')) groups.push('triggers')
   return groups

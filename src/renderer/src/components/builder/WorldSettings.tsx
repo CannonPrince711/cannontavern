@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { VoiceOptions } from '@/lib/speech'
 import { BookPlus, Loader2, Sparkles } from 'lucide-react'
 import { IMAGE_PURPOSES, type ImagePurpose } from '@shared/settings'
 import { chatBackendId, WORLD_RESOURCE_KINDS, type ImageOverride, type WorldOverrides, type WorldResourceKind } from '@shared/world'
@@ -224,6 +225,10 @@ export function WorldSettings({ campaignPath, world, onChange }: { campaignPath:
         </Field>
         <Field label="Extra DM instructions" htmlFor="ws-dm" description="Added to the DM prompt in this world only, e.g. pacing, content limits or how NPCs talk.">
           <Textarea id="ws-dm" rows={3} value={world.dm_instructions ?? ''} onChange={(e) => set({ dm_instructions: e.target.value.trim() ? e.target.value : undefined })} placeholder="Optional" />
+        </Field>
+        <Field label="Narrator voice" htmlFor="ws-narrator" description={`Reads the DM aloud in this world. Characters use their own voice (set in each character or NPC). Global: ${settings.tts.voice || 'the server default'}.`}>
+          <Input id="ws-narrator" list="ws-narrator-options" value={world.narrator_voice ?? ''} onChange={(e) => set({ narrator_voice: e.target.value.trim() || undefined })} placeholder="Global" className="w-60" />
+          <VoiceOptions id="ws-narrator-options" />
         </Field>
         <Field inline label="Own player prompt" description="When the AI plays the character (You are DM / AI only).">
           <Switch checked={world.player_prompt !== undefined} onCheckedChange={(on) => set({ player_prompt: on ? settings.prompt.playerPrompt : undefined })} aria-label="Override the player prompt" />

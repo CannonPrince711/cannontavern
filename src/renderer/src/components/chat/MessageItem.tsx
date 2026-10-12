@@ -230,7 +230,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
     void showMenu([
       { label: selected ? 'Copy selection' : 'Copy', run: () => void navigator.clipboard.writeText(selected || m.text) },
       !streaming && { label: 'Edit', run: () => setEditing(true) },
-      ttsOn && !!m.text.trim() && { label: 'Read aloud', run: () => speak(m.text).catch((err) => toast.error(err)) },
+      ttsOn && !!m.text.trim() && { label: 'Read aloud', run: () => speak(m.text, { sessionPath: useChat.getState().session?.path, role: m.role, name: m.name }).catch((err) => toast.error(err)) },
       separator,
       isAi && m.swipes.length > 1 && { label: 'Previous reply', accelerator: 'Alt+Left', enabled: m.swipeIndex > 0 && !busy, run: () => props.onSwipe(m.id, -1) },
       isAi && m.swipes.length > 1 && { label: 'Next reply', accelerator: 'Alt+Right', enabled: !busy, run: () => props.onSwipe(m.id, 1) },
@@ -285,7 +285,7 @@ export const MessageItem = memo(function MessageItem(props: Props): React.JSX.El
         <Pencil />
       </ActionButton>
       {ttsOn && !!m.text.trim() && (
-        <ActionButton label="Read aloud" onClick={() => speak(m.text).catch((err) => toast.error(err))}>
+        <ActionButton label="Read aloud" onClick={() => speak(m.text, { sessionPath: useChat.getState().session?.path, role: m.role, name: m.name }).catch((err) => toast.error(err))}>
           <Volume2 />
         </ActionButton>
       )}

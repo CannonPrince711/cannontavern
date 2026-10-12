@@ -94,3 +94,17 @@ describe('separate DM and character models', () => {
     expect(worldGroups({ character_backend: 'gemsicle' })).toEqual(['text'])
   })
 })
+
+describe('voices per speaker', () => {
+  it('keeps a character’s voice in their note', async () => {
+    const { normalizeCard, cardToFrontmatter } = await import('@shared/notes')
+    const card = normalizeCard({ name: 'Rias', voice: ' rias ' }, 'x')
+    expect(card.voice).toBe('rias')
+    expect(cardToFrontmatter(card).voice).toBe('rias')
+    expect(cardToFrontmatter(normalizeCard({ name: 'No voice' }, 'x')).voice).toBeUndefined()
+  })
+
+  it('lets a world set its narrator voice', () => {
+    expect(worldGroups({ narrator_voice: 'narrator' })).toEqual(['prompt'])
+  })
+})

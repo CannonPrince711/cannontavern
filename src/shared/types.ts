@@ -235,6 +235,8 @@ export interface CharacterCard {
   aliases?: string[]
   creator_notes?: string
   alternate_greetings?: string[]
+  /** Read-aloud voice on the speech server (e.g. "rias"); empty: the narrator's. */
+  voice?: string
   dnd?: DndSheet
 }
 

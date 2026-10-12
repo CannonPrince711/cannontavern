@@ -2,7 +2,7 @@ import { Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Field, NativeSelect, SettingsGroup, Switch } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
-import { speak, stopSpeaking } from '@/lib/speech'
+import { speak, stopSpeaking, VoiceOptions } from '@/lib/speech'
 import { useApp } from '@/stores/app'
 import { toast } from '@/stores/toasts'
 import { NumberInput } from './fields'
@@ -39,7 +39,8 @@ export function TtsSection(): React.JSX.Element {
           </>
         )}
         <Field label="Voice" htmlFor="tts-voice" description={tts.mode === 'system' ? 'Leave blank for the default voice.' : 'A voice name the server knows, e.g. alloy.'}>
-          <Input id="tts-voice" value={tts.voice} onChange={(e) => set({ voice: e.target.value.trim() })} />
+          <Input id="tts-voice" list={tts.mode === 'server' ? 'tts-voice-options' : undefined} value={tts.voice} onChange={(e) => set({ voice: e.target.value.trim() })} />
+          {tts.mode === 'server' && <VoiceOptions id="tts-voice-options" />}
         </Field>
         <NumberInput label="Speed" value={tts.speed} min={0.25} max={4} step={0.05} onChange={(v) => set({ speed: v })} suffix="×" />
       </SettingsGroup>

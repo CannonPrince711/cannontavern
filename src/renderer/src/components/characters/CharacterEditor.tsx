@@ -16,6 +16,7 @@ import { Input, Textarea } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tip } from '@/components/ui/tooltip'
 import { invoke, IpcError, on } from '@/lib/ipc'
+import { VoiceOptions } from '@/lib/speech'
 import { toast } from '@/stores/toasts'
 import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
@@ -262,6 +263,10 @@ export function CharacterEditor(): React.JSX.Element | null {
                 <TabsContent value="card" className="space-y-1">
                   <TextField label="Description" rows={6} value={draft.card.description} onChange={(v) => card('description', v)} description="Who the character is: appearance, background, abilities. Use {{char}} and {{user}}." />
                   <TextField label="Personality" rows={2} value={draft.card.personality} onChange={(v) => card('personality', v)} />
+                  <Field label="Voice" htmlFor="char-voice" description="Read-aloud voice on your speech server (Settings → Speech). Empty: the narrator’s voice.">
+                    <Input id="char-voice" list="char-voice-options" value={draft.card.voice ?? ''} onChange={(e) => card('voice', e.target.value.trim() || undefined)} placeholder="e.g. rias" className="w-60" />
+                    <VoiceOptions id="char-voice-options" />
+                  </Field>
                   <TextField label="Scenario" rows={3} value={draft.card.scenario} onChange={(v) => card('scenario', v)} />
                 </TabsContent>
                 <TabsContent value="greetings" className="space-y-1">
