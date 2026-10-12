@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Hammer, Loader2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { CAMPAIGN_TONES, emptyDraft, MAX_TONES, SETTING_GROUPS, TONE_GROUPS, PREMISE_MAX, type CampaignConcept, type CampaignDraft, type DraftPiece } from '@shared/builder'
 import { PLAY_MODE_INFO, PLAY_MODES, type PlayMode } from '@shared/play'
-import { RulesetPicker } from '@/components/rulesets/Rulesets'
+import { findRuleset, RulesetPicker, useRulesets } from '@/components/rulesets/Rulesets'
+import { useUniverses } from '@/components/universes/Universes'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -97,6 +98,23 @@ function listOps<K extends 'locations' | 'npcs' | 'factions' | 'outline' | 'ques
 
 function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { concept: CampaignConcept; setConcept: (c: CampaignConcept) => void; onDraft: () => void; onManual: () => void; hasBackend: boolean }): React.JSX.Element {
   const set = <K extends keyof CampaignConcept>(k: K, v: CampaignConcept[K]): void => setConcept({ ...concept, [k]: v })
+  const universes = useUniverses()
+  const rulesets = useRulesets()
+  // A universe brings its bible into the draft and its ruleset onto the campaign.
+  const pickUniverse = async (folder: string): Promise<void> => {
+    try {
+      const u = await invoke('universes:get', folder)
+      if (!u) return
+      const r = findRuleset(rulesets, u.ruleset)
+      setConcept({
+        ...concept,
+        universe: { path: u.path, name: u.name, setting: u.setting },
+        ...(u.ruleset && r ? { edition: r.engine, ruleset: r.sourcebooks ? undefined : { id: r.id, name: r.name, rules: r.rules } } : {})
+      })
+    } catch (err) {
+      toast.error(err, 'Couldn’t read the universe')
+    }
+  }
   // The own-idea box is open while it holds anything (a lone space just opened it).
   const custom = concept.setting !== ''
   const [toneDraft, setToneDraft] = useState('')
@@ -201,14 +219,27 @@ function ConceptStep({ concept, setConcept, onDraft, onManual, hasBackend }: { c
           <Input id="cb-players" type="number" min={1} max={8} value={concept.players} onChange={(e) => set('players', Math.max(1, Math.min(8, Number(e.target.value) || 1)))} className="w-24" />
         </div>
       </div>
+      {universes.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Universe</Label>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip active={!concept.universe} onClick={() => setConcept({ ...concept, universe: undefined })}>
+              A world of its own
+            </Chip>
+            {universes.map((u) => (
+              <Chip key={u.folder} active={concept.universe?.path === u.folder} onClick={() => void pickUniverse(u.folder)}>
+                {u.displayName}
+              </Chip>
+            ))}
+          </div>
+          {concept.universe && <p className="text-xs text-muted-foreground">The draft is set inside {concept.universe.name} and uses its ruleset; the campaign shares its lorebooks.</p>}
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label>Rules</Label>
         <RulesetPicker
           value={concept.ruleset?.id ?? (concept.edition === '3.5e' ? 'dnd35' : 'dnd5e')}
-          onChange={(r) => {
-            set('edition', r.engine)
-            set('ruleset', r.sourcebooks ? undefined : { id: r.id, name: r.name, rules: r.rules })
-          }}
+          onChange={(r) => setConcept({ ...concept, edition: r.engine, ruleset: r.sourcebooks ? undefined : { id: r.id, name: r.name, rules: r.rules } })}
         />
       </div>
       <div className="space-y-1.5">
@@ -443,7 +474,7 @@ export function CampaignBuilder(): React.JSX.Element | null {
     }
     setBusy(true)
     try {
-      const r = await invoke('campaigns:build', draft, { mode, session, edition: concept.edition, ...(concept.ruleset ? { ruleset: concept.ruleset.id } : {}), ...(character ? { characterPath: character } : {}) })
+      const r = await invoke('campaigns:build', draft, { mode, session, edition: concept.edition, ...(concept.ruleset ? { ruleset: concept.ruleset.id } : {}), ...(concept.universe ? { universe: concept.universe.path } : {}), ...(character ? { characterPath: character } : {}) })
       const vault = useVault.getState()
       vault.setIndex(r.index)
       vault.setActiveCampaign(r.campaignPath)

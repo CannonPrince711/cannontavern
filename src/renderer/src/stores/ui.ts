@@ -21,6 +21,8 @@ interface UiStore {
   creatingCampaign: boolean
   /** The campaign builder dialog is open. */
   buildingCampaign: boolean
+  /** The universes dialog is open. */
+  managingUniverses: boolean
   /** Campaign folder whose settings dialog is open. */
   campaignSettings: string | null
   /** Which tab that dialog opens on. */
@@ -41,6 +43,7 @@ export const useUi = create<UiStore>((set) => ({
   editingCharacter: null,
   creatingCampaign: false,
   buildingCampaign: false,
+  managingUniverses: false,
   campaignSettings: null,
   campaignSettingsTab: 'campaign',
   settingsOpen: false,

@@ -15,6 +15,8 @@ import { resolveTextBackend, textAdapter } from './backends/text'
 import { AppError, toErrorInfo } from './errors'
 import { campaignLink } from '@shared/membership'
 import { campaignRuleset } from './rulesets'
+import { campaignUniverse } from './universes'
+import { withUniverse } from '@shared/universes'
 import { createCharacterFromCard, readCampaign } from './library'
 import { settingsStore } from './settings-store'
 import { vaultService } from './vault/service'
@@ -33,7 +35,9 @@ export interface GenerateCharacterOpts {
 export async function generateCharacter(opts: GenerateCharacterOpts): Promise<{ path: VaultPath; name: string; changes: string[] }> {
   const vault = vaultService.require()
   const s = opts.campaignPath ? settingsFor(opts.campaignPath) : settingsStore.get()
-  const campaign = opts.campaignPath ? (await readCampaign(vault, opts.campaignPath).catch(() => null))?.campaign ?? null : null
+  const own = opts.campaignPath ? (await readCampaign(vault, opts.campaignPath).catch(() => null))?.campaign ?? null : null
+  // In a universe: its setting and ruleset too.
+  const campaign = own ? withUniverse(own, await campaignUniverse(vault, own).catch(() => null)) : null
   const ruleset = campaign && !opts.edition ? await campaignRuleset(vault, campaign) : null
   const edition: Edition = opts.edition ?? ruleset?.engine ?? '5e'
   const index = vaultService.getIndex()

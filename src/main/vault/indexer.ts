@@ -1,5 +1,6 @@
 import { FOLDERS, classifyPath, isSharedLorebook, type NoteKind } from '@shared/layout'
 import { campaignFolderFromLink } from '@shared/membership'
+import { isUniverseLink, universeFolderFromLink } from '@shared/universes'
 import { joinVaultPath, noteName, wikilinkTarget } from '@shared/names'
 import { worldFromFrontmatter } from '@shared/world'
 import type {
@@ -8,6 +9,7 @@ import type {
   LorebookSummary,
   NoteRef,
   SessionSummary,
+  UniverseSummary,
   VaultIndex,
   VaultPath
 } from '@shared/types'
@@ -28,6 +30,7 @@ export class VaultIndexer {
   private presets = new Map<string, NoteRef>()
   private campaigns = new Map<string, CampaignSummary>()
   private sessions = new Map<string, SessionSummary>()
+  private universes = new Map<string, UniverseSummary>()
   builtAt = new Date().toISOString()
 
   constructor(
@@ -75,6 +78,7 @@ export class VaultIndexer {
           displayName: str(data.name) || noteName(folder),
           sessionCount: 0,
           world: worldFromFrontmatter(data),
+          ...(str(data.universe).trim() ? { universe: universeFolderFromLink(str(data.universe), this.vault.rootFolder) ?? undefined } : {}),
           ...(str(data.ruleset).trim() ? { ruleset: str(data.ruleset).trim() } : {}),
           ...(str(data.edition).trim() ? { edition: str(data.edition).trim() } : {})
         })
@@ -92,6 +96,15 @@ export class VaultIndexer {
         })
         break
       case 'party':
+        break
+      case 'universe':
+        this.universes.set(k, {
+          ...ref,
+          folder: cls.universePath!,
+          displayName: str(data.name) || noteName(cls.universePath!),
+          ...(str(data.blurb) ? { blurb: str(data.blurb) } : {}),
+          ...(str(data.ruleset) ? { ruleset: str(data.ruleset) } : {})
+        })
         break
     }
     return cls.kind
@@ -137,7 +150,7 @@ export class VaultIndexer {
       rootFolder: this.vault.rootFolder,
       isObsidianVault: this.meta.isObsidianVault,
       builtAt: this.builtAt,
-      characters: this.withCampaigns([...this.characters.values()]).sort(byName),
+      characters: this.withCampaigns([...this.characters.values()], [...campaigns.values()]).sort(byName),
       npcs: [...this.npcs.values()].sort(byName),
       campaigns: [...campaigns.entries()]
         .map(([k, c]) => ({ ...c, sessionCount: counts.get(k) ?? 0 }))
@@ -145,7 +158,8 @@ export class VaultIndexer {
       // Newest first: file names start with the date, so reverse name order works.
       sessions: [...this.sessions.values()].sort((a, b) => b.created.localeCompare(a.created) || b.name.localeCompare(a.name)),
       lorebooks: [...this.lorebooks.values()].sort(byName),
-      presets: [...this.presets.values()].sort(byName)
+      presets: [...this.presets.values()].sort(byName),
+      universes: [...this.universes.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
     }
   }
 
@@ -161,17 +175,28 @@ export class VaultIndexer {
       level: num(dnd.level),
       hp: num(dnd.hp),
       max_hp: num(dnd.max_hp),
-      campaigns: [...new Set(strs(data.campaigns).map((l) => campaignFolderFromLink(l, this.vault.rootFolder)).filter((f): f is string => !!f))]
+      campaigns: [...new Set(strs(data.campaigns).filter((l) => !isUniverseLink(l)).map((l) => campaignFolderFromLink(l, this.vault.rootFolder)).filter((f): f is string => !!f))],
+      // Added to a whole universe: expanded to its campaigns in withCampaigns.
+      universes: strs(data.campaigns).filter(isUniverseLink).map((l) => universeFolderFromLink(l, this.vault.rootFolder)).filter((f): f is string => !!f)
     }
   }
 
-  /** A character with no `campaigns` of its own belongs to the campaigns it has played in. */
-  private withCampaigns(list: CharacterSummary[]): CharacterSummary[] {
+  /**
+   * A character added to a universe belongs to every campaign in it; one with no `campaigns`
+   * of its own belongs to the campaigns it has played in.
+   */
+  private withCampaigns(list: CharacterSummary[], campaigns: CampaignSummary[]): CharacterSummary[] {
     const played = new Map<string, Set<string>>()
     for (const s of this.sessions.values()) {
       for (const who of s.cast ?? []) played.set(who, (played.get(who) ?? new Set()).add(s.campaignPath))
     }
-    return list.map((c) => {
+    return list.map(({ universes, ...c }) => {
+      if (universes?.length) {
+        const set = new Set(universes.map((u) => u.toLowerCase()))
+        c = { ...c, campaigns: [...new Set([...(c.campaigns ?? []), ...campaigns.filter((x) => x.universe && set.has(x.universe.toLowerCase())).map((x) => x.path)])] }
+        // A universe with no campaigns yet: keep the character out of the others.
+        if (!c.campaigns?.length) c = { ...c, campaigns: universes }
+      }
       if (c.campaigns?.length) return c
       const key = c.path.replace(/\.md$/i, '').toLowerCase()
       const found = played.get(key) ?? played.get(c.name.toLowerCase())
@@ -187,7 +212,7 @@ export class VaultIndexer {
   }
 
   private maps(): Map<string, unknown>[] {
-    return [this.characters, this.npcs, this.lorebooks, this.presets, this.campaigns, this.sessions]
+    return [this.characters, this.npcs, this.lorebooks, this.presets, this.campaigns, this.sessions, this.universes]
   }
 }
 

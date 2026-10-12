@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { UniversesDialog } from '@/components/universes/Universes'
 import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { AppShell } from '@/components/layout/AppShell'
 import { TitleBar } from '@/components/TitleBar'
@@ -93,6 +94,7 @@ export function App(): React.JSX.Element {
           {ready && <LorebookEditor />}
           {ready && <CampaignBuilder />}
           {ready && <CampaignSettings />}
+          {ready && <UniversesDialog />}
           {ready && <GraphOverlay />}
           {ready && <MapOverlay />}
           <AskDialog />

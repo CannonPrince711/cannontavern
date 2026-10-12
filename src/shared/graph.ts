@@ -5,7 +5,7 @@
  */
 import { classifyPath } from './layout'
 
-export type GraphKind = 'campaign' | 'party' | 'session' | 'character' | 'npc' | 'lorebook' | 'preset' | 'note'
+export type GraphKind = 'universe' | 'campaign' | 'party' | 'session' | 'character' | 'npc' | 'lorebook' | 'preset' | 'note'
 
 export interface GraphNode {
   id: string

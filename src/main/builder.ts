@@ -22,6 +22,8 @@ import { serializeLorebookBody } from '@shared/notes'
 import type { PlayMode } from '@shared/play'
 import { SOURCEBOOKS, type Edition } from '@shared/editions'
 import { readRuleset, rulesetValue } from './rulesets'
+import { readUniverse } from './universes'
+import { universeLink } from '@shared/universes'
 import type { VaultPath } from '@shared/types'
 import { backendChain } from './backends/chain'
 import { effectiveContext } from './backends/context'
@@ -168,6 +170,8 @@ export interface BuildOptions {
   edition?: Edition
   /** Ruleset id or note path (see rulesets.ts). */
   ruleset?: string
+  /** Universe folder it's set in (see universes.ts). */
+  universe?: string
   /** Create "Session 01" (opening with the draft's scene unless you are the DM). */
   session: boolean
   characterPath?: VaultPath
@@ -200,12 +204,15 @@ export async function buildCampaign(draft: CampaignDraft, opts: BuildOptions): P
     )
     links.push(toWikilink(lorePath, { full: true }))
   }
-  const ruleset = opts.ruleset ? await readRuleset(vault, opts.ruleset) : null
+  const universe = opts.universe ? await readUniverse(vault, opts.universe) : null
+  // No ruleset picked: the universe's.
+  const ruleset = opts.ruleset ? await readRuleset(vault, opts.ruleset) : universe?.ruleset ? await readRuleset(vault, universe.ruleset) : null
   await vault.mutate(joinVaultPath(campaign.path, CAMPAIGN_FILE), (cur) =>
     cur === null
       ? null
       : updateNote(cur, {
           lorebooks: links,
+          ...(universe ? { universe: universeLink(universe.path, universe.name) } : {}),
           ...(opts.mode !== 'ai-dm' ? { mode: opts.mode } : {}),
           ...(ruleset && !ruleset.sourcebooks
             ? { ruleset: rulesetValue(ruleset), ...(ruleset.engine !== '5e' ? { edition: ruleset.engine } : {}) }

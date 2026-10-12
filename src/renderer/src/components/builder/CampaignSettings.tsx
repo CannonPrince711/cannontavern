@@ -15,11 +15,15 @@ import { useUi } from '@/stores/ui'
 import { useVault } from '@/stores/vault'
 import { WorldSettings } from './WorldSettings'
 import { findRuleset, RulesetPicker, useRulesets } from '@/components/rulesets/Rulesets'
+import { useUniverses } from '@/components/universes/Universes'
+import { universeFolderFromLink } from '@shared/universes'
 
 interface Form {
   edition: Edition
   /** Ruleset as stored in Campaign.md (id or link); '' for the D&D edition. */
   ruleset: string
+  /** Universe folder; '' for none. */
+  universe: string
   sources: string[]
   other: string
   mode: PlayMode
@@ -40,6 +44,8 @@ export function CampaignSettings(): React.JSX.Element | null {
   const [form, setForm] = useState<Form | null>(null)
   const [busy, setBusy] = useState(false)
   const rulesets = useRulesets()
+  const universes = useUniverses()
+  const rootFolder = useVault((s) => s.index?.rootFolder ?? '')
 
   useEffect(() => {
     if (!path) return setForm(null)
@@ -53,6 +59,7 @@ export function CampaignSettings(): React.JSX.Element | null {
         setForm({
           edition,
           ruleset: c.ruleset ?? '',
+          universe: c.universe ? (universeFolderFromLink(c.universe, rootFolder) ?? '') : '',
           sources: sources.length ? sources.filter((s) => known.has(s)) : SOURCEBOOKS[edition].filter((b) => b.core).map((b) => b.name),
           other: sources.filter((s) => !known.has(s)).join(', '),
           mode: c.mode ?? 'ai-dm',
@@ -91,6 +98,7 @@ export function CampaignSettings(): React.JSX.Element | null {
       await invoke('campaigns:update', path, {
         edition: form.edition,
         ruleset: current && !current.sourcebooks ? current.id : null,
+        universe: form.universe || null,
         sources: [...form.sources, ...other],
         mode: form.mode,
         setting: form.setting,
@@ -200,6 +208,20 @@ export function CampaignSettings(): React.JSX.Element | null {
             </section>
             )}
 
+            {universes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-universe">Universe</Label>
+                <NativeSelect id="cs-universe" value={form.universe} onChange={(e) => set('universe', e.target.value)}>
+                  <option value="">None: a world of its own</option>
+                  {universes.map((u) => (
+                    <option key={u.folder} value={u.folder}>
+                      {u.displayName}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <p className="text-xs text-muted-foreground">Set in a universe, the campaign shares its setting bible and lorebooks, and characters added to the universe show up here.</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="cs-setting">Setting</Label>
               <Textarea id="cs-setting" rows={3} value={form.setting} onChange={(e) => set('setting', e.target.value)} />
