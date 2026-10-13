@@ -146,6 +146,17 @@ The clock button next to the message box turns on the **turn timer**: a countdow
 
 When the DM asks for a check (`[CHECK perception DC 13]`), a button appears that rolls it with your sheet's modifiers.
 
+The sheet panel also tracks the things that come up at the table every session:
+
+- **Death saves** (5e). At 0 HP a box appears with success and failure pips and a **Roll death save** button: 10 or more succeeds, a natural 1 counts as two failures, a natural 20 brings you back with 1 HP, and damage taken at 0 HP is a failure. Healing clears them.
+- **Concentration.** The brain button on a spell marks it as concentrated on. When you take damage, the app rolls the CON save for you (DC 10 or half the damage) and ends the spell on a failure; dropping to 0 HP ends it too.
+- **Inspiration** (5e): the star next to your name.
+- **Features**: limited-use abilities such as Rage, Ki points or Channel Divinity, with pips for each use and whether a short or long rest recharges them. **Fill for <class>** adds the usual ones for a 5e class and level from the SRD. Rests recharge them.
+- **Coins**: platinum, gold, electrum, silver and copper.
+- **Condition reminders**: hover a condition for what it does.
+
+The DM sees all of these in the sheet block of the prompt.
+
 ### Slash commands
 
 | Command | What it does |
@@ -155,7 +166,12 @@ When the DM asks for a check (`[CHECK perception DC 13]`), a button appears that
 | `/init`, `/next`, `/prev`, `/endcombat` | Start and run combat |
 | `/add Goblin hp 7 ac 15 init +2` | Add a combatant |
 | `/dmg Goblin 5`, `/heal Aria 4` | Change hit points |
-| `/rest short 2`, `/rest long` | Rests (hit dice, HP, spell slots) |
+| `/rest short 2`, `/rest long` | Rests (hit dice, HP, spell slots, features) |
+| `/deathsave` | Roll a death saving throw at 0 HP (5e) |
+| `/conc Bless`, `/conc end` | Start or end concentrating on a spell |
+| `/use Rage`, `/use ki 2` | Spend uses of a limited feature (no name lists them) |
+| `/inspire`, `/inspire use` | Gain or spend inspiration (5e) |
+| `/cond prone` | What a condition does (no name: your current conditions) |
 | `/party` | Add your character to the combat tracker |
 | `/image <prompt>`, `/image scene`, `/image portrait [name]`, `/image battlemap [place]` | Generate an illustration, a portrait, or a top-down battlemap of the current scene (or of the place you describe) |
 | `/note <name>` | Pull any vault note into the conversation |
@@ -215,7 +231,7 @@ Players only see the session's visible messages, the party's public stats and th
 
 ### Automatic sheet updates
 
-With **Settings → Prompt → Automatic sheet updates** on, the DM adds a hidden `<state>{"hp":-4,"add_item":"rope"}</state>` line when your HP, gold, XP, items or conditions change. The app applies the change to your sheet, hides the line, and posts what changed with an **Undo** button.
+With **Settings → Prompt → Automatic sheet updates** on, the DM adds a hidden `<state>{"hp":-4,"add_item":"rope"}</state>` line when your HP, gold, XP, items, conditions, concentration, inspiration or feature uses change. The app applies the change to your sheet, hides the line, and posts what changed with an **Undo** button.
 
 ## Text backends
 

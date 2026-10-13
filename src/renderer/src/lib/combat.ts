@@ -1,10 +1,11 @@
 import { addCombatants, applyHp, emptyCombat, findCombatant, nextTurn, parseAddArgs, prevTurn, rollInitiative } from '@shared/combat'
 import { modifier } from '@shared/prompt'
 import { damage, heal } from '@shared/sheet'
-import type { CombatState } from '@shared/types'
+import type { CombatState, DndSheet } from '@shared/types'
 import { loadActiveSheet, updateActiveSheet } from '@/hooks/useActiveCharacter'
 import { useChat } from '@/stores/chat'
 import { invoke } from './ipc'
+import { concentrationCheck } from './rolls'
 
 export function currentCombat(): CombatState {
   return useChat.getState().session?.frontmatter.combat ?? emptyCombat()
@@ -38,6 +39,23 @@ export async function addPartyToCombat(): Promise<void> {
   )
 }
 
+const system = (text: string): Promise<void> => useChat.getState().post({ role: 'system', text, swipes: [], swipeIndex: 0 })
+
+/**
+ * Damage (positive) or healing (negative) to a character sheet, saved with
+ * `save`. A concentrating character that stays up rolls to keep concentrating.
+ */
+export async function changeSheetHp(name: string, sheet: DndSheet, amount: number, save: (patch: Partial<DndSheet>) => Promise<unknown>): Promise<void> {
+  const next = amount > 0 ? damage(sheet, amount) : heal(sheet, -amount)
+  await save({ hp: next.hp, temp_hp: next.temp_hp, concentration: next.concentration, death_saves: next.death_saves })
+  if (amount <= 0 || !sheet.concentration) return
+  if (!next.concentration) return system(`${name} drops and loses concentration on ${sheet.concentration}.`)
+  if (!(await concentrationCheck(name, next, amount))) {
+    await save({ concentration: undefined })
+    await system(`${name} loses concentration on ${sheet.concentration}.`)
+  }
+}
+
 /** Damage (positive) or healing (negative); a player combatant's sheet is updated too. */
 export async function hurt(name: string, amount: number): Promise<void> {
   const c = currentCombat()
@@ -46,18 +64,14 @@ export async function hurt(name: string, amount: number): Promise<void> {
     await updateCombat((s) => applyHp(s, target.id, amount))
     if (target.is_player && target.character) {
       const active = await loadActiveSheet()
-      if (active?.path === target.character && active.note.card.dnd) {
-        const sheet = amount > 0 ? damage(active.note.card.dnd, amount) : heal(active.note.card.dnd, -amount)
-        await updateActiveSheet({ hp: sheet.hp, temp_hp: sheet.temp_hp })
-      }
+      if (active?.path === target.character && active.note.card.dnd) await changeSheetHp(active.note.card.name, active.note.card.dnd, amount, updateActiveSheet)
     }
     return
   }
   // Not in combat: apply to the active character's sheet by name.
   const active = await loadActiveSheet()
   if (active?.note.card.dnd && active.note.card.name.toLowerCase().startsWith(name.trim().toLowerCase())) {
-    const sheet = amount > 0 ? damage(active.note.card.dnd, amount) : heal(active.note.card.dnd, -amount)
-    await updateActiveSheet({ hp: sheet.hp, temp_hp: sheet.temp_hp })
+    await changeSheetHp(active.note.card.name, active.note.card.dnd, amount, updateActiveSheet)
     return
   }
   throw new Error(`No combatant or character called “${name}”.`)

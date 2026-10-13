@@ -1,7 +1,9 @@
-import { parseCheckArgs, resolveTarget, rollCheck } from '@shared/checks'
+import { checkBonus, parseCheckArgs, resolveTarget, rollCheck } from '@shared/checks'
 import { formatRoll, roll } from '@shared/dice'
 import { editionOf } from '@shared/editions'
-import type { RollMode, RollResult } from '@shared/types'
+import { signed } from '@shared/prompt'
+import { concentrationDc } from '@shared/sheet'
+import type { DndSheet, RollMode, RollResult } from '@shared/types'
 import { loadActiveSheet } from '@/hooks/useActiveCharacter'
 import { useChat } from '@/stores/chat'
 import { useDiceFx } from '@/stores/dice'
@@ -60,4 +62,18 @@ export function parseAndRollCheck(args: string, save: boolean): Promise<void> {
   const { target, dc, mode } = parseCheckArgs(args)
   if (!target) throw new Error(save ? 'Usage: /save wis 13' : 'Usage: /check dex 15')
   return rollCheckFor(target, dc, { save, mode })
+}
+
+/**
+ * The CON save to keep concentrating after taking damage (DC 10 or half the
+ * damage). Posts the roll and returns whether concentration holds.
+ */
+export async function concentrationCheck(name: string, sheet: DndSheet, damageTaken: number): Promise<boolean> {
+  const target = resolveTarget('con', true, editionOf(sheet))!
+  const { bonus } = checkBonus(sheet, target)
+  const r = roll(`1d20${bonus ? signed(bonus) : ''} Concentration`)
+  r.dc = concentrationDc(damageTaken)
+  r.success = r.total >= r.dc
+  await postRoll(r, name)
+  return r.success
 }
