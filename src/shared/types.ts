@@ -65,6 +65,15 @@ export interface StateChange {
   remove_item?: string
   add_condition?: string
   remove_condition?: string
+  /** Spend one use of a limited feature (Rage, Ki…). */
+  use_resource?: string
+  /** Give one use back (undo). */
+  restore_resource?: string
+  /** The spell now concentrated on; "" ends concentration. */
+  concentration?: string
+  /** What was concentrated on before (for undo). */
+  concentration_was?: string
+  inspiration?: boolean
 }
 
 export interface Message {
@@ -177,6 +186,23 @@ export interface Spell {
   notes?: string
 }
 
+/** A feature with limited uses (Rage, Ki points, Channel Divinity…). */
+export interface Resource {
+  name: string
+  max: number
+  used: number
+  /** Which rest gives the uses back. */
+  reset: 'short' | 'long'
+}
+
+/** Coins other than gold (gold is `gold`). */
+export interface Coins {
+  pp?: number
+  ep?: number
+  sp?: number
+  cp?: number
+}
+
 export interface SpellSlot {
   max: number
   used: number
@@ -220,6 +246,15 @@ export interface DndSheet {
   /** 3.5: ranks per skill, e.g. { "spot": 4, "move silently": 6 }. */
   skill_ranks?: Record<string, number>
   feats?: string[]
+  /** 5e: death saving throws while at 0 HP. */
+  death_saves?: { successes: number; failures: number }
+  /** 5e: heroic inspiration. */
+  inspiration?: boolean
+  /** The spell being concentrated on. */
+  concentration?: string
+  /** Limited-use features, recharged by rests. */
+  resources?: Resource[]
+  coins?: Coins
 }
 
 /** Character note frontmatter: a SillyTavern V2 card plus the D&D sheet. */

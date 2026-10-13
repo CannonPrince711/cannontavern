@@ -12,10 +12,12 @@ import type {
   Campaign,
   CharacterCard,
   DndSheet,
+  Coins,
   InventoryItem,
   LoreEntry,
   Party,
   PartyQuest,
+  Resource,
   Spell,
   SpellSlot
 } from './types'
@@ -118,6 +120,24 @@ function spell(v: unknown): Spell | null {
   }
 }
 
+function resource(v: unknown): Resource | null {
+  const o = obj(v)
+  const name = str(o.name).trim()
+  if (!name) return null
+  const max = Math.max(0, num(o.max, 1))
+  return { name, max, used: Math.max(0, Math.min(max, num(o.used))), reset: str(o.reset).toLowerCase() === 'short' ? 'short' : 'long' }
+}
+
+function coins(v: unknown): Coins | undefined {
+  const o = obj(v)
+  const out: Coins = {}
+  for (const k of ['pp', 'ep', 'sp', 'cp'] as const) {
+    const n = Math.max(0, Math.trunc(num(o[k])))
+    if (n) out[k] = n
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export function normalizeSheet(raw: unknown): DndSheet {
   const o = obj(raw)
   const d = defaultSheet()
@@ -160,6 +180,16 @@ export function normalizeSheet(raw: unknown): DndSheet {
   if (isEdition(o.edition) && o.edition !== '5e') sheet.edition = o.edition
   const feats = strList(o.feats)
   if (feats.length) sheet.feats = feats
+  const ds = obj(o.death_saves)
+  const successes = Math.max(0, Math.min(3, num(ds.successes)))
+  const failures = Math.max(0, Math.min(3, num(ds.failures)))
+  if (successes || failures) sheet.death_saves = { successes, failures }
+  if (bool(o.inspiration)) sheet.inspiration = true
+  if (str(o.concentration).trim()) sheet.concentration = str(o.concentration).trim()
+  const resources = (Array.isArray(o.resources) ? o.resources : []).map(resource).filter((x): x is Resource => !!x)
+  if (resources.length) sheet.resources = resources
+  const purse = coins(o.coins)
+  if (purse) sheet.coins = purse
   if (sheet.edition === '3.5e') {
     const bs = obj(o.base_saves)
     sheet.bab = num(o.bab)

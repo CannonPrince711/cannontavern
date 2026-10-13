@@ -65,6 +65,47 @@ export function conditionsFor(edition: Edition): string[] {
   return edition === '3.5e' ? CONDITIONS_35 : CONDITIONS
 }
 
+/** Short reminders, in our own words, of what common conditions do. */
+export const CONDITION_NOTES: Record<Edition, [string, string][]> = {
+  '5e': [
+    ['Blinded', 'Can’t see; attacks against it have advantage, its attacks have disadvantage.'],
+    ['Charmed', 'Won’t attack the charmer; the charmer has advantage on social checks with it.'],
+    ['Frightened', 'Disadvantage on checks and attacks while the source is in sight; can’t move closer.'],
+    ['Grappled', 'Speed 0 until it escapes or the grappler is moved away.'],
+    ['Incapacitated', 'No actions or reactions.'],
+    ['Invisible', 'Attacks against it have disadvantage; its attacks have advantage.'],
+    ['Paralyzed', 'Incapacitated, fails STR/DEX saves; hits from within 5 ft are crits.'],
+    ['Poisoned', 'Disadvantage on attack rolls and ability checks.'],
+    ['Prone', 'Melee attacks against it have advantage, ranged have disadvantage; standing costs half speed.'],
+    ['Restrained', 'Speed 0; attacks against it have advantage; disadvantage on DEX saves and its attacks.'],
+    ['Stunned', 'Incapacitated, can barely speak, fails STR/DEX saves; attacks against it have advantage.'],
+    ['Unconscious', 'Drops prone, fails STR/DEX saves; melee hits within 5 ft are crits.'],
+    ['Deafened', 'Can’t hear; fails any check that needs hearing.'],
+    ['Petrified', 'Turned to stone: incapacitated, unaware, resists all damage; attacks against it have advantage.'],
+    ['Exhaustion', 'Cumulative levels: penalties grow until death at the last level.']
+  ],
+  '3.5e': [
+    ['Blinded', '−2 AC, loses DEX to AC, half speed, −4 on most STR/DEX skills; 50% miss chance on its attacks.'],
+    ['Dazed', 'Can take no actions, but has no AC penalty.'],
+    ['Entangled', '−2 attack, −4 DEX, half speed; casting needs a Concentration check.'],
+    ['Fatigued', '−2 STR and DEX; can’t run or charge. Exhausted is worse (−6, half speed).'],
+    ['Flat-footed', 'Hasn’t acted yet in combat: loses DEX bonus to AC, no attacks of opportunity.'],
+    ['Grappling', 'Can’t move freely; limited actions; loses DEX to AC against others.'],
+    ['Helpless', 'Melee attacks get +4; can be coup de grâced; treated as DEX 0.'],
+    ['Nauseated', 'Can only take a single move action each turn.'],
+    ['Prone', '−4 melee attack; +4 AC against ranged, −4 AC against melee.'],
+    ['Shaken', '−2 on attacks, saves, skill and ability checks. Frightened/panicked are worse.'],
+    ['Sickened', '−2 on attacks, weapon damage, saves, skill and ability checks.'],
+    ['Stunned', 'Drops what it holds, no actions, −2 AC, loses DEX to AC.']
+  ]
+}
+
+/** The reminder for a condition by name ("poisoned", "Exhaustion 2"…), if there is one. */
+export function conditionNote(name: string, edition: Edition = '5e'): string | undefined {
+  const q = name.trim().toLowerCase().replace(/\s*\d+$/, '')
+  return CONDITION_NOTES[edition].find(([n]) => n.toLowerCase() === q)?.[1]
+}
+
 export interface CheckTarget {
   kind: 'ability' | 'skill' | 'save'
   ability: AbilityKey

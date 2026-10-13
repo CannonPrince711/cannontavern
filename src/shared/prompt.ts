@@ -49,7 +49,7 @@ Write only {{char}}'s part for this turn: a reaction, a line of dialogue, or wha
 
 Keep it to one to three sentences.`
 
-export const AUTO_STATE_INSTRUCTION = `After your narration, if the player character's state changed, add one hidden line in this exact format: <state>{"hp":-4,"add_item":"rope"}</state>. Allowed keys: hp, temp_hp, gold, xp (numbers are changes, e.g. -4), add_item, remove_item, add_condition, remove_condition (strings). Omit the line if nothing changed.`
+export const AUTO_STATE_INSTRUCTION = `After your narration, if the player character's state changed, add one hidden line in this exact format: <state>{"hp":-4,"add_item":"rope"}</state>. Allowed keys: hp, temp_hp, gold, xp (numbers are changes, e.g. -4), add_item, remove_item, add_condition, remove_condition, use_resource (strings; use_resource spends one use of a limited feature from the sheet, e.g. "Rage"), concentration (the spell now concentrated on, or "none" when it ends), inspiration (true when gained, false when spent). Omit the line if nothing changed.`
 
 export interface PromptPreset {
   name: string
@@ -159,6 +159,36 @@ export function renderCampaign(c: Campaign | null, p: Party | null, forPlayer = 
   return parts.join('\n\n')
 }
 
+/** "Gold 45", or every coin type when the sheet has more than gold. */
+function renderCoins(s: DndSheet): string {
+  const c = s.coins
+  if (!c || !Object.values(c).some(Boolean)) return `Gold ${s.gold}`
+  const parts = ([['pp', c.pp], ['gp', s.gold], ['ep', c.ep], ['sp', c.sp], ['cp', c.cp]] as const).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`)
+  return `Coins: ${parts.join(', ') || 'none'}`
+}
+
+/** Death saves, concentration, inspiration and limited-use features. */
+function renderTracking(s: DndSheet): string[] {
+  const lines: string[] = []
+  if (s.hp === 0 && s.edition !== '3.5e') {
+    const ds = s.death_saves ?? { successes: 0, failures: 0 }
+    lines.push(
+      ds.failures >= 3
+        ? 'Dead (three failed death saves).'
+        : ds.successes >= 3
+          ? 'Unconscious at 0 HP but stable.'
+          : `Unconscious and dying at 0 HP: death saves ${ds.successes} succeeded, ${ds.failures} failed.`
+    )
+  }
+  if (s.concentration) lines.push(`Concentrating on: ${s.concentration}`)
+  if (s.inspiration) lines.push('Has inspiration.')
+  if (s.resources?.length) {
+    const per = (r: { reset: string }): string => (s.edition === '3.5e' ? 'per day' : `per ${r.reset} rest`)
+    lines.push(`Limited features left: ${s.resources.map((r) => `${r.name} ${r.max - r.used}/${r.max} (${per(r)})`).join(', ')}`)
+  }
+  return lines
+}
+
 export function renderSheet(name: string, s: DndSheet): string {
   if (s.edition === '3.5e') return renderSheet35(name, s)
   const abilities = (['str', 'dex', 'con', 'int', 'wis', 'cha'] as const)
@@ -173,7 +203,8 @@ export function renderSheet(name: string, s: DndSheet): string {
   if (s.skills.length) lines.push(`Proficient skills: ${s.skills.join(', ')}`)
   lines.push(`Conditions: ${s.conditions.length ? s.conditions.join(', ') : 'none'}`)
   const items = s.inventory.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}${i.equipped ? ' (equipped)' : ''}`)
-  lines.push(`Inventory: ${items.length ? items.join(', ') : 'nothing'} · Gold ${s.gold}`)
+  lines.push(`Inventory: ${items.length ? items.join(', ') : 'nothing'} · ${renderCoins(s)}`)
+  lines.push(...renderTracking(s))
   const slots = Object.entries(s.spell_slots)
     .filter(([, v]) => v.max > 0)
     .sort(([a], [b]) => Number(a) - Number(b))
@@ -205,7 +236,8 @@ function renderSheet35(name: string, s: DndSheet): string {
   if (s.feats?.length) lines.push(`Feats: ${s.feats.join(', ')}`)
   lines.push(`Conditions: ${s.conditions.length ? s.conditions.join(', ') : 'none'}`)
   const items = s.inventory.map((i) => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}${i.equipped ? ' (equipped)' : ''}`)
-  lines.push(`Inventory: ${items.length ? items.join(', ') : 'nothing'} · Gold ${s.gold}`)
+  lines.push(`Inventory: ${items.length ? items.join(', ') : 'nothing'} · ${renderCoins(s)}`)
+  lines.push(...renderTracking(s))
   const slots = Object.entries(s.spell_slots)
     .filter(([, v]) => v.max > 0)
     .sort(([a], [b]) => Number(a) - Number(b))

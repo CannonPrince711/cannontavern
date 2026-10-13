@@ -1,12 +1,12 @@
 import { useCampaignRuleset } from '@/components/rulesets/Rulesets'
 import { useEffect, useState } from 'react'
-import { BedDouble, Coffee, Heart, Minus, Pencil, Plus, ScrollText, Shield, Sparkles, Swords, Trash2, TrendingUp, X, Zap } from 'lucide-react'
-import { ABILITIES, checkBonus, conditionsFor, levelForXp, skillsFor, xpForLevel } from '@shared/checks'
+import { BedDouble, Brain, Coffee, Coins, Flame, Heart, HeartPulse, Minus, Pencil, Plus, ScrollText, Shield, Skull, Sparkles, Star, Swords, Trash2, TrendingUp, X, Zap } from 'lucide-react'
+import { ABILITIES, checkBonus, conditionNote, conditionsFor, levelForXp, skillsFor, xpForLevel } from '@shared/checks'
 import { EDITION_INFO, EDITIONS, editionOf, SAVES_35, SKILLS_35, type Edition } from '@shared/editions'
 import { defaultSheet } from '@shared/notes'
 import { modifier, signed } from '@shared/prompt'
-import { damage, heal, hitDie, levelUp, longRest, shortRest } from '@shared/sheet'
-import type { DndSheet } from '@shared/types'
+import { classResources, deathSave, deathState, hitDie, levelUp, longRest, shortRest } from '@shared/sheet'
+import type { Coins as CoinPurse, DndSheet } from '@shared/types'
 import { askConfirm } from '@/components/AskDialog'
 import { CharacterAvatar, hpColor } from '@/components/CharacterAvatar'
 import { EmptyState } from '@/components/EmptyState'
@@ -16,7 +16,8 @@ import { NativeSelect } from '@/components/ui/controls'
 import { Input } from '@/components/ui/input'
 import { Tip } from '@/components/ui/tooltip'
 import { useActiveCharacterPath, useCharacterNote } from '@/hooks/useActiveCharacter'
-import { rollCheckFor } from '@/lib/rolls'
+import { changeSheetHp } from '@/lib/combat'
+import { postRoll, rollCheckFor } from '@/lib/rolls'
 import { invoke } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 import { useChat } from '@/stores/chat'
@@ -107,6 +108,8 @@ function useCampaignEdition(): Edition {
 
 const DND_TERMS = { race: 'Race', class: 'Class', level: 'Level', spells: 'Spells' }
 
+const COIN_NAMES = { pp: 'Platinum pieces', gp: 'Gold pieces', ep: 'Electrum pieces', sp: 'Silver pieces', cp: 'Copper pieces' }
+
 export function SheetPanel(): React.JSX.Element {
   const path = useActiveCharacterPath()
   const { note, updateSheet } = useCharacterNote(path)
@@ -116,6 +119,7 @@ export function SheetPanel(): React.JSX.Element {
   const [newItem, setNewItem] = useState('')
   const [newSpell, setNewSpell] = useState('')
   const [newFeat, setNewFeat] = useState('')
+  const [newResource, setNewResource] = useState('')
   const campaignEdition = useCampaignEdition()
   const terms = useCampaignRuleset()?.terms ?? DND_TERMS
 
@@ -178,6 +182,26 @@ export function SheetPanel(): React.JSX.Element {
     void useChat.getState().post({ role: 'system', text: `${note.card.name} reached level ${r.sheet.level} (+${r.hpGain} max HP).`, swipes: [], swipeIndex: 0 })
   }
 
+  const system = (text: string): void => void useChat.getState().post({ role: 'system', text, swipes: [], swipeIndex: 0 })
+  const changeHp = (delta: number): void => {
+    setAmount('')
+    void changeSheetHp(note.card.name, sheet, delta, updateSheet).catch((e) => toast.error(e))
+  }
+  const dying = deathState(sheet)
+  const saves = sheet.death_saves ?? { successes: 0, failures: 0 }
+  const rollDeathSave = async (): Promise<void> => {
+    const r = deathSave(sheet)
+    set({ hp: r.sheet.hp, death_saves: r.sheet.death_saves })
+    await postRoll(r.roll, note.card.name)
+    if (r.outcome === 'revived') system(`${note.card.name} rolls a natural 20 and regains 1 HP!`)
+    else if (r.outcome === 'stable') system(`${note.card.name} is stable.`)
+    else if (r.outcome === 'dead') system(`${note.card.name} has died.`)
+  }
+  const resources = sheet.resources ?? []
+  const suggested = resources.length ? [] : classResources(sheet)
+  const setResource = (i: number, patch: Partial<(typeof resources)[number]>): void => set({ resources: resources.map((r, j) => (j === i ? { ...r, ...patch } : r)) })
+  const shortRestable = !is35 && (((sheet.hit_dice ? sheet.hit_dice.max - sheet.hit_dice.used : sheet.level) > 0 && sheet.hp < sheet.max_hp) || resources.some((r) => r.reset === 'short' && r.used > 0))
+
   return (
     <div className="pb-6 text-sm">
       {/* Identity */}
@@ -191,6 +215,22 @@ export function SheetPanel(): React.JSX.Element {
                 <Pencil className="size-3" />
               </button>
             </Tip>
+            {!is35 && (
+              <Tip label={sheet.inspiration ? 'Inspiration (click to spend)' : 'No inspiration (click to gain)'}>
+                <button
+                  type="button"
+                  aria-label="Inspiration"
+                  aria-pressed={!!sheet.inspiration}
+                  onClick={() => {
+                    set({ inspiration: sheet.inspiration ? undefined : true })
+                    system(sheet.inspiration ? `${note.card.name} spends inspiration.` : `${note.card.name} gains inspiration.`)
+                  }}
+                  className={cn('rounded p-0.5', sheet.inspiration ? 'text-gold' : 'text-muted-foreground/50 hover:text-foreground')}
+                >
+                  <Star className={cn('size-3.5', sheet.inspiration && 'fill-current')} />
+                </button>
+              </Tip>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             <EditableText value={sheet.race} label={terms.race} placeholder={terms.race} onCommit={(v) => set({ race: v })} />{' '}
@@ -227,10 +267,10 @@ export function SheetPanel(): React.JSX.Element {
         </div>
         <div className="mt-2 flex gap-1.5">
           <Input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="0" aria-label="Amount" className="h-8 w-16 text-center" inputMode="numeric" />
-          <Button size="sm" variant="outline" className="flex-1 border-crimson/50 text-crimson hover:bg-crimson/10" disabled={!n} onClick={() => (set(damage(sheet, n)), setAmount(''))}>
+          <Button size="sm" variant="outline" className="flex-1 border-crimson/50 text-crimson hover:bg-crimson/10" disabled={!n} onClick={() => changeHp(n)}>
             Damage
           </Button>
-          <Button size="sm" variant="outline" className="flex-1 border-emerald/50 text-emerald hover:bg-emerald/10" disabled={!n} onClick={() => (set(heal(sheet, n)), setAmount(''))}>
+          <Button size="sm" variant="outline" className="flex-1 border-emerald/50 text-emerald hover:bg-emerald/10" disabled={!n} onClick={() => changeHp(-n)}>
             Heal
           </Button>
           <Tip label="Add temporary HP">
@@ -239,6 +279,37 @@ export function SheetPanel(): React.JSX.Element {
             </Button>
           </Tip>
         </div>
+        {dying && (
+          <div className={cn('mt-2 rounded-lg border px-2 py-1.5', dying === 'dead' ? 'border-crimson/60 bg-crimson/10' : 'border-gold/40 bg-card')}>
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1 font-medium">
+                {dying === 'dead' ? <Skull className="size-3.5 text-crimson" /> : <HeartPulse className="size-3.5 text-crimson" />}
+                {dying === 'dead' ? 'Dead' : dying === 'stable' ? 'Stable at 0 HP' : 'Dying: death saves'}
+              </span>
+              {dying === 'dying' && (
+                <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => void rollDeathSave().catch((e) => toast.error(e))}>
+                  Roll death save
+                </Button>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
+              {(['successes', 'failures'] as const).map((kind) => (
+                <span key={kind} className="flex items-center gap-1">
+                  {kind === 'successes' ? 'Successes' : 'Failures'}
+                  {[0, 1, 2].map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-label={`Death save ${kind} ${k + 1}: ${k < saves[kind] ? 'marked' : 'empty'}`}
+                      onClick={() => set({ death_saves: { ...saves, [kind]: k < saves[kind] ? k : k + 1 } })}
+                      className={cn('size-3 rounded-full border-2', k < saves[kind] ? (kind === 'successes' ? 'border-emerald bg-emerald' : 'border-crimson bg-crimson') : 'border-muted-foreground')}
+                    />
+                  ))}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Core stats */}
@@ -456,32 +527,122 @@ export function SheetPanel(): React.JSX.Element {
           </NativeSelect>
         }
       >
-        {sheet.conditions.length === 0 ? (
+        {sheet.conditions.length === 0 && !sheet.concentration ? (
           <p className="text-xs text-muted-foreground">None.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
+            {sheet.concentration && (
+              <Tip label="Concentrating: taking damage calls for a CON save (DC 10 or half the damage). Dropping to 0 HP ends it.">
+                <span className="flex items-center gap-1 rounded-full border border-gold/50 bg-gold/10 px-2 py-0.5 text-xs text-gold">
+                  <Brain className="size-3" /> {sheet.concentration}
+                  <button type="button" aria-label={`End concentration on ${sheet.concentration}`} onClick={() => (set({ concentration: undefined }), system(`${note.card.name} stops concentrating on ${sheet.concentration}.`))}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              </Tip>
+            )}
             {sheet.conditions.map((c) => (
-              <span key={c} className="flex items-center gap-1 rounded-full border border-crimson/40 bg-crimson/10 px-2 py-0.5 text-xs capitalize text-crimson">
-                {c}
-                <button type="button" aria-label={`Remove ${c}`} onClick={() => set({ conditions: sheet.conditions.filter((x) => x !== c) })}>
-                  <X className="size-3" />
-                </button>
-              </span>
+              <Tip key={c} label={conditionNote(c, edition) ?? c}>
+                <span className="flex items-center gap-1 rounded-full border border-crimson/40 bg-crimson/10 px-2 py-0.5 text-xs capitalize text-crimson">
+                  {c}
+                  <button type="button" aria-label={`Remove ${c}`} onClick={() => set({ conditions: sheet.conditions.filter((x) => x !== c) })}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              </Tip>
             ))}
           </div>
         )}
       </Section>
 
-      {/* Inventory */}
+      {/* Limited-use features */}
       <Section
-        title="Inventory"
-        icon={ScrollText}
+        title="Features"
+        icon={Flame}
         action={
-          <span className="text-xs text-muted-foreground">
-            <EditableNumber value={sheet.gold} label="Gold" min={0} onCommit={(v) => set({ gold: v })} className="text-gold" /> gp
-          </span>
+          suggested.length > 0 && (
+            <Tip label={`Add ${suggested.map((r) => r.name).join(', ')}`}>
+              <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => set({ resources: suggested })}>
+                Fill for {sheet.class || 'class'}
+              </button>
+            </Tip>
+          )
         }
       >
+        {resources.length === 0 && <p className="mb-1.5 text-xs text-muted-foreground">Track uses of Rage, Ki, Channel Divinity and the like.</p>}
+        <ul className="space-y-1">
+          {resources.map((r, i) => (
+            <li key={`${r.name}-${i}`} className="group flex items-center gap-1.5 rounded px-1 py-0.5 text-xs hover:bg-accent/60">
+              <span className="min-w-0 flex-1 truncate">{r.name}</span>
+              {r.max <= 10 ? (
+                <span className="flex gap-1">
+                  {Array.from({ length: r.max }, (_, k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-label={`${r.name} use ${k + 1}: ${k < r.used ? 'spent' : 'available'}`}
+                      onClick={() => setResource(i, { used: k < r.used ? k : k + 1 })}
+                      className={cn('size-3 rounded-full border-2', k < r.used ? 'border-muted-foreground' : 'border-gold bg-gold')}
+                    />
+                  ))}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 font-mono tabular-nums">
+                  <button type="button" aria-label={`Spend ${r.name}`} onClick={() => setResource(i, { used: Math.min(r.max, r.used + 1) })} className="text-muted-foreground hover:text-foreground">
+                    <Minus className="size-3" />
+                  </button>
+                  {r.max - r.used}/{r.max}
+                  <button type="button" aria-label={`Regain ${r.name}`} onClick={() => setResource(i, { used: Math.max(0, r.used - 1) })} className="text-muted-foreground hover:text-foreground">
+                    <Plus className="size-3" />
+                  </button>
+                </span>
+              )}
+              <Tip label={is35 ? 'Per day' : `Recharges on a ${r.reset} rest (click to change)`}>
+                <button type="button" aria-label={`${r.name} recharges on a ${r.reset} rest`} disabled={is35} onClick={() => setResource(i, { reset: r.reset === 'short' ? 'long' : 'short' })} className="w-4 text-center text-[10px] text-muted-foreground uppercase">
+                  {is35 ? 'D' : r.reset[0]}
+                </button>
+              </Tip>
+              <button type="button" aria-label={`Remove ${r.name}`} onClick={() => set({ resources: resources.filter((_, j) => j !== i) })} className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-crimson">
+                <Trash2 className="size-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+        <form
+          className="mt-1.5 flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const m = /^(.*?)\s+(\d+)(?:\s+(short|long))?$/i.exec(newResource.trim())
+            const [name, max, reset] = m ? [m[1]!.trim(), Number(m[2]), m[3]?.toLowerCase()] : [newResource.trim(), 1, undefined]
+            if (!name) return
+            set({ resources: [...resources, { name, max: Math.max(1, max), used: 0, reset: reset === 'short' ? 'short' : 'long' }] })
+            setNewResource('')
+          }}
+        >
+          <Input value={newResource} onChange={(e) => setNewResource(e.target.value)} placeholder={is35 ? 'e.g. Turn Undead 5' : 'e.g. Rage 3 long, Ki 4 short'} className="h-7 text-xs" aria-label="New feature" />
+          <Button type="submit" size="icon-sm" variant="outline" aria-label="Add feature" disabled={!newResource.trim()}>
+            <Plus />
+          </Button>
+        </form>
+      </Section>
+
+      {/* Inventory */}
+      <Section title="Inventory" icon={ScrollText}>
+        <div className="mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
+          <Coins className="size-3.5 text-gold" />
+          {(['pp', 'gp', 'ep', 'sp', 'cp'] as const).map((k) => (
+            <span key={k}>
+              <EditableNumber
+                value={k === 'gp' ? sheet.gold : (sheet.coins?.[k] ?? 0)}
+                label={COIN_NAMES[k]}
+                min={0}
+                onCommit={(v) => set(k === 'gp' ? { gold: v } : { coins: { ...(sheet.coins ?? {}), [k]: v || undefined } as CoinPurse })}
+                className={cn('font-mono', k === 'gp' && 'text-gold')}
+              />
+              {k}
+            </span>
+          ))}
+        </div>
         <ul className="space-y-0.5">
           {sheet.inventory.map((item, i) => (
             <li key={`${item.name}-${i}`} className="group flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/60">
@@ -558,6 +719,23 @@ export function SheetPanel(): React.JSX.Element {
             <li key={`${sp.name}-${i}`} className="group flex items-center gap-1.5 rounded px-1 py-0.5 text-xs hover:bg-accent/60">
               <span className="w-6 text-center text-[10px] text-muted-foreground">{sp.level === 0 ? 'C' : sp.level}</span>
               <span className="flex-1 truncate">{sp.name}</span>
+              {!is35 && (
+                <Tip label={sheet.concentration === sp.name ? 'Stop concentrating' : `Concentrate on ${sp.name}`}>
+                  <button
+                    type="button"
+                    aria-label={sheet.concentration === sp.name ? `Stop concentrating on ${sp.name}` : `Concentrate on ${sp.name}`}
+                    aria-pressed={sheet.concentration === sp.name}
+                    onClick={() => {
+                      const on = sheet.concentration !== sp.name
+                      set({ concentration: on ? sp.name : undefined })
+                      system(on ? `${note.card.name} concentrates on ${sp.name}.` : `${note.card.name} stops concentrating on ${sp.name}.`)
+                    }}
+                    className={cn(sheet.concentration === sp.name ? 'text-gold' : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground')}
+                  >
+                    <Brain className="size-3" />
+                  </button>
+                </Tip>
+              )}
               <button type="button" aria-label={`Remove ${sp.name}`} onClick={() => set({ spells: sheet.spells.filter((_, j) => j !== i) })} className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-crimson">
                 <Trash2 className="size-3" />
               </button>
@@ -589,11 +767,11 @@ export function SheetPanel(): React.JSX.Element {
             size="sm"
             className={cn('flex-1', is35 && 'hidden')}
             onClick={() => {
-              const r = shortRest(sheet, 1)
+              const r = shortRest(sheet, sheet.hp < sheet.max_hp ? 1 : 0)
               set(r.sheet)
-              void useChat.getState().post({ role: 'system', text: `${note.card.name} takes a short rest and spends a hit die, regaining ${r.healed} HP.`, swipes: [], swipeIndex: 0 })
+              system(r.rolls.length ? `${note.card.name} takes a short rest and spends a hit die, regaining ${r.healed} HP.` : `${note.card.name} takes a short rest.`)
             }}
-            disabled={(sheet.hit_dice ? sheet.hit_dice.max - sheet.hit_dice.used : sheet.level) <= 0 || sheet.hp >= sheet.max_hp}
+            disabled={!shortRestable}
           >
             <Coffee /> Short rest
           </Button>
