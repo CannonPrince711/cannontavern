@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Globe2, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Users, Wand2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsUpDown, ExternalLink, FileUp, Globe2, Lightbulb, Pencil, Plus, ScrollText, Search, Settings2, UserPlus, Users, Wand2 } from 'lucide-react'
 import type { SessionSummary } from '@shared/types'
 import { NewCharacterDialog } from '@/components/characters/CharacterEditor'
 import { ImportCharactersDialog } from '@/components/characters/ImportCharactersDialog'
@@ -156,6 +156,9 @@ function CampaignSwitcher(): React.JSX.Element {
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => useUi.setState({ buildingCampaign: true })}>
           <Wand2 /> Campaign builder…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => useUi.setState({ generatingIdeas: true })}>
+          <Lightbulb /> Idea generator…
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => useUi.setState({ managingUniverses: true })}>
           <Globe2 /> Universes…

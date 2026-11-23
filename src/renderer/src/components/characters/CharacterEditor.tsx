@@ -357,7 +357,16 @@ export function CharacterEditor(): React.JSX.Element | null {
 /** Small dialog asking for a new character's name. */
 const NO_CAMPAIGNS: never[] = []
 
-export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }): React.JSX.Element {
+export function NewCharacterDialog({
+  open,
+  onOpenChange,
+  initial
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  /** Starts on the AI tab with this concept (from the idea generator). */
+  initial?: { concept: string; race?: string; cls?: string }
+}): React.JSX.Element {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState<'blank' | 'ai'>('ai')
@@ -366,6 +375,11 @@ export function NewCharacterDialog({ open, onOpenChange }: { open: boolean; onOp
   const active = useVault((s) => s.activeCampaign)
   const hasImageBackend = useApp((s) => (s.settings?.imageBackends.length ?? 0) > 0)
   const [gen, setGen] = useState({ concept: '', level: 1, race: '', cls: '', campaignPath: '', portrait: true })
+  useEffect(() => {
+    if (!open || !initial) return
+    setTab('ai')
+    setGen((g) => ({ ...g, concept: initial.concept, race: initial.race ?? '', cls: initial.cls ?? '' }))
+  }, [open, initial])
   const campaignPath = gen.campaignPath || active || ''
   const rulesetList = useRulesets()
   const campaignInfo = campaigns.find((c) => c.path === campaignPath)

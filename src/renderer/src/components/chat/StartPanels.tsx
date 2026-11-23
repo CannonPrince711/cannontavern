@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, ScrollText, Sparkles, Wand2 } from 'lucide-react'
+import { Lightbulb, Loader2, ScrollText, Sparkles, Wand2 } from 'lucide-react'
 import { CharacterAvatar } from '@/components/CharacterAvatar'
 import { forCampaign } from '@shared/membership'
 import { EmptyState } from '@/components/EmptyState'
@@ -62,6 +62,9 @@ export function CreateCampaignPanel(): React.JSX.Element {
         <span className="text-xs text-muted-foreground">or</span>
         <Button variant="outline" onClick={() => useUi.setState({ buildingCampaign: true })}>
           <Wand2 /> Open the campaign builder
+        </Button>
+        <Button variant="ghost" onClick={() => useUi.setState({ generatingIdeas: true })}>
+          <Lightbulb /> No idea yet? Roll some
         </Button>
         <span className="max-w-sm text-center text-xs text-muted-foreground">Describe a premise and tone; the AI drafts places, NPCs, factions, secrets and an opening scene for you to edit.</span>
         </div>

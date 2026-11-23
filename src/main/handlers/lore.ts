@@ -19,6 +19,8 @@ import { generateRuleset, listRulesets, readRuleset, rulesetValue, saveRuleset }
 import { createUniverse, generateUniverse, readUniverse, saveUniverse } from '../universes'
 import { universeLink } from '@shared/universes'
 import { rulesetRef } from '@shared/rulesets'
+import { IdeaRequestSchema, IdeaSchema, type Idea, type IdeaRequest } from '@shared/ideas'
+import { generateIdeas, saveIdea } from '../ideas'
 
 const path = z.string().min(1).max(1024)
 
@@ -168,6 +170,8 @@ export function registerLoreHandlers(): void {
     ])
   )
   handle('universes:generate', (_e, concept) => generateUniverse(concept), z.tuple([z.string().max(2000)]))
+  handle('ideas:generate', (_e, req) => generateIdeas(req), z.tuple([IdeaRequestSchema]) as unknown as z.ZodType<[IdeaRequest]>)
+  handle('ideas:save', (_e, idea) => saveIdea(idea), z.tuple([IdeaSchema]) as unknown as z.ZodType<[Idea]>)
   const entry = z.object({ name: z.string().max(80), text: z.string().max(800) })
   handle(
     'universes:create',
