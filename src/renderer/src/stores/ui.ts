@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Idea } from '@shared/ideas'
 
 export type SettingsSection =
   | 'general'
@@ -23,6 +24,10 @@ interface UiStore {
   buildingCampaign: boolean
   /** The universes dialog is open. */
   managingUniverses: boolean
+  /** The idea generator dialog is open. */
+  generatingIdeas: boolean
+  /** An idea picked in the generator, waiting for its creator (campaign builder, new character, universes) to take it. */
+  ideaHandoff: Idea | null
   /** Campaign folder whose settings dialog is open. */
   campaignSettings: string | null
   /** Which tab that dialog opens on. */
@@ -44,6 +49,8 @@ export const useUi = create<UiStore>((set) => ({
   creatingCampaign: false,
   buildingCampaign: false,
   managingUniverses: false,
+  generatingIdeas: false,
+  ideaHandoff: null,
   campaignSettings: null,
   campaignSettingsTab: 'campaign',
   settingsOpen: false,

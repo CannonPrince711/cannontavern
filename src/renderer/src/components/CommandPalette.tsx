@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { BookOpen, CornerDownLeft, Dices, FileText, FolderOpen, Hash, MessageSquare, Plus, ScrollText, Network, Search, Settings, SquareTerminal, User, Wand2 } from 'lucide-react'
+import { BookOpen, CornerDownLeft, Dices, FileText, FolderOpen, Hash, Lightbulb, MessageSquare, Plus, ScrollText, Network, Search, Settings, SquareTerminal, User, Wand2 } from 'lucide-react'
 import { useGraph } from '@/components/graph/GraphView'
 import { Map as MapIcon } from 'lucide-react'
 import { useMap } from '@/components/map/MapView'
@@ -141,6 +141,7 @@ function useItems(query: string): Item[] {
             .catch((err) => toast.error(err, 'Couldn’t restore Resources'))
       },
       { id: 'builder', group: 'Actions', label: 'Campaign builder', icon: Wand2, keywords: 'create generate ai world npc', run: () => useUi.setState({ buildingCampaign: true }) },
+      { id: 'ideas', group: 'Actions', label: 'Idea generator', icon: Lightbulb, keywords: 'ideas inspiration random pitch campaign one-shot character world universe dice', run: () => useUi.setState({ generatingIdeas: true }) },
       { id: 'dice', group: 'Actions', label: 'Dice tray', icon: Dices, keywords: 'roll', run: () => useDiceFx.getState().setTrayOpen(!useDiceFx.getState().trayOpen) },
       { id: 'inspector', group: 'Actions', label: 'Prompt inspector', icon: SquareTerminal, keywords: 'tokens context debug', run: () => useUi.setState({ inspectorOpen: true }) },
       { id: 'left', group: 'Actions', label: 'Toggle left sidebar', icon: MessageSquare, run: () => useLayout.getState().toggleLeft() },

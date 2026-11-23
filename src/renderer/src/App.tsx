@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { UniversesDialog } from '@/components/universes/Universes'
+import { IdeasDialog } from '@/components/ideas/IdeasDialog'
 import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { AppShell } from '@/components/layout/AppShell'
 import { TitleBar } from '@/components/TitleBar'
@@ -95,6 +96,7 @@ export function App(): React.JSX.Element {
           {ready && <CampaignBuilder />}
           {ready && <CampaignSettings />}
           {ready && <UniversesDialog />}
+          {ready && <IdeasDialog />}
           {ready && <GraphOverlay />}
           {ready && <MapOverlay />}
           <AskDialog />

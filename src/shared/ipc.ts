@@ -15,6 +15,7 @@ import type { CampaignConcept, CampaignDraft } from './builder'
 import type { Edition } from './editions'
 import type { Ruleset } from './rulesets'
 import type { Universe, UniverseDraft } from './universes'
+import type { Idea, IdeaRequest } from './ideas'
 import type { WorldOverrides, WorldResourceKind } from './world'
 import type { AutoRespond, TableStatus } from './table'
 import type { PlayMode, Speaker } from './play'
@@ -194,6 +195,10 @@ export interface InvokeMap {
   'universes:generate': Invoke<[concept: string], UniverseDraft>
   /** Writes a drafted universe and its lorebook. */
   'universes:create': Invoke<[draft: UniverseDraft], Universe>
+  /** Idea generator: pitches from the idea dice + the chat model (nothing is written). */
+  'ideas:generate': Invoke<[req: IdeaRequest], Idea[]>
+  /** Appends an idea to Ideas.md at the vault root; returns the note's path. */
+  'ideas:save': Invoke<[idea: Idea], VaultPath>
   /** Asks the AI to pick the best installed text and image models for a campaign; nothing is saved. */
   'campaigns:suggestGenerators': Invoke<[path: VaultPath], { world: WorldOverrides; notes: string }>
   /** Writes items, creatures and more that fit the campaign into its "<name> Resources" lorebook (attached to it). */
@@ -427,6 +432,8 @@ const invokeChannels = {
   'universes:save': 1,
   'universes:generate': 1,
   'universes:create': 1,
+  'ideas:generate': 1,
+  'ideas:save': 1,
   'campaigns:suggestGenerators': 1,
   'campaigns:generateResources': 1,
   'vault:createResources': 1,

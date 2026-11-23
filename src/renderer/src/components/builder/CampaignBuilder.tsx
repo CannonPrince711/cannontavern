@@ -441,6 +441,22 @@ export function CampaignBuilder(): React.JSX.Element | null {
   const [busy, setBusy] = useState(false)
   const [run, setRun] = useState(0)
 
+  // An idea from the idea generator fills in the concept.
+  const handoff = useUi((s) => s.ideaHandoff)
+  useEffect(() => {
+    if (!open || !handoff || (handoff.kind !== 'campaign' && handoff.kind !== 'oneshot')) return
+    setStage('concept')
+    setConcept({
+      ...DEFAULT_CONCEPT,
+      name: handoff.title,
+      premise: [handoff.pitch, handoff.premise, ...handoff.details].filter(Boolean).join('\n\n').slice(0, PREMISE_MAX),
+      tones: handoff.tones.slice(0, MAX_TONES),
+      settings: handoff.settings,
+      length: handoff.kind === 'oneshot' ? 'one-shot' : 'long'
+    })
+    useUi.setState({ ideaHandoff: null })
+  }, [open, handoff])
+
   const close = (): void => {
     useUi.setState({ buildingCampaign: false })
     setTimeout(() => {

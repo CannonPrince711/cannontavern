@@ -42,6 +42,16 @@ export function UniversesDialog(): React.JSX.Element | null {
     if (!open) setSelected(null)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // An idea from the idea generator opens the "new" page with its concept filled in.
+  const handoff = useUi((s) => s.ideaHandoff)
+  useEffect(() => {
+    if (!open || handoff?.kind !== 'universe') return
+    setSelected('new')
+    setDraft(null)
+    setConcept(`${handoff.title}: ${handoff.pitch}\n\n${handoff.premise}\n\n${handoff.details.join('\n')}`.slice(0, 2000))
+    useUi.setState({ ideaHandoff: null })
+  }, [open, handoff])
+
   useEffect(() => {
     setForm(null)
     if (!selected || selected === 'new') return
